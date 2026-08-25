@@ -1,0 +1,6 @@
+import { desc } from "drizzle-orm";
+import { getDb } from "../../../db";
+import { productionRecords } from "../../../db/schema";
+
+export async function GET(){try{return Response.json({records:await getDb().select().from(productionRecords).orderBy(desc(productionRecords.id)).limit(500)});}catch{return Response.json({records:[]});}}
+export async function POST(request:Request){const body=await request.json() as {companyId?:number;sourceFile?:string;rows?:Record<string,unknown>[]};const rows=body.rows||[];if(!rows.length)return Response.json({error:"No production rows supplied"},{status:400});const now=new Date().toISOString();const values=rows.slice(0,500).map(r=>({companyId:Number(body.companyId||1),reportDate:String(r.date||r.reportDate||now.slice(0,10)),fleetNumber:String(r.machine||r.fleetNumber||"Unassigned"),shiftHours:Number(r.shiftHours||24),plannedDowntime:Number(r.plannedDowntime||0),unplannedDowntime:Number(r.unplannedDowntime||r.downtime||0),operatingHours:Number(r.operatingHours||0),productiveHours:Number(r.productiveHours||r.operatingHours||0),tonnes:Number(r.tonnes||0),sourceFile:String(body.sourceFile||"manual import"),createdAt:now}));await getDb().insert(productionRecords).values(values);return Response.json({imported:values.length},{status:201});}
