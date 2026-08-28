@@ -1801,6 +1801,39 @@ function PaymentsOrders() {
       );
     setSaving(false);
   }
+  async function populateOrderFromDocument(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    const form = e.currentTarget.form;
+    if (!file || !form) return;
+    if (!/\.(xlsx|xls|xlsm|csv)$/i.test(file.name)) {
+      setMessage("Document attached. PDF, Word and image values require manual review; Excel/CSV fields can be filled automatically.");
+      return;
+    }
+    try {
+      const [row] = await readWorkbook(file);
+      if (!row) throw new Error("The spreadsheet has no data rows.");
+      const values: Record<string, string | number> = {
+        orderNumber: String(firstValue(row, ["po number", "purchase order", "order number", "po", "quotation number"])),
+        supplier: String(firstValue(row, ["supplier", "vendor", "store"])),
+        storeContact: String(firstValue(row, ["store contact", "supplier contact", "contact"])),
+        fleetNumber: String(firstValue(row, ["fleet number", "fleet", "machine", "equipment"])),
+        description: String(firstValue(row, ["description", "part or service", "item", "service"])),
+        orderDate: String(firstValue(row, ["order date", "po date", "date"])),
+        expectedDelivery: String(firstValue(row, ["expected delivery", "delivery date", "due date"])),
+        amount: Number(firstValue(row, ["amount", "total", "order value", "value"]) || 0),
+        responsiblePerson: String(firstValue(row, ["responsible person", "buyer", "planner", "requested by"])),
+      };
+      let filled = 0;
+      for (const [name, value] of Object.entries(values)) {
+        if (value === "" || value === 0) continue;
+        const input = form.elements.namedItem(name) as HTMLInputElement | null;
+        if (input) { input.value = String(value); filled++; }
+      }
+      setMessage(`✓ Document read: ${filled} fields populated. Please review them before saving.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not read the document.");
+    }
+  }
   const overdue = orders.filter(
     (o) =>
       o.expectedDelivery &&
@@ -2096,9 +2129,10 @@ function PaymentsOrders() {
                 <input
                   name="document"
                   type="file"
-                  accept=".pdf,.docx,.xlsx,.png,.jpg,.jpeg"
+                  onChange={populateOrderFromDocument}
+                  accept=".pdf,.docx,.xlsx,.xls,.xlsm,.csv,.png,.jpg,.jpeg"
                 />
-                <small>PDF, Word, Excel or image · maximum 10 MB</small>
+                <small>Excel/CSV auto-fill fields; PDF, Word or image attach for review · maximum 10 MB</small>
               </label>
               <label className="wide">
                 Follow-up channels
