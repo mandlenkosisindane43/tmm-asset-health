@@ -4,7 +4,7 @@ import { getDb } from "../../../db";
 import { purchaseOrders } from "../../../db/schema";
 import { ensureCoreSchema } from "../../../db/bootstrap";
 
-const allowed = new Set(["application/pdf","image/png","image/jpeg","application/vnd.openxmlformats-officedocument.wordprocessingml.document","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]);
+const allowed = new Set(["application/pdf","image/png","image/jpeg","application/vnd.openxmlformats-officedocument.wordprocessingml.document","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","application/vnd.ms-excel","text/csv","application/csv"]);
 
 export async function GET(){
   await ensureCoreSchema();
@@ -22,7 +22,7 @@ export async function POST(request:Request){
   let attachmentKey:string|undefined,attachmentName:string|undefined;
   if(file instanceof File&&file.size){
     if(file.size>10_000_000)return Response.json({error:"Document must be 10 MB or smaller"},{status:400});
-    if(!allowed.has(file.type))return Response.json({error:"Upload PDF, Word, Excel, PNG or JPG"},{status:400});
+    if(!allowed.has(file.type))return Response.json({error:"Upload PDF, Word, Excel, CSV, PNG or JPG"},{status:400});
     attachmentName=file.name;
     const safe=file.name.replace(/[^a-zA-Z0-9._-]/g,"-");
     attachmentKey=`company-${Number(form.get("companyId")||1)}/orders/${crypto.randomUUID()}-${safe}`;
