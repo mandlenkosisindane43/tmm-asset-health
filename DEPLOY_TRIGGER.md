@@ -1,3 +1,3 @@
 # Deployment Trigger
 
-This file exists only to trigger a fresh Cloudflare deployment after build configuration changes.
+Fresh deployment requested after removing the obsolete R2 binding. Cloudflare should build from the latest main branch commit.
