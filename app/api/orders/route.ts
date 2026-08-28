@@ -2,15 +2,18 @@ import { desc } from "drizzle-orm";
 import { env } from "cloudflare:workers";
 import { getDb } from "../../../db";
 import { purchaseOrders } from "../../../db/schema";
+import { ensureCoreSchema } from "../../../db/bootstrap";
 
 const allowed = new Set(["application/pdf","image/png","image/jpeg","application/vnd.openxmlformats-officedocument.wordprocessingml.document","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]);
 
 export async function GET(){
+  await ensureCoreSchema();
   try{return Response.json({orders:await getDb().select().from(purchaseOrders).orderBy(desc(purchaseOrders.id)).limit(200)});}
   catch{return Response.json({orders:[]});}
 }
 
 export async function POST(request:Request){
+  await ensureCoreSchema();
   const form=await request.formData();
   const required=["orderNumber","supplier","description","orderDate"];
   for(const field of required)if(!String(form.get(field)||"").trim())return Response.json({error:`${field} is required`},{status:400});
