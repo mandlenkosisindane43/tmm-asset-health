@@ -2,8 +2,10 @@ import { eq } from "drizzle-orm";
 import { getChatGPTUser } from "../../chatgpt-auth";
 import { getDb } from "../../../db";
 import { softwareUsers } from "../../../db/schema";
+import { ensureCoreSchema } from "../../../db/bootstrap";
 
 export async function GET(){
+  await ensureCoreSchema();
   const user=await getChatGPTUser();
   if(!user)return Response.json({error:"Sign in required"},{status:401});
   const [profile]=await getDb().select().from(softwareUsers).where(eq(softwareUsers.email,user.email)).limit(1);
@@ -11,6 +13,7 @@ export async function GET(){
 }
 
 export async function POST(request:Request){
+  await ensureCoreSchema();
   const user=await getChatGPTUser();
   if(!user)return Response.json({error:"Sign in required"},{status:401});
   const body=await request.json();
