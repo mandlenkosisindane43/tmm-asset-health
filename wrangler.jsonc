@@ -1,11 +1,29 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
+  "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "tmm-asset-health",
-  "main": "dist/server/index.js",
-  "compatibility_date": "2026-08-25",
+  "account_id": "ba53c9a85c6f300723d5d58f899722f9",
+  "main": "./worker/index.ts",
+  "compatibility_date": "2026-08-28",
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
-    "directory": "dist/client",
-    "binding": "ASSETS"
+    "directory": "./dist/client",
+    "binding": "ASSETS",
+    "not_found_handling": "none"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "tmm-asset-health-db",
+      "database_id": "93fdd54e-404e-4fe0-ab59-dde7425575e6"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "BUCKET",
+      "bucket_name": "tmm-asset-health-files"
+    }
+  ],
+  "observability": {
+    "enabled": true
   }
 }
