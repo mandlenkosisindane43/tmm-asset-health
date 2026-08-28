@@ -1,11 +1,14 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
+  "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "tmm-asset-health",
-  "main": "dist/server/index.js",
-  "compatibility_date": "2026-08-25",
+  "account_id": "ba53c9a85c6f300723d5d58f899722f9",
+  "main": "vinext/server/app-router-entry",
+  "compatibility_date": "2026-08-28",
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
-    "directory": "dist/client",
-    "binding": "ASSETS"
+    "not_found_handling": "none"
+  },
+  "observability": {
+    "enabled": true
   }
 }
