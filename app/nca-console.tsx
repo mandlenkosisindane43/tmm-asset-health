@@ -1,5 +1,6 @@
 "use client";
 import { ChangeEvent, FormEvent, ReactNode, useEffect, useState } from "react";
+import * as XLSX from "xlsx";
 
 const nav = [
   "Overview",
@@ -41,6 +42,66 @@ const icons = [
   "⌾",
   "◇",
 ];
+
+type ImportRow = Record<string, string | number | boolean | null>;
+
+function cleanKey(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+function firstValue(row: ImportRow, aliases: string[]) {
+  const entries = Object.entries(row);
+  for (const alias of aliases) {
+    const found = entries.find(([key]) => cleanKey(key) === cleanKey(alias));
+    if (found && found[1] !== "") return found[1];
+  }
+  return "";
+}
+async function readWorkbook(file: File): Promise<ImportRow[]> {
+  const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  return XLSX.utils.sheet_to_json<ImportRow>(sheet, { defval: "", raw: false });
+}
+function productionRows(rows: ImportRow[]) {
+  return rows.map((row) => ({
+    date: String(firstValue(row, ["date", "report date", "shift date"])),
+    fleetNumber: String(firstValue(row, ["fleet number", "fleet", "machine", "equipment"])),
+    shiftHours: Number(firstValue(row, ["shift hours", "planned hours", "available hours"]) || 24),
+    plannedDowntime: Number(firstValue(row, ["planned downtime", "planned dt"]) || 0),
+    unplannedDowntime: Number(firstValue(row, ["unplanned downtime", "downtime", "breakdown hours"]) || 0),
+    operatingHours: Number(firstValue(row, ["operating hours", "running hours"]) || 0),
+    productiveHours: Number(firstValue(row, ["productive hours", "working hours", "operating hours"]) || 0),
+    tonnes: Number(firstValue(row, ["tonnes", "production", "actual production", "tons"]) || 0),
+  })).filter((row) => row.date && row.fleetNumber);
+}
+function fleetRows(rows: ImportRow[]) {
+  return rows.map((row) => ({
+    fleetNumber: String(firstValue(row, ["fleet number", "fleet", "machine", "equipment"])),
+    category: String(firstValue(row, ["machine type", "category", "type", "model"])),
+    site: String(firstValue(row, ["site", "section", "area"]) || "Unassigned"),
+    status: String(firstValue(row, ["status"]) || "operating"),
+    operatingHours: Number(firstValue(row, ["operating hours", "hours", "hour meter"]) || 0),
+    nextServiceHours: Number(firstValue(row, ["next service hours", "service due", "service hours"]) || 0),
+  })).filter((row) => row.fleetNumber && row.category);
+}
+function downloadWord(filename: string, title: string, rows: ImportRow[]) {
+  const headers = Object.keys(rows[0] || {});
+  const html = `<!doctype html><html><body><h1>${title}</h1><table border="1" cellspacing="0" cellpadding="5"><thead><tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${headers.map((h) => `<td>${String(row[h] ?? "")}</td>`).join("")}</tr>`).join("")}</tbody></table></body></html>`;
+  const url = URL.createObjectURL(new Blob([html], { type: "application/msword" }));
+  const a = document.createElement("a"); a.href = url; a.download = filename; a.click(); URL.revokeObjectURL(url);
+}
+function downloadExcel(filename: string, rows: ImportRow[]) {
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows), "Report");
+  XLSX.writeFile(workbook, filename);
+}
+function printRows(title: string, rows: ImportRow[]) {
+  const headers = Object.keys(rows[0] || {});
+  const popup = window.open("", "_blank", "noopener,noreferrer");
+  if (!popup) return;
+  popup.document.write(`<!doctype html><html><head><title>${title}</title><style>body{font-family:Arial;padding:24px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #bbb;padding:6px;text-align:left}th{background:#eee}</style></head><body><h1>${title}</h1><table><thead><tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.map((row) => `<tr>${headers.map((h) => `<td>${String(row[h] ?? "")}</td>`).join("")}</tr>`).join("")}</tbody></table></body></html>`);
+  popup.document.close(); popup.focus(); popup.print();
+}
+
 type Contact = {
   name: string;
   role: string;
@@ -446,42 +507,37 @@ function Companies({ add }: { add: () => void }) {
   );
 }
 function Fleet({ add }: { add: () => void }) {
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function importFleet(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]; if (!file) return;
+    setBusy(true); setMessage("Reading fleet spreadsheet…");
+    try {
+      const rows = fleetRows(await readWorkbook(file));
+      if (!rows.length) throw new Error("No valid fleet rows found. Required headings include Fleet Number and Machine Type.");
+      const response = await fetch("/api/machines", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ companyId: 1, rows }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Fleet import failed");
+      setMessage(`✓ Imported ${result.imported} machines; skipped ${result.skipped} duplicates or incomplete rows.`);
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Fleet import failed"); }
+    setBusy(false); e.target.value = "";
+  }
   return (
     <>
-      <Title
-        tag="ASSET REGISTER"
-        title="Machine fleet"
-        desc="This fleet register is empty and ready for company-owned assets."
-      >
-        <button className="primary" onClick={add}>
-          ＋ Add machine
-        </button>
+      <Title tag="ASSET REGISTER" title="Machine fleet" desc="Register machines manually or import an approved Excel/CSV fleet list.">
+        <button className="primary" onClick={add}>＋ Add machine</button>
       </Title>
+      {message && <div className="ordersaved">{message}</div>}
       <section className="panel tablewrap">
         <div className="tabletop">
-          <span>0 registered machines</span>
-          <button>Import fleet list</button>
+          <span>Company fleet register</span>
+          <label className="primary" style={{cursor:"pointer"}}>
+            {busy ? "Importing…" : "Import fleet list"}
+            <input hidden type="file" accept=".xlsx,.xls,.xlsm,.csv" onChange={importFleet} disabled={busy} />
+          </label>
         </div>
-        <table>
-          <thead>
-            <tr>
-              <th>Fleet</th>
-              <th>Machine type</th>
-              <th>Site</th>
-              <th>Status</th>
-              <th>Health</th>
-              <th>Availability</th>
-              <th>Utilisation</th>
-              <th>Service due</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td colSpan={8}>
-                <EmptyRow text="No machines found. Add a machine or import a fleet spreadsheet." />
-              </td>
-            </tr>
-          </tbody>
+        <table><thead><tr><th>Fleet</th><th>Machine type</th><th>Site</th><th>Status</th><th>Operating hours</th><th>Service due</th></tr></thead>
+          <tbody><tr><td colSpan={6}><EmptyRow text="Import a fleet spreadsheet or add a machine manually. Duplicate fleet numbers are skipped." /></td></tr></tbody>
         </table>
       </section>
     </>
@@ -960,10 +1016,10 @@ function Reports() {
         desc="Companies choose a report and date range; SAS performs the calculations."
       >
         <div className="exports">
-          <button>▦ Excel</button>
-          <button>▣ PDF</button>
-          <button>W Word</button>
-          <button>⌁ Print</button>
+          <button onClick={() => exportProduction("excel")}>▦ Excel</button>
+          <button onClick={() => exportProduction("pdf")}>▣ PDF</button>
+          <button onClick={() => exportProduction("word")}>W Word</button>
+          <button onClick={() => exportProduction("pdf")}>⌁ Print</button>
         </div>
       </Title>
       <div className="reportcatalog">
@@ -1294,6 +1350,15 @@ function Production() {
   );
 }
 function SummaryReports() {
+  async function exportProduction(format: "excel" | "word" | "pdf") {
+    const response = await fetch("/api/production");
+    const data = await response.json();
+    const rows = (data.records || []) as ImportRow[];
+    if (!rows.length) { alert("Add or import daily production records first."); return; }
+    if (format === "excel") downloadExcel("TMM-Production-Report.xlsx", rows);
+    else if (format === "word") downloadWord("TMM-Production-Report.doc", "TMM Production Report", rows);
+    else printRows("TMM Production Report — choose Save as PDF", rows);
+  }
   const [period, setPeriod] = useState<"Weekly" | "Monthly">("Weekly");
   const labels =
     period === "Weekly"
@@ -1736,6 +1801,39 @@ function PaymentsOrders() {
       );
     setSaving(false);
   }
+  async function populateOrderFromDocument(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    const form = e.currentTarget.form;
+    if (!file || !form) return;
+    if (!/\.(xlsx|xls|xlsm|csv)$/i.test(file.name)) {
+      setMessage("Document attached. PDF, Word and image values require manual review; Excel/CSV fields can be filled automatically.");
+      return;
+    }
+    try {
+      const [row] = await readWorkbook(file);
+      if (!row) throw new Error("The spreadsheet has no data rows.");
+      const values: Record<string, string | number> = {
+        orderNumber: String(firstValue(row, ["po number", "purchase order", "order number", "po", "quotation number"])),
+        supplier: String(firstValue(row, ["supplier", "vendor", "store"])),
+        storeContact: String(firstValue(row, ["store contact", "supplier contact", "contact"])),
+        fleetNumber: String(firstValue(row, ["fleet number", "fleet", "machine", "equipment"])),
+        description: String(firstValue(row, ["description", "part or service", "item", "service"])),
+        orderDate: String(firstValue(row, ["order date", "po date", "date"])),
+        expectedDelivery: String(firstValue(row, ["expected delivery", "delivery date", "due date"])),
+        amount: Number(firstValue(row, ["amount", "total", "order value", "value"]) || 0),
+        responsiblePerson: String(firstValue(row, ["responsible person", "buyer", "planner", "requested by"])),
+      };
+      let filled = 0;
+      for (const [name, value] of Object.entries(values)) {
+        if (value === "" || value === 0) continue;
+        const input = form.elements.namedItem(name) as HTMLInputElement | null;
+        if (input) { input.value = String(value); filled++; }
+      }
+      setMessage(`✓ Document read: ${filled} fields populated. Please review them before saving.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not read the document.");
+    }
+  }
   const overdue = orders.filter(
     (o) =>
       o.expectedDelivery &&
@@ -2031,9 +2129,10 @@ function PaymentsOrders() {
                 <input
                   name="document"
                   type="file"
-                  accept=".pdf,.docx,.xlsx,.png,.jpg,.jpeg"
+                  onChange={populateOrderFromDocument}
+                  accept=".pdf,.docx,.xlsx,.xls,.xlsm,.csv,.png,.jpg,.jpeg"
                 />
-                <small>PDF, Word, Excel or image · maximum 10 MB</small>
+                <small>Excel/CSV auto-fill fields; PDF, Word or image attach for review · maximum 10 MB</small>
               </label>
               <label className="wide">
                 Follow-up channels
@@ -2077,192 +2176,49 @@ function PaymentsOrders() {
   );
 }
 function CaptureHub({ openManual }: { openManual: () => void }) {
-  const [file, setFile] = useState<File | null>(null),
-    [stage, setStage] = useState<"ready" | "checking" | "review">("ready"),
-    [source, setSource] = useState("Control room daily report");
-  function choose(e: ChangeEvent<HTMLInputElement>) {
-    const next = e.target.files?.[0] || null;
-    setFile(next);
-    setStage(next ? "checking" : "ready");
-    if (next) setTimeout(() => setStage("review"), 700);
+  const [file, setFile] = useState<File | null>(null);
+  const [source, setSource] = useState("Control room daily report");
+  const [rows, setRows] = useState<ImportRow[]>([]);
+  const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false);
+  async function choose(e: ChangeEvent<HTMLInputElement>) {
+    const next = e.target.files?.[0] || null; setFile(next); setRows([]); setMessage("");
+    if (!next) return;
+    try {
+      const raw = await readWorkbook(next);
+      const mapped = source === "Fleet availability report" ? fleetRows(raw) : productionRows(raw);
+      if (!mapped.length) throw new Error("No valid rows detected. Check the required headings and try again.");
+      setRows(mapped as unknown as ImportRow[]);
+      setMessage(`✓ ${mapped.length} valid rows detected. Review the preview before approving.`);
+    } catch (error) { setMessage(error instanceof Error ? error.message : "The file could not be read."); }
+  }
+  async function approve() {
+    if (!file || !rows.length) return; setSaving(true);
+    const fleet = source === "Fleet availability report";
+    const response = await fetch(fleet ? "/api/machines" : "/api/production", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ companyId: 1, sourceFile: file.name, rows })
+    });
+    const result = await response.json().catch(() => ({}));
+    setMessage(response.ok ? `✓ Import completed: ${result.imported ?? 0} records saved to D1.` : result.error || "Import failed.");
+    setSaving(false);
   }
   return (
     <>
-      <Title
-        tag="DATA CAPTURE HUB"
-        title="Bring in daily machine information"
-        desc="Choose the easiest method for the site. Every record stays inside the selected company workspace."
-      />
+      <Title tag="DATA CAPTURE HUB" title="Bring in daily machine information" desc="Upload an Excel/CSV control-room report, review detected fields, then approve the D1 import." />
       <div className="capturemethods">
-        <article className="panel capturecard selected">
-          <span>1</span>
-          <b>Excel or CSV upload</b>
-          <p>
-            Upload the daily report from the control room. SAS checks the
-            headings before any records are accepted.
-          </p>
-          <em>Recommended for your current reports</em>
-        </article>
-        <article className="panel capturecard">
-          <span>2</span>
-          <b>Manual daily entry</b>
-          <p>
-            Use the simple shift form when a spreadsheet is unavailable or one
-            machine needs correcting.
-          </p>
-          <button onClick={openManual}>Open manual capture →</button>
-        </article>
-        <article className="panel capturecard">
-          <span>3</span>
-          <b>Sensors & telematics</b>
-          <p>
-            Connect OEM, GPS, hour-meter or IoT data later. Normal daily capture
-            remains available.
-          </p>
-          <em>Optional connection</em>
-        </article>
+        <article className="panel capturecard selected"><span>1</span><b>Excel or CSV upload</b><p>Reads headings and maps fleet, dates, hours, downtime and production.</p><em>Recommended</em></article>
+        <article className="panel capturecard"><span>2</span><b>Manual daily entry</b><p>Use the shift form when a spreadsheet is unavailable.</p><button onClick={openManual}>Open manual capture →</button></article>
+        <article className="panel capturecard"><span>3</span><b>Sensors & telematics</b><p>Optional future OEM or IoT connection.</p><em>Not connected</em></article>
       </div>
       <section className="panel importworkspace">
-        <Head tag="CONTROL-ROOM IMPORT" title="Upload, check and approve">
-          <span className="safechip">No automatic overwrite</span>
-        </Head>
+        <Head tag="CONTROL-ROOM IMPORT" title="Upload, review and approve"><span className="safechip">No automatic overwrite</span></Head>
         <div className="importgrid">
-          <div className="dropzone">
-            <input
-              id="daily-file"
-              type="file"
-              accept=".xlsx,.xls,.xlsm,.csv"
-              onChange={choose}
-            />
-            <label htmlFor="daily-file">
-              <b>⇧</b>
-              <strong>
-                {file ? file.name : "Choose the control-room report"}
-              </strong>
-              <span>Excel .xlsx/.xlsm/.xls or CSV · one file at a time</span>
-              <button type="button">Browse file</button>
-            </label>
-          </div>
-          <div className="importsettings">
-            <label>
-              Report type
-              <select
-                value={source}
-                onChange={(e) => setSource(e.target.value)}
-              >
-                <option>Control room daily report</option>
-                <option>Fleet availability report</option>
-                <option>Breakdown report</option>
-                <option>Production summary</option>
-              </select>
-            </label>
-            <label>
-              Company workspace
-              <select>
-                <option>Select company before import</option>
-              </select>
-            </label>
-            <label>
-              Site
-              <select>
-                <option>Detect from spreadsheet</option>
-              </select>
-            </label>
-            <label>
-              Duplicate rule
-              <select>
-                <option>Flag for review — do not overwrite</option>
-                <option>Skip matching rows</option>
-              </select>
-            </label>
-          </div>
+          <div className="dropzone"><input id="daily-file" type="file" accept=".xlsx,.xls,.xlsm,.csv" onChange={choose}/><label htmlFor="daily-file"><b>⇧</b><strong>{file ? file.name : "Choose the control-room report"}</strong><span>Excel or CSV · one file at a time</span><button type="button">Browse file</button></label></div>
+          <div className="importsettings"><label>Report type<select value={source} onChange={(e)=>{setSource(e.target.value);setRows([]);setFile(null);}}><option>Control room daily report</option><option>Fleet availability report</option><option>Production summary</option></select></label><label>Duplicate rule<select><option>Flag / skip — never overwrite</option></select></label></div>
         </div>
-        {stage === "ready" ? (
-          <div className="importstatus neutral">
-            <b>1</b>
-            <span>
-              <strong>Nothing imported yet</strong>
-              <small>
-                Select a report. SAS will show the detected columns and any
-                errors before approval.
-              </small>
-            </span>
-          </div>
-        ) : stage === "checking" ? (
-          <div className="importstatus checking">
-            <b>…</b>
-            <span>
-              <strong>Checking the report</strong>
-              <small>
-                Reading headings, dates, fleet numbers, hours and production
-                fields.
-              </small>
-            </span>
-          </div>
-        ) : (
-          <div className="importstatus success">
-            <b>✓</b>
-            <span>
-              <strong>File ready for field mapping</strong>
-              <small>
-                The next review confirms Date, Shift, Fleet Number, Operating
-                Hours, Downtime and Production. Nothing is saved until you
-                approve.
-              </small>
-            </span>
-            <button>Review mapping</button>
-          </div>
-        )}
-        <div className="importsteps">
-          <span>
-            <b>1</b> Upload
-          </span>
-          <i>→</i>
-          <span>
-            <b>2</b> Match columns
-          </span>
-          <i>→</i>
-          <span>
-            <b>3</b> Fix warnings
-          </span>
-          <i>→</i>
-          <span>
-            <b>4</b> Approve import
-          </span>
-        </div>
-      </section>
-      <section className="panel sensorpanel">
-        <Head tag="OPTIONAL AUTOMATION" title="Sensor & telematics connections">
-          <span className="provider">All connections off until configured</span>
-        </Head>
-        <div className="sensorlist">
-          {[
-            ["OEM machine API", "Hours, fault codes and service readings"],
-            [
-              "GPS / fleet telematics",
-              "Location, ignition, idle and utilisation",
-            ],
-            [
-              "IoT sensor gateway",
-              "Pressure, temperature, oil level and vibration",
-            ],
-          ].map((x) => (
-            <article key={x[0]}>
-              <b>○</b>
-              <div>
-                <strong>{x[0]}</strong>
-                <small>{x[1]}</small>
-              </div>
-              <span>Not connected</span>
-              <button>Set up</button>
-            </article>
-          ))}
-        </div>
-        <p className="sensorhelp">
-          Sensor information is treated as another source, not as a replacement
-          for verified operator and control-room records. Alerts are generated
-          only after company rules and safe thresholds are approved.
-        </p>
+        {message && <div className="importstatus success"><b>{rows.length ? "✓" : "!"}</b><span><strong>{message}</strong><small>Nothing is saved until Approve import is pressed.</small></span></div>}
+        {rows.length > 0 && <><div className="panel tablewrap" style={{overflowX:"auto"}}><table><thead><tr>{Object.keys(rows[0]).map((key)=><th key={key}>{key}</th>)}</tr></thead><tbody>{rows.slice(0,5).map((row,i)=><tr key={i}>{Object.keys(rows[0]).map((key)=><td key={key}>{String(row[key] ?? "")}</td>)}</tr>)}</tbody></table></div><div className="modalfoot"><span>Previewing first {Math.min(rows.length,5)} of {rows.length} valid rows.</span><button className="primary" onClick={approve} disabled={saving}>{saving ? "Saving…" : "Approve import"}</button></div></>}
       </section>
     </>
   );
