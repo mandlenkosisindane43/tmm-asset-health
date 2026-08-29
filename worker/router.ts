@@ -52,34 +52,40 @@ async function ensureContractorSessionCompatibility(env: Env) {
   return sessionCompatibilityReady;
 }
 
-async function polishCompanyAdminDashboard(request: Request, response: Response) {
+async function polishCompanyAdminWorkspace(request: Request, response: Response) {
   if (request.method !== "GET") return response;
   const url = new URL(request.url);
   if (url.pathname !== "/contractor") return response;
-  const view = url.searchParams.get("view") || "dashboard";
-  if (view !== "dashboard") return response;
 
   const contentType = response.headers.get("content-type") || "";
   if (!contentType.includes("text/html")) return response;
 
+  const view = url.searchParams.get("view") || "dashboard";
   let body = await response.text();
 
-  // Keep the full Add / Import Daily Report workflow in the dedicated
-  // Daily Reports module, but remove the large data-entry panel from Home.
-  body = body.replace(/<aside class="sideform">[\s\S]*?<\/aside>/, "");
-
-  // Make the dashboard content use the full width after the panel is removed.
+  // Use the clean dark-background Sindane logo on every Company Admin / role page.
   body = body.replace(
-    ".dashboard-grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:13px;margin-top:13px}",
-    ".dashboard-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:13px;margin-top:13px}",
+    '<img src="/sindane-logo.png" alt="Sindane Asset Solutions"><div class="tag">TRACK. PREVENT. PERFORM.</div>',
+    '<img src="/sindane-logo-sidebar.svg" alt="Sindane Asset Solutions" class="sidebar-brand-image">',
   );
 
-  // Present the existing PNG company logo as a prominent image, matching
-  // the approved sidebar reference while retaining the dark brand panel.
+  // Also replace any remaining role-page logo images with the clean brand asset.
+  body = body.replaceAll('src="/sindane-logo.png"', 'src="/sindane-logo-sidebar.svg"');
+
+  // Inject final layout overrides: no top spacer, no white logo card, clean sidebar.
   body = body.replace(
-    ".logo{text-align:center;padding:4px 8px 22px;border-bottom:1px solid #243541}.logo img{max-width:178px;width:100%;height:105px;object-fit:contain}.tag{font-size:8px;letter-spacing:.25em;color:#e2a900;font-weight:800;margin-top:-8px}",
-    ".logo{text-align:center;padding:2px 4px 18px;border-bottom:1px solid #243541}.logo img{display:block;max-width:205px;width:100%;height:128px;object-fit:contain;margin:0 auto}.tag{font-size:8px;letter-spacing:.22em;color:#e2a900;font-weight:800;margin-top:-10px}",
+    "</style>",
+    `.sidebar-brand-image{display:block!important;width:146px!important;max-width:146px!important;height:118px!important;object-fit:contain!important;margin:0 auto!important;background:transparent!important;border:0!important;border-radius:0!important;box-shadow:none!important;padding:0!important}.logo{display:block!important;text-align:center!important;padding:0 0 14px!important;margin:0 0 12px!important;min-height:0!important;height:auto!important;background:transparent!important;border-bottom:1px solid rgba(255,255,255,.10)!important}.logo .tag{display:none!important}html,body{margin:0!important;padding:0!important}.app{margin:0!important;padding:0!important;align-items:start!important;min-height:100vh!important}.side{margin:0!important;top:0!important;align-self:start!important;padding:10px 14px 20px!important;min-height:100vh!important;height:100vh!important;background:linear-gradient(180deg,#08151d 0%,#06131e 100%)!important}.side nav{padding-top:4px!important}.side nav a{padding:11px 12px!important}.rolehero img{background:transparent!important;border:0!important;border-radius:0!important;padding:0!important;object-fit:contain!important}@media(max-width:820px){.app{display:grid!important;grid-template-columns:182px minmax(0,1fr)!important;align-items:start!important}.side{position:sticky!important;top:0!important;height:100vh!important;min-height:100vh!important;padding:8px 10px 16px!important}.side nav{display:grid!important;grid-template-columns:1fr!important;gap:4px!important}.side nav a{font-size:12px!important;justify-content:flex-start!important;padding:10px!important}.side nav a span{font-size:17px!important;width:20px!important}.sidebar-brand-image{width:132px!important;max-width:132px!important;height:106px!important}.logo{padding-bottom:10px!important;margin-bottom:8px!important}.userbox{display:flex!important;left:10px!important;right:10px!important;bottom:14px!important}.main{min-width:0!important}.content{padding:12px!important}.kpis{grid-template-columns:1fr 1fr!important}.row3,.row4,.split{grid-template-columns:1fr!important}.actions{grid-template-columns:1fr 1fr!important}}\n</style>`,
   );
+
+  // Dashboard home stays clean: the full Daily Report form belongs only in Daily Reports.
+  if (view === "dashboard") {
+    body = body.replace(/<aside class="sideform">[\s\S]*?<\/aside>/, "");
+    body = body.replace(
+      ".dashboard-grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:13px;margin-top:13px}",
+      ".dashboard-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:13px;margin-top:13px}",
+    );
+  }
 
   const headers = new Headers(response.headers);
   headers.delete("content-length");
@@ -107,7 +113,7 @@ export default {
 
     // Redesigned Company Admin / role workspace.
     const adminV3 = await handleCompanyAdminV3(request, env);
-    if (adminV3) return polishCompanyAdminDashboard(request, adminV3);
+    if (adminV3) return polishCompanyAdminWorkspace(request, adminV3);
 
     // Existing tenant APIs remain available behind the same secure session.
     const contractor = await handleContractorLiveV2(request, env);
