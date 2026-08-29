@@ -384,82 +384,94 @@ function Overview({
   return (
     <>
       <Title
-        tag="SAS SETUP CENTRE"
-        title="Welcome to TMM Asset Health"
-        desc="Your workspace is clean and ready for its first company, contacts and machines."
-      />
+        tag="COMPANY ADMIN CENTRE"
+        title="Simple company administration"
+        desc="Manage people, fleet setup and important exceptions without taking over the engineer, mechanic or supervisor's daily work."
+      >
+        <button onClick={() => go("Users & roles")}>Invite user</button>
+        <button className="primary" onClick={() => go("Fleet")}>
+          Register machines
+        </button>
+      </Title>
       <div className="blankkpis">
-        <Kpi label="Companies" value="0" note="No client company added" />
-        <Kpi label="Machines" value="0" note="Fleet register is empty" />
-        <Kpi label="Open alerts" value="0" note="No critical alerts" />
-        <Kpi label="Licence" value="Not issued" note="Create a company first" />
+        <Kpi label="Active users" value="0" note="Invite the first company user" />
+        <Kpi label="Registered machines" value="0" note="Fleet setup not completed" />
+        <Kpi label="Pending approvals" value="0" note="Nothing waiting for approval" />
+        <Kpi label="Critical alerts" value="0" note="No urgent exceptions" />
       </div>
+
       <section className="setup panel">
         <div>
-          <small>GET STARTED</small>
-          <h2>Set up the system in four controlled steps</h2>
+          <small>ADMIN PRIORITIES</small>
+          <h2>Only the controls needed to keep the company workspace running</h2>
           <p>
-            Company data is separated by licence. Machines, users, contacts,
-            imports and reports will belong only to the selected company.
+            Operational capture belongs to supervisors and mechanics. Reliability
+            analysis belongs to engineers. The company administrator manages
+            access, setup, alerts and exceptions.
           </p>
         </div>
         <ol>
           <li>
             <b>1</b>
             <span>
-              <strong>Add a company</strong>
-              <small>Client details, sites and licence owner</small>
+              <strong>Invite users</strong>
+              <small>Add engineers, mechanics, supervisors and managers</small>
             </span>
-            <button onClick={addCompany}>Start</button>
+            <button onClick={() => go("Users & roles")}>Invite user</button>
           </li>
           <li>
             <b>2</b>
             <span>
-              <strong>Add alert contacts</strong>
-              <small>Up to 10 emails and 10 phone numbers</small>
+              <strong>Register the fleet</strong>
+              <small>Add machines manually or import an approved fleet list</small>
             </span>
-            <button onClick={() => go("Alerts & contacts")}>Configure</button>
+            <button onClick={() => go("Fleet")}>Open fleet</button>
           </li>
           <li>
             <b>3</b>
             <span>
-              <strong>Register machines</strong>
-              <small>Fleet numbers, hours and service plans</small>
+              <strong>Configure alert contacts</strong>
+              <small>Select who receives critical email and SMS alerts</small>
             </span>
-            <button onClick={() => go("Fleet")}>Open</button>
+            <button onClick={() => go("Alerts & contacts")}>Configure</button>
           </li>
           <li>
             <b>4</b>
             <span>
-              <strong>Issue SAS licence</strong>
-              <small>Plan, expiry, grace period and limits</small>
+              <strong>Review reports and exceptions</strong>
+              <small>Check missing reports, overdue actions and approvals</small>
             </span>
-            <button onClick={() => go("SAS Licence")}>Review</button>
+            <button onClick={() => go("Reports")}>View reports</button>
           </li>
         </ol>
       </section>
+
       <div className="twocol">
-        <section className="panel emptybox">
-          <b>▦</b>
-          <h2>No fleet data yet</h2>
-          <p>
-            Register a machine or import an approved daily production
-            spreadsheet.
-          </p>
-          <button className="primary" onClick={() => go("Fleet")}>
-            Add first machine
-          </button>
+        <section className="panel guide">
+          <Head tag="NEEDS ATTENTION" title="Company admin checklist" />
+          {[
+            "No users waiting for approval",
+            "No missing daily production report",
+            "No critical alert requiring escalation",
+            "Company licence status ready for review",
+          ].map((item, index) => (
+            <p key={item}>
+              <b>{index + 1}</b>
+              <span>{item}</span>
+            </p>
+          ))}
         </section>
         <section className="panel emptybox">
-          <b>✦</b>
-          <h2>Critical alerts are ready</h2>
+          <b>♙</b>
+          <h2>Invite the company team</h2>
           <p>
-            Add responsible people and select whether each person receives
-            email, SMS or both.
+            Give each person only the role and company access required for their
+            responsibility.
           </p>
-          <button onClick={() => go("Alerts & contacts")}>
-            Set alert contacts
+          <button className="primary" onClick={() => go("Users & roles")}>
+            Invite user
           </button>
+          <button onClick={addCompany}>Update company setup</button>
         </section>
       </div>
     </>
