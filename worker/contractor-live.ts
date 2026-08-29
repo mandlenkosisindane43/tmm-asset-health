@@ -12,94 +12,54 @@ type Session = {
   role: string;
   companyName: string;
   licenceStatus: string;
-  companyExpiresAt: string;
-  graceDays: number;
+  licenceExpiresAt: string;
 };
 
-const SESSION_COOKIE = "sas_contractor_session";
-const encoder = new TextEncoder();
+const COOKIE = "sas_contractor_session";
+const te = new TextEncoder();
 let schemaReady: Promise<void> | null = null;
 
-function json(data: unknown, status = 200, headers: Record<string, string> = {}) {
-  return new Response(JSON.stringify(data), {
+function responseJson(value: unknown, status = 200, extra: Record<string, string> = {}) {
+  return new Response(JSON.stringify(value), {
     status,
-    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...headers },
+    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...extra },
   });
 }
 
-function html(body: string, status = 200) {
-  return new Response(body, {
+function responseHtml(value: string, status = 200) {
+  return new Response(value, {
     status,
     headers: {
       "content-type": "text/html; charset=utf-8",
       "cache-control": "no-store",
       "x-frame-options": "DENY",
       "referrer-policy": "same-origin",
-      "content-security-policy": "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+      "content-security-policy": "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'self'",
     },
   });
 }
 
-function normaliseEmail(value: unknown) {
-  return String(value || "").trim().toLowerCase();
+function txt(v: unknown, max = 240) { return String(v || "").trim().slice(0, max); }
+function email(v: unknown) { return txt(v, 200).toLowerCase(); }
+function hex(bytes: Uint8Array) { return Array.from(bytes, b => b.toString(16).padStart(2, "0")).join(""); }
+function unhex(value: string) { const b = new Uint8Array(value.length / 2); for (let i = 0; i < b.length; i++) b[i] = parseInt(value.slice(i * 2, i * 2 + 2), 16); return b; }
+function b64url(bytes: Uint8Array) { let s = ""; bytes.forEach(b => s += String.fromCharCode(b)); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, ""); }
+
+async function sha(value: string) { return hex(new Uint8Array(await crypto.subtle.digest("SHA-256", te.encode(value)))); }
+async function same(a: string, b: string) { const [x, y] = await Promise.all([sha(a), sha(b)]); let d = x.length ^ y.length; for (let i = 0; i < Math.min(x.length, y.length); i++) d |= x.charCodeAt(i) ^ y.charCodeAt(i); return d === 0; }
+async function passHash(password: string, salt: string) {
+  const key = await crypto.subtle.importKey("raw", te.encode(password), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: unhex(salt), iterations: 150000 }, key, 256);
+  return hex(new Uint8Array(bits));
 }
 
-function safeText(value: unknown, max = 240) {
-  return String(value || "").trim().slice(0, max);
-}
-
-function toHex(bytes: Uint8Array) {
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-function fromHex(value: string) {
-  const out = new Uint8Array(Math.floor(value.length / 2));
-  for (let i = 0; i < out.length; i++) out[i] = Number.parseInt(value.slice(i * 2, i * 2 + 2), 16);
-  return out;
-}
-
-function base64url(bytes: Uint8Array) {
-  let binary = "";
-  for (const b of bytes) binary += String.fromCharCode(b);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-async function sha256Hex(value: string) {
-  return toHex(new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(value))));
-}
-
-async function secureTextEqual(a: string, b: string) {
-  const [ha, hb] = await Promise.all([sha256Hex(a), sha256Hex(b)]);
-  if (ha.length !== hb.length) return false;
-  let diff = 0;
-  for (let i = 0; i < ha.length; i++) diff |= ha.charCodeAt(i) ^ hb.charCodeAt(i);
-  return diff === 0;
-}
-
-async function passwordHash(password: string, saltHex: string) {
-  const key = await crypto.subtle.importKey("raw", encoder.encode(password), "PBKDF2", false, ["deriveBits"]);
-  const bits = await crypto.subtle.deriveBits(
-    { name: "PBKDF2", hash: "SHA-256", salt: fromHex(saltHex), iterations: 150000 },
-    key,
-    256,
-  );
-  return toHex(new Uint8Array(bits));
-}
-
-function cookieValue(request: Request, name: string) {
-  const cookie = request.headers.get("cookie") || "";
-  for (const part of cookie.split(";")) {
-    const [k, ...rest] = part.trim().split("=");
-    if (k === name) return rest.join("=");
+function cookie(request: Request) {
+  const raw = request.headers.get("cookie") || "";
+  for (const part of raw.split(";")) {
+    const pair = part.trim().split("=");
+    if (pair.shift() === COOKIE) return pair.join("=");
   }
   return "";
-}
-
-function licenceAllowed(status: string, expiresAt: string, graceDays: number) {
-  if (!["active", "trial"].includes(String(status).toLowerCase())) return false;
-  const expiry = new Date(expiresAt).getTime();
-  if (!Number.isFinite(expiry)) return false;
-  return Date.now() <= expiry + Math.max(0, Number(graceDays || 0)) * 86400000;
 }
 
 async function ensureSchema(env: ContractorEnv) {
@@ -137,7 +97,6 @@ async function ensureSchema(env: ContractorEnv) {
         expires_at TEXT NOT NULL,
         created_at TEXT NOT NULL
       );
-      CREATE INDEX IF NOT EXISTS contractor_sessions_company_idx ON contractor_sessions(company_id);
       CREATE TABLE IF NOT EXISTS contractor_documents (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         company_id INTEGER NOT NULL,
@@ -149,7 +108,6 @@ async function ensureSchema(env: ContractorEnv) {
         category TEXT NOT NULL DEFAULT 'general',
         created_at TEXT NOT NULL
       );
-      CREATE INDEX IF NOT EXISTS contractor_documents_company_idx ON contractor_documents(company_id);
       CREATE TABLE IF NOT EXISTS machines (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         company_id INTEGER NOT NULL,
@@ -208,322 +166,259 @@ async function ensureSchema(env: ContractorEnv) {
         created_at TEXT NOT NULL
       );
     `);
-    const alterations = [
+    for (const q of [
       "ALTER TABLE company_users ADD COLUMN password_hash TEXT",
       "ALTER TABLE company_users ADD COLUMN password_salt TEXT",
       "ALTER TABLE company_users ADD COLUMN updated_at TEXT",
-    ];
-    for (const sql of alterations) {
-      try { await env.DB.prepare(sql).run(); } catch { /* already exists */ }
-    }
-  })().catch((error) => { schemaReady = null; throw error; });
+    ]) { try { await env.DB.prepare(q).run(); } catch { /* existing column */ } }
+  })().catch(e => { schemaReady = null; throw e; });
   return schemaReady;
 }
 
-async function getSession(request: Request, env: ContractorEnv): Promise<Session | null> {
+function activeLicence(status: string, expires: string, graceDays: number) {
+  if (!["active", "trial"].includes(status.toLowerCase())) return false;
+  const end = new Date(expires).getTime() + Math.max(0, graceDays) * 86400000;
+  return Number.isFinite(end) && Date.now() <= end;
+}
+
+async function sessionFor(request: Request, env: ContractorEnv): Promise<Session | null> {
   await ensureSchema(env);
-  const token = cookieValue(request, SESSION_COOKIE);
+  const token = cookie(request);
   if (!token) return null;
-  const tokenHash = await sha256Hex(token);
+  const tokenHash = await sha(token);
   const row = await env.DB.prepare(`
-    SELECT s.company_id AS companyId, s.user_id AS userId, s.expires_at AS sessionExpiresAt,
-           u.email AS email, u.full_name AS fullName, u.role AS role, u.status AS userStatus,
-           c.name AS companyName, c.licence_status AS licenceStatus, c.expires_at AS companyExpiresAt,
-           c.grace_days AS graceDays
+    SELECT s.company_id AS companyId,s.user_id AS userId,s.expires_at AS sessionExpires,
+           u.email,u.full_name AS fullName,u.role,u.status AS userStatus,
+           c.name AS companyName,c.licence_status AS licenceStatus,c.expires_at AS licenceExpires,c.grace_days AS graceDays
     FROM contractor_sessions s
-    JOIN company_users u ON u.id = s.user_id AND u.company_id = s.company_id
-    JOIN companies c ON c.id = s.company_id
-    WHERE s.token_hash = ?
-    LIMIT 1
+    JOIN company_users u ON u.id=s.user_id AND u.company_id=s.company_id
+    JOIN companies c ON c.id=s.company_id
+    WHERE s.token_hash=? LIMIT 1
   `).bind(tokenHash).first<Record<string, unknown>>();
   if (!row) return null;
-  if (String(row.userStatus) !== "active" || new Date(String(row.sessionExpiresAt)).getTime() < Date.now()) {
-    await env.DB.prepare("DELETE FROM contractor_sessions WHERE token_hash = ?").bind(tokenHash).run();
-    return null;
-  }
-  if (!licenceAllowed(String(row.licenceStatus), String(row.companyExpiresAt), Number(row.graceDays || 0))) return null;
+  if (String(row.userStatus) !== "active" || new Date(String(row.sessionExpires)).getTime() < Date.now()) return null;
+  if (!activeLicence(String(row.licenceStatus), String(row.licenceExpires), Number(row.graceDays || 0))) return null;
   return {
-    companyId: Number(row.companyId), userId: Number(row.userId), email: String(row.email),
-    fullName: String(row.fullName), role: String(row.role), companyName: String(row.companyName),
-    licenceStatus: String(row.licenceStatus), companyExpiresAt: String(row.companyExpiresAt), graceDays: Number(row.graceDays || 0),
+    companyId: Number(row.companyId), userId: Number(row.userId), email: String(row.email), fullName: String(row.fullName),
+    role: String(row.role), companyName: String(row.companyName), licenceStatus: String(row.licenceStatus), licenceExpiresAt: String(row.licenceExpires),
   };
 }
 
-async function requireSession(request: Request, env: ContractorEnv) {
-  const session = await getSession(request, env);
-  return session || null;
-}
-
-async function verifyAdmin(request: Request, env: ContractorEnv) {
-  const configured = String(env.ADMIN_PASSWORD || "");
-  if (!configured) return false;
-  const auth = request.headers.get("authorization") || "";
-  const supplied = auth.startsWith("Bearer ") ? auth.slice(7) : (request.headers.get("x-admin-password") || "");
-  if (!supplied) return false;
-  return secureTextEqual(supplied, configured);
-}
-
 async function login(request: Request, env: ContractorEnv) {
-  await ensureSchema(env);
   const body = await request.json().catch(() => ({})) as Record<string, unknown>;
-  const email = normaliseEmail(body.email);
-  const password = String(body.password || "");
-  if (!email || !password) return json({ error: "Email and password are required." }, 400);
+  const userEmail = email(body.email), password = String(body.password || "");
+  if (!userEmail || !password) return responseJson({ error: "Email and password are required." }, 400);
   const row = await env.DB.prepare(`
-    SELECT u.id AS userId, u.company_id AS companyId, u.email, u.full_name AS fullName, u.role,
-           u.status AS userStatus, u.password_hash AS passwordHash, u.password_salt AS passwordSalt,
-           c.name AS companyName, c.licence_status AS licenceStatus, c.expires_at AS companyExpiresAt,
-           c.grace_days AS graceDays
-    FROM company_users u JOIN companies c ON c.id = u.company_id
-    WHERE lower(u.email) = ? ORDER BY u.id ASC LIMIT 1
-  `).bind(email).first<Record<string, unknown>>();
-  if (!row || String(row.userStatus) !== "active" || !row.passwordHash || !row.passwordSalt) {
-    return json({ error: "Invalid email or password." }, 401);
-  }
-  const hash = await passwordHash(password, String(row.passwordSalt));
-  if (!(await secureTextEqual(hash, String(row.passwordHash)))) return json({ error: "Invalid email or password." }, 401);
-  if (!licenceAllowed(String(row.licenceStatus), String(row.companyExpiresAt), Number(row.graceDays || 0))) {
-    return json({ error: "This company licence is inactive or expired. Contact Sindane Asset Solutions." }, 403);
-  }
-  const tokenBytes = crypto.getRandomValues(new Uint8Array(32));
-  const token = base64url(tokenBytes);
-  const tokenHash = await sha256Hex(token);
-  const now = new Date();
-  const expires = new Date(now.getTime() + 12 * 60 * 60 * 1000);
-  await env.DB.prepare("DELETE FROM contractor_sessions WHERE expires_at < ?").bind(now.toISOString()).run();
+    SELECT u.id AS userId,u.company_id AS companyId,u.full_name AS fullName,u.role,u.status AS userStatus,u.password_hash AS passwordHash,u.password_salt AS passwordSalt,
+           c.name AS companyName,c.licence_status AS licenceStatus,c.expires_at AS licenceExpires,c.grace_days AS graceDays
+    FROM company_users u JOIN companies c ON c.id=u.company_id WHERE lower(u.email)=? ORDER BY u.id LIMIT 1
+  `).bind(userEmail).first<Record<string, unknown>>();
+  if (!row || String(row.userStatus) !== "active" || !row.passwordHash || !row.passwordSalt) return responseJson({ error: "Invalid email or password." }, 401);
+  const calculated = await passHash(password, String(row.passwordSalt));
+  if (!(await same(calculated, String(row.passwordHash)))) return responseJson({ error: "Invalid email or password." }, 401);
+  if (!activeLicence(String(row.licenceStatus), String(row.licenceExpires), Number(row.graceDays || 0))) return responseJson({ error: "Company licence is inactive or expired." }, 403);
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  const token = b64url(bytes), tokenHash = await sha(token), now = new Date(), expires = new Date(Date.now() + 12 * 3600000);
+  await env.DB.prepare("DELETE FROM contractor_sessions WHERE expires_at<?").bind(now.toISOString()).run();
   await env.DB.prepare("INSERT INTO contractor_sessions(token_hash,company_id,user_id,expires_at,created_at) VALUES(?,?,?,?,?)")
     .bind(tokenHash, Number(row.companyId), Number(row.userId), expires.toISOString(), now.toISOString()).run();
-  return json({ ok: true, company: row.companyName, name: row.fullName }, 200, {
-    "set-cookie": `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=43200`,
-  });
+  return responseJson({ ok: true }, 200, { "set-cookie": COOKIE + "=" + token + "; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=43200" });
 }
 
 async function logout(request: Request, env: ContractorEnv) {
-  const token = cookieValue(request, SESSION_COOKIE);
-  if (token) await env.DB.prepare("DELETE FROM contractor_sessions WHERE token_hash = ?").bind(await sha256Hex(token)).run();
-  return json({ ok: true }, 200, { "set-cookie": `${SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0` });
+  const token = cookie(request);
+  if (token) await env.DB.prepare("DELETE FROM contractor_sessions WHERE token_hash=?").bind(await sha(token)).run();
+  return responseJson({ ok: true }, 200, { "set-cookie": COOKIE + "=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0" });
 }
 
-async function createContractor(request: Request, env: ContractorEnv) {
-  await ensureSchema(env);
-  if (!(await verifyAdmin(request, env))) {
-    if (!env.ADMIN_PASSWORD) return json({ error: "ADMIN_PASSWORD is not configured in Cloudflare secrets." }, 503);
-    return json({ error: "Administrator authentication failed." }, 401);
-  }
-  const body = await request.json().catch(() => ({})) as Record<string, unknown>;
-  const companyName = safeText(body.companyName, 120);
-  const email = normaliseEmail(body.email);
-  const fullName = safeText(body.fullName, 120);
-  const password = String(body.password || "");
-  const role = safeText(body.role || "company_admin", 40) || "company_admin";
-  const licenceDays = Math.min(3650, Math.max(1, Number(body.licenceDays || 30)));
-  if (!companyName || !email || !fullName) return json({ error: "Company name, administrator name and email are required." }, 400);
-  if (password.length < 10) return json({ error: "Use a password with at least 10 characters." }, 400);
-  const existing = await env.DB.prepare("SELECT id FROM company_users WHERE lower(email) = ? LIMIT 1").bind(email).first();
-  if (existing) return json({ error: "That email is already linked to a contractor account." }, 409);
-  const licenceKey = `SAS-${base64url(crypto.getRandomValues(new Uint8Array(12))).toUpperCase()}`;
-  const now = new Date();
-  const expiresAt = new Date(now.getTime() + licenceDays * 86400000).toISOString();
+async function adminOk(request: Request, env: ContractorEnv) {
+  const configured = String(env.ADMIN_PASSWORD || "");
+  if (!configured) return false;
+  const auth = request.headers.get("authorization") || "";
+  const supplied = auth.startsWith("Bearer ") ? auth.slice(7) : String(request.headers.get("x-admin-password") || "");
+  return supplied ? same(supplied, configured) : false;
+}
+
+async function createCompany(request: Request, env: ContractorEnv) {
+  if (!(await adminOk(request, env))) return responseJson({ error: env.ADMIN_PASSWORD ? "Administrator authentication failed." : "ADMIN_PASSWORD is not configured in Cloudflare secrets." }, env.ADMIN_PASSWORD ? 401 : 503);
+  const b = await request.json().catch(() => ({})) as Record<string, unknown>;
+  const companyName = txt(b.companyName, 120), fullName = txt(b.fullName, 120), userEmail = email(b.email), password = String(b.password || "");
+  if (!companyName || !fullName || !userEmail) return responseJson({ error: "Company, administrator name and email are required." }, 400);
+  if (password.length < 10) return responseJson({ error: "Use a contractor password with at least 10 characters." }, 400);
+  const exists = await env.DB.prepare("SELECT id FROM company_users WHERE lower(email)=? LIMIT 1").bind(userEmail).first();
+  if (exists) return responseJson({ error: "This email is already linked to a contractor account." }, 409);
+  const days = Math.max(1, Math.min(3650, Number(b.licenceDays || 30))), now = new Date(), expires = new Date(Date.now() + days * 86400000).toISOString();
+  const licence = "SAS-" + b64url(crypto.getRandomValues(new Uint8Array(12))).toUpperCase();
   await env.DB.prepare("INSERT INTO companies(name,licence_key,licence_status,expires_at,grace_days,max_users,created_at) VALUES(?,?,?,?,?,?,?)")
-    .bind(companyName, licenceKey, "active", expiresAt, 7, 10, now.toISOString()).run();
-  const company = await env.DB.prepare("SELECT id FROM companies WHERE licence_key = ? LIMIT 1").bind(licenceKey).first<{ id: number }>();
-  if (!company) return json({ error: "Company creation failed." }, 500);
-  const salt = toHex(crypto.getRandomValues(new Uint8Array(16)));
-  const hash = await passwordHash(password, salt);
-  await env.DB.prepare(`INSERT INTO company_users(company_id,email,full_name,role,status,password_hash,password_salt,updated_at,created_at)
-    VALUES(?,?,?,?,?,?,?,?,?)`).bind(company.id, email, fullName, role, "active", hash, salt, now.toISOString(), now.toISOString()).run();
-  return json({ ok: true, companyId: company.id, companyName, email, licenceKey, expiresAt }, 201);
+    .bind(companyName, licence, "active", expires, 7, 10, now.toISOString()).run();
+  const company = await env.DB.prepare("SELECT id FROM companies WHERE licence_key=? LIMIT 1").bind(licence).first<{ id: number }>();
+  if (!company) return responseJson({ error: "Company creation failed." }, 500);
+  const salt = hex(crypto.getRandomValues(new Uint8Array(16))), hash = await passHash(password, salt);
+  await env.DB.prepare("INSERT INTO company_users(company_id,email,full_name,role,status,password_hash,password_salt,updated_at,created_at) VALUES(?,?,?,?,?,?,?,?,?)")
+    .bind(company.id, userEmail, fullName, txt(b.role || "company_admin", 40), "active", hash, salt, now.toISOString(), now.toISOString()).run();
+  return responseJson({ ok: true, companyId: company.id, companyName, email: userEmail, licenceKey: licence, expiresAt: expires }, 201);
 }
 
-async function contractorData(request: Request, env: ContractorEnv, session: Session, path: string) {
-  const method = request.method.toUpperCase();
-  const companyId = session.companyId;
-
-  if (path === "/api/contractor/me" && method === "GET") {
-    return json({ user: { email: session.email, fullName: session.fullName, role: session.role }, company: { id: companyId, name: session.companyName, licenceStatus: session.licenceStatus, expiresAt: session.companyExpiresAt } });
-  }
-
-  if (path === "/api/contractor/dashboard" && method === "GET") {
-    const machines = (await env.DB.prepare("SELECT id,fleet_number AS fleetNumber,category,site,status,operating_hours AS operatingHours,availability_target AS availabilityTarget,next_service_hours AS nextServiceHours FROM machines WHERE company_id=? ORDER BY fleet_number LIMIT 1000").bind(companyId).all<Record<string, unknown>>()).results;
-    const breakdowns = (await env.DB.prepare("SELECT id,fleet_number AS fleetNumber,severity,system_name AS system,component,description,opened_at AS openedAt,downtime_hours AS downtimeHours,status,action FROM events WHERE company_id=? AND status!='closed' ORDER BY id DESC LIMIT 100").bind(companyId).all<Record<string, unknown>>()).results;
-    const workOrders = (await env.DB.prepare("SELECT id,fleet_number AS fleetNumber,title,priority,assigned_to AS assignedTo,due_at AS dueAt,status FROM work_orders WHERE company_id=? AND status NOT IN ('closed','completed') ORDER BY id DESC LIMIT 100").bind(companyId).all<Record<string, unknown>>()).results;
-    const production = (await env.DB.prepare("SELECT id,report_date AS reportDate,fleet_number AS fleetNumber,shift_hours AS shiftHours,planned_downtime AS plannedDowntime,unplanned_downtime AS unplannedDowntime,operating_hours AS operatingHours,productive_hours AS productiveHours,tonnes FROM production_records WHERE company_id=? ORDER BY report_date DESC,id DESC LIMIT 200").bind(companyId).all<Record<string, unknown>>()).results;
-    const total = machines.length;
-    const operating = machines.filter((m) => ["operating", "running", "available"].includes(String(m.status || "").toLowerCase())).length;
-    const availability = total ? (operating / total) * 100 : 0;
-    const latestDate = production[0]?.reportDate ? String(production[0].reportDate) : null;
-    const productionToday = latestDate ? production.filter((r) => String(r.reportDate) === latestDate).reduce((sum, r) => sum + Number(r.tonnes || 0), 0) : 0;
-    return json({ metrics: { fleetTotal: total, operating, availability, openBreakdowns: breakdowns.length, openWorkOrders: workOrders.length, productionToday, productionDate: latestDate }, machines, breakdowns, workOrders, production });
-  }
+async function dataApi(request: Request, env: ContractorEnv, s: Session, path: string): Promise<Response | null> {
+  const method = request.method.toUpperCase(), cid = s.companyId;
+  if (path === "/api/contractor/me" && method === "GET") return responseJson({ user: { email: s.email, fullName: s.fullName, role: s.role }, company: { id: cid, name: s.companyName, licenceStatus: s.licenceStatus, expiresAt: s.licenceExpiresAt } });
 
   if (path === "/api/contractor/fleet") {
     if (method === "GET") {
-      const rows = (await env.DB.prepare("SELECT id,fleet_number AS fleetNumber,category,site,status,operating_hours AS operatingHours,availability_target AS availabilityTarget,next_service_hours AS nextServiceHours,created_at AS createdAt FROM machines WHERE company_id=? ORDER BY fleet_number LIMIT 1000").bind(companyId).all<Record<string, unknown>>()).results;
-      return json({ machines: rows });
+      const r = await env.DB.prepare("SELECT id,fleet_number AS fleetNumber,category,site,status,operating_hours AS operatingHours,availability_target AS availabilityTarget,next_service_hours AS nextServiceHours FROM machines WHERE company_id=? ORDER BY fleet_number LIMIT 1000").bind(cid).all<Record<string, unknown>>();
+      return responseJson({ machines: r.results });
     }
     if (method === "POST") {
-      const body = await request.json().catch(() => ({})) as Record<string, unknown>;
-      const fleetNumber = safeText(body.fleetNumber, 60), category = safeText(body.category, 100), site = safeText(body.site || "Unassigned", 100);
-      if (!fleetNumber || !category) return json({ error: "Fleet number and machine type are required." }, 400);
-      try {
-        await env.DB.prepare("INSERT INTO machines(company_id,fleet_number,category,site,status,operating_hours,availability_target,next_service_hours,created_at) VALUES(?,?,?,?,?,?,?,?,?)")
-          .bind(companyId, fleetNumber, category, site, safeText(body.status || "operating", 30), Number(body.operatingHours || 0), Number(body.availabilityTarget || 0.9), body.nextServiceHours === "" || body.nextServiceHours == null ? null : Number(body.nextServiceHours), new Date().toISOString()).run();
-      } catch { return json({ error: "That fleet number already exists for this company." }, 409); }
-      return json({ ok: true }, 201);
+      const b = await request.json().catch(() => ({})) as Record<string, unknown>;
+      const fleet = txt(b.fleetNumber, 60), category = txt(b.category, 100);
+      if (!fleet || !category) return responseJson({ error: "Fleet number and machine type are required." }, 400);
+      try { await env.DB.prepare("INSERT INTO machines(company_id,fleet_number,category,site,status,operating_hours,availability_target,next_service_hours,created_at) VALUES(?,?,?,?,?,?,?,?,?)")
+        .bind(cid, fleet, category, txt(b.site || "Unassigned", 100), txt(b.status || "operating", 30), Number(b.operatingHours || 0), Number(b.availabilityTarget || 0.9), b.nextServiceHours === "" || b.nextServiceHours == null ? null : Number(b.nextServiceHours), new Date().toISOString()).run(); }
+      catch { return responseJson({ error: "That fleet number already exists for this company." }, 409); }
+      return responseJson({ ok: true }, 201);
     }
   }
 
   if (path === "/api/contractor/breakdowns") {
     if (method === "GET") {
-      const rows = (await env.DB.prepare("SELECT id,fleet_number AS fleetNumber,event_type AS eventType,severity,system_name AS system,component,description,opened_at AS openedAt,closed_at AS closedAt,downtime_hours AS downtimeHours,status,action FROM events WHERE company_id=? ORDER BY id DESC LIMIT 500").bind(companyId).all<Record<string, unknown>>()).results;
-      return json({ events: rows });
+      const r = await env.DB.prepare("SELECT id,fleet_number AS fleetNumber,severity,system_name AS system,component,description,opened_at AS openedAt,downtime_hours AS downtimeHours,status,action FROM events WHERE company_id=? ORDER BY id DESC LIMIT 500").bind(cid).all<Record<string, unknown>>();
+      return responseJson({ events: r.results });
     }
     if (method === "POST") {
-      const b = await request.json().catch(() => ({})) as Record<string, unknown>;
-      const fleet = safeText(b.fleetNumber, 60), description = safeText(b.description, 500);
-      if (!fleet || !description) return json({ error: "Machine and fault description are required." }, 400);
-      const now = new Date().toISOString();
-      await env.DB.prepare(`INSERT INTO events(company_id,fleet_number,event_type,severity,system_name,component,description,opened_at,downtime_hours,status,action,spares_status,oil_litres_lost,created_at)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(companyId, fleet, safeText(b.eventType || "breakdown", 40), safeText(b.severity || "medium", 30), safeText(b.system || "General", 80), safeText(b.component || "Not confirmed", 100), description, now, Number(b.downtimeHours || 0), "open", safeText(b.action || "Inspection required", 300), "Not assessed", Number(b.oilLitresLost || 0), now).run();
-      return json({ ok: true }, 201);
+      const b = await request.json().catch(() => ({})) as Record<string, unknown>, fleet = txt(b.fleetNumber, 60), description = txt(b.description, 500), now = new Date().toISOString();
+      if (!fleet || !description) return responseJson({ error: "Machine and fault description are required." }, 400);
+      await env.DB.prepare("INSERT INTO events(company_id,fleet_number,event_type,severity,system_name,component,description,opened_at,downtime_hours,status,action,spares_status,oil_litres_lost,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+        .bind(cid, fleet, "breakdown", txt(b.severity || "medium", 30), txt(b.system || "General", 80), txt(b.component || "Not confirmed", 100), description, now, Number(b.downtimeHours || 0), "open", txt(b.action || "Inspection required", 300), "Not assessed", Number(b.oilLitresLost || 0), now).run();
+      return responseJson({ ok: true }, 201);
     }
   }
 
   if (path === "/api/contractor/work-orders") {
     if (method === "GET") {
-      const rows = (await env.DB.prepare("SELECT id,fleet_number AS fleetNumber,title,priority,assigned_to AS assignedTo,due_at AS dueAt,status,created_at AS createdAt FROM work_orders WHERE company_id=? ORDER BY id DESC LIMIT 500").bind(companyId).all<Record<string, unknown>>()).results;
-      return json({ workOrders: rows });
+      const r = await env.DB.prepare("SELECT id,fleet_number AS fleetNumber,title,priority,assigned_to AS assignedTo,due_at AS dueAt,status FROM work_orders WHERE company_id=? ORDER BY id DESC LIMIT 500").bind(cid).all<Record<string, unknown>>();
+      return responseJson({ workOrders: r.results });
     }
     if (method === "POST") {
-      const b = await request.json().catch(() => ({})) as Record<string, unknown>;
-      const fleet = safeText(b.fleetNumber, 60), title = safeText(b.title, 300);
-      if (!fleet || !title) return json({ error: "Fleet number and work description are required." }, 400);
+      const b = await request.json().catch(() => ({})) as Record<string, unknown>, fleet = txt(b.fleetNumber, 60), title = txt(b.title, 300);
+      if (!fleet || !title) return responseJson({ error: "Fleet number and work description are required." }, 400);
       await env.DB.prepare("INSERT INTO work_orders(company_id,fleet_number,title,priority,assigned_to,due_at,status,created_at) VALUES(?,?,?,?,?,?,?,?)")
-        .bind(companyId, fleet, title, safeText(b.priority || "medium", 30), safeText(b.assignedTo, 120), safeText(b.dueAt, 40), "open", new Date().toISOString()).run();
-      return json({ ok: true }, 201);
+        .bind(cid, fleet, title, txt(b.priority || "medium", 30), txt(b.assignedTo, 120), txt(b.dueAt, 40), "open", new Date().toISOString()).run();
+      return responseJson({ ok: true }, 201);
     }
   }
 
   if (path === "/api/contractor/production") {
     if (method === "GET") {
-      const rows = (await env.DB.prepare("SELECT id,report_date AS reportDate,fleet_number AS fleetNumber,shift_hours AS shiftHours,planned_downtime AS plannedDowntime,unplanned_downtime AS unplannedDowntime,operating_hours AS operatingHours,productive_hours AS productiveHours,tonnes,source_file AS sourceFile,created_at AS createdAt FROM production_records WHERE company_id=? ORDER BY report_date DESC,id DESC LIMIT 500").bind(companyId).all<Record<string, unknown>>()).results;
-      return json({ records: rows });
+      const r = await env.DB.prepare("SELECT id,report_date AS reportDate,fleet_number AS fleetNumber,shift_hours AS shiftHours,unplanned_downtime AS unplannedDowntime,operating_hours AS operatingHours,tonnes FROM production_records WHERE company_id=? ORDER BY report_date DESC,id DESC LIMIT 500").bind(cid).all<Record<string, unknown>>();
+      return responseJson({ records: r.results });
     }
     if (method === "POST") {
-      const b = await request.json().catch(() => ({})) as Record<string, unknown>;
-      const date = safeText(b.reportDate || new Date().toISOString().slice(0, 10), 20), fleet = safeText(b.fleetNumber || "Plant", 60);
-      await env.DB.prepare(`INSERT INTO production_records(company_id,report_date,fleet_number,shift_hours,planned_downtime,unplanned_downtime,operating_hours,productive_hours,tonnes,source_file,created_at)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?)`).bind(companyId, date, fleet, Number(b.shiftHours || 24), Number(b.plannedDowntime || 0), Number(b.unplannedDowntime || 0), Number(b.operatingHours || 0), Number(b.productiveHours || 0), Number(b.tonnes || 0), "contractor live capture", new Date().toISOString()).run();
-      return json({ ok: true }, 201);
+      const b = await request.json().catch(() => ({})) as Record<string, unknown>, now = new Date().toISOString();
+      await env.DB.prepare("INSERT INTO production_records(company_id,report_date,fleet_number,shift_hours,planned_downtime,unplanned_downtime,operating_hours,productive_hours,tonnes,source_file,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)")
+        .bind(cid, txt(b.reportDate || now.slice(0, 10), 20), txt(b.fleetNumber || "Plant", 60), Number(b.shiftHours || 24), 0, Number(b.unplannedDowntime || 0), Number(b.operatingHours || 0), Number(b.operatingHours || 0), Number(b.tonnes || 0), "contractor live capture", now).run();
+      return responseJson({ ok: true }, 201);
     }
+  }
+
+  if (path === "/api/contractor/dashboard" && method === "GET") {
+    const fleet = (await env.DB.prepare("SELECT id,fleet_number AS fleetNumber,category,site,status,operating_hours AS operatingHours,next_service_hours AS nextServiceHours FROM machines WHERE company_id=? ORDER BY fleet_number LIMIT 1000").bind(cid).all<Record<string, unknown>>()).results;
+    const breaks = (await env.DB.prepare("SELECT id,fleet_number AS fleetNumber,severity,description,opened_at AS openedAt,downtime_hours AS downtimeHours,status FROM events WHERE company_id=? AND status!='closed' ORDER BY id DESC LIMIT 100").bind(cid).all<Record<string, unknown>>()).results;
+    const work = (await env.DB.prepare("SELECT id FROM work_orders WHERE company_id=? AND status NOT IN ('closed','completed') LIMIT 1000").bind(cid).all()).results;
+    const prod = (await env.DB.prepare("SELECT report_date AS reportDate,tonnes FROM production_records WHERE company_id=? ORDER BY report_date DESC,id DESC LIMIT 500").bind(cid).all<Record<string, unknown>>()).results;
+    const operating = fleet.filter(x => ["operating", "running", "available"].includes(String(x.status || "").toLowerCase())).length;
+    const latestDate = prod.length ? String(prod[0].reportDate) : "";
+    const tonnes = latestDate ? prod.filter(x => String(x.reportDate) === latestDate).reduce((sum, x) => sum + Number(x.tonnes || 0), 0) : 0;
+    return responseJson({ metrics: { fleetTotal: fleet.length, operating, availability: fleet.length ? operating / fleet.length * 100 : 0, openBreakdowns: breaks.length, openWorkOrders: work.length, production: tonnes, productionDate: latestDate }, fleet, breakdowns: breaks });
   }
 
   if (path === "/api/contractor/documents") {
     if (method === "GET") {
-      const rows = (await env.DB.prepare("SELECT id,file_name AS fileName,content_type AS contentType,size_bytes AS sizeBytes,category,created_at AS createdAt FROM contractor_documents WHERE company_id=? ORDER BY id DESC LIMIT 300").bind(companyId).all<Record<string, unknown>>()).results;
-      return json({ documents: rows });
+      const r = await env.DB.prepare("SELECT id,file_name AS fileName,category,size_bytes AS sizeBytes,created_at AS createdAt FROM contractor_documents WHERE company_id=? ORDER BY id DESC LIMIT 300").bind(cid).all<Record<string, unknown>>();
+      return responseJson({ documents: r.results });
     }
     if (method === "POST") {
-      if (!env.BUCKET) return json({ error: "R2 storage is not configured." }, 503);
-      const form = await request.formData();
-      const file = form.get("file");
-      if (!(file instanceof File) || !file.size) return json({ error: "Choose a document to upload." }, 400);
-      if (file.size > 15_000_000) return json({ error: "Document must be 15 MB or smaller." }, 400);
+      if (!env.BUCKET) return responseJson({ error: "R2 storage is not configured." }, 503);
+      const form = await request.formData(), file = form.get("file");
+      if (!(file instanceof File) || !file.size) return responseJson({ error: "Choose a file." }, 400);
+      if (file.size > 15_000_000) return responseJson({ error: "File must be 15 MB or smaller." }, 400);
       const allowed = new Set(["application/pdf","image/png","image/jpeg","application/vnd.openxmlformats-officedocument.wordprocessingml.document","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","application/vnd.ms-excel","text/csv","application/csv","text/plain"]);
-      if (file.type && !allowed.has(file.type)) return json({ error: "Upload PDF, Word, Excel, CSV, TXT, PNG or JPG." }, 400);
-      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-").slice(-140) || "document";
-      const key = `companies/${companyId}/documents/${crypto.randomUUID()}-${safeName}`;
+      if (file.type && !allowed.has(file.type)) return responseJson({ error: "Upload PDF, Word, Excel, CSV, TXT, PNG or JPG." }, 400);
+      const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "-").slice(-140) || "document";
+      const key = "companies/" + cid + "/documents/" + crypto.randomUUID() + "-" + safe;
       await env.BUCKET.put(key, file.stream(), { httpMetadata: { contentType: file.type || "application/octet-stream" } });
       await env.DB.prepare("INSERT INTO contractor_documents(company_id,uploaded_by,file_name,object_key,content_type,size_bytes,category,created_at) VALUES(?,?,?,?,?,?,?,?)")
-        .bind(companyId, session.userId, file.name.slice(0, 240), key, file.type || "application/octet-stream", file.size, safeText(form.get("category") || "general", 60), new Date().toISOString()).run();
-      return json({ ok: true }, 201);
+        .bind(cid, s.userId, file.name.slice(0, 240), key, file.type || "application/octet-stream", file.size, txt(form.get("category") || "general", 60), new Date().toISOString()).run();
+      return responseJson({ ok: true }, 201);
     }
   }
 
-  const docMatch = path.match(/^\/api\/contractor\/documents\/(\d+)\/download$/);
-  if (docMatch && method === "GET") {
-    if (!env.BUCKET) return json({ error: "R2 storage is not configured." }, 503);
-    const doc = await env.DB.prepare("SELECT object_key AS objectKey,file_name AS fileName,content_type AS contentType FROM contractor_documents WHERE id=? AND company_id=? LIMIT 1")
-      .bind(Number(docMatch[1]), companyId).first<Record<string, unknown>>();
-    if (!doc) return json({ error: "Document not found." }, 404);
-    const object = await env.BUCKET.get(String(doc.objectKey));
-    if (!object) return json({ error: "Stored file not found." }, 404);
-    return new Response(object.body, { headers: { "content-type": String(doc.contentType || "application/octet-stream"), "content-disposition": `attachment; filename="${String(doc.fileName).replace(/["\r\n]/g, "-")}"`, "cache-control": "private, no-store" } });
+  const dm = path.match(/^\/api\/contractor\/documents\/(\d+)\/download$/);
+  if (dm && method === "GET") {
+    if (!env.BUCKET) return responseJson({ error: "R2 storage is not configured." }, 503);
+    const d = await env.DB.prepare("SELECT object_key AS objectKey,file_name AS fileName,content_type AS contentType FROM contractor_documents WHERE id=? AND company_id=? LIMIT 1").bind(Number(dm[1]), cid).first<Record<string, unknown>>();
+    if (!d) return responseJson({ error: "Document not found." }, 404);
+    const obj = await env.BUCKET.get(String(d.objectKey));
+    if (!obj) return responseJson({ error: "Stored file not found." }, 404);
+    return new Response(obj.body, { headers: { "content-type": String(d.contentType || "application/octet-stream"), "content-disposition": "attachment; filename=\"" + String(d.fileName).replace(/[\"\r\n]/g, "-") + "\"", "cache-control": "private, no-store" } });
   }
-
   return null;
 }
 
 function loginPage() {
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Contractor Login | TMM Asset Health</title><style>
-  *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#08162b;font-family:Arial,sans-serif;padding:20px;color:#14213d}.box{width:min(430px,100%);background:#fff;padding:32px;border-radius:18px;box-shadow:0 25px 70px #0008}.brand{color:#0f3158;font-weight:900}.brand span{display:block;color:#64748b;font-size:12px;margin-top:4px}.tag{margin:18px 0 6px;color:#1369b0;font-size:11px;font-weight:900;letter-spacing:.08em}.box h1{margin:0 0 8px}.box p{color:#64748b;font-size:13px;line-height:1.5}.field{display:grid;gap:7px;margin-top:15px;font-size:12px;font-weight:800}.field input{padding:13px;border:1px solid #cbd5e1;border-radius:9px;font-size:15px}.btn{width:100%;margin-top:20px;border:0;background:#1267b3;color:#fff;padding:13px;border-radius:9px;font-size:15px;font-weight:900;cursor:pointer}.msg{min-height:20px;color:#b91c1c;font-size:12px;margin-top:12px}.demo{margin-top:20px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:12px}.demo a{color:#1267b3;font-weight:800;text-decoration:none}</style></head><body><form class="box" id="login"><div class="brand">TMM Asset Health<span>Sindane Asset Solutions</span></div><div class="tag">CONTRACTOR SECURE ACCESS</div><h1>Sign in to your company workspace</h1><p>Your account is isolated to your contractor company. Fleet, breakdowns, production and documents are never selected by a browser-supplied company ID.</p><label class="field">Email<input name="email" type="email" required autocomplete="username"></label><label class="field">Password<input name="password" type="password" required autocomplete="current-password"></label><button class="btn">Sign in securely</button><div class="msg" id="msg"></div><div class="demo">Need to show the sample first? <a href="/contractor-demo">Open contractor demo</a></div></form><script>
-  document.getElementById('login').addEventListener('submit',async(e)=>{e.preventDefault();const f=new FormData(e.currentTarget);const r=await fetch('/api/contractor/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:f.get('email'),password:f.get('password')})});const j=await r.json().catch(()=>({}));if(r.ok){location.href='/contractor';return}document.getElementById('msg').textContent=j.error||'Sign in failed.'});
-  </script></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Contractor Login</title><style>*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#09192e;font-family:Arial,sans-serif;padding:20px}.box{width:min(430px,100%);background:#fff;border-radius:18px;padding:32px;color:#15243c}.brand{font-weight:900;color:#103963}.brand small{display:block;color:#718198;margin-top:4px}.tag{margin-top:22px;font-size:11px;font-weight:900;color:#1267b3}.box h1{margin:7px 0}.box p{color:#64748b;font-size:13px;line-height:1.5}.field{display:grid;gap:7px;margin-top:15px;font-size:12px;font-weight:800}.field input{padding:13px;border:1px solid #cbd5e1;border-radius:8px;font-size:15px}.btn{width:100%;margin-top:20px;border:0;border-radius:8px;background:#1267b3;color:#fff;padding:13px;font-weight:900}.msg{min-height:18px;margin-top:12px;color:#b91c1c;font-size:12px}.demo{border-top:1px solid #e5e7eb;margin-top:18px;padding-top:16px;font-size:12px}.demo a{color:#1267b3;font-weight:800;text-decoration:none}</style></head><body><form id="f" class="box"><div class="brand">TMM Asset Health<small>Sindane Asset Solutions</small></div><div class="tag">CONTRACTOR SECURE ACCESS</div><h1>Company workspace login</h1><p>After sign-in, every database query uses the company ID stored in your secure server session.</p><label class="field">Email<input name="email" type="email" required></label><label class="field">Password<input name="password" type="password" required></label><button class="btn">Sign in securely</button><div id="msg" class="msg"></div><div class="demo"><a href="/contractor-demo">Open the sample contractor demo</a></div></form><script>document.getElementById('f').onsubmit=async function(e){e.preventDefault();var f=new FormData(e.currentTarget);var r=await fetch('/api/contractor/login',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email:f.get('email'),password:f.get('password')})});var j=await r.json().catch(function(){return {}});if(r.ok){location.href='/contractor';return}document.getElementById('msg').textContent=j.error||'Sign in failed.'}</script></body></html>`;
 }
 
-function ownerSetupPage() {
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Create Contractor Account</title><style>*{box-sizing:border-box}body{margin:0;background:#f4f7fb;color:#14213d;font-family:Arial,sans-serif;padding:28px}.wrap{max-width:760px;margin:auto}.card{background:#fff;border:1px solid #dce5ef;border-radius:16px;padding:25px}h1{margin-top:0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.field{display:grid;gap:6px;font-size:12px;font-weight:800}.field input,.field select{padding:12px;border:1px solid #cbd5e1;border-radius:8px}.wide{grid-column:1/-1}.btn{border:0;background:#1267b3;color:white;padding:13px 18px;border-radius:9px;font-weight:900;cursor:pointer;margin-top:18px}.msg{white-space:pre-wrap;margin-top:18px;padding:12px;background:#f8fafc;border-radius:8px;font-size:12px}@media(max-width:650px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}}</style></head><body><div class="wrap"><div class="card"><h1>Create contractor company</h1><p>This owner-only setup creates the company, licence and first contractor administrator. The administrator password is hashed before being stored.</p><form id="form" class="grid"><label class="field wide">Sindane owner password<input name="ownerPassword" type="password" required></label><label class="field wide">Company name<input name="companyName" required></label><label class="field">Administrator full name<input name="fullName" required></label><label class="field">Administrator email<input name="email" type="email" required></label><label class="field">Contractor password<input name="password" type="password" minlength="10" required></label><label class="field">Licence days<input name="licenceDays" type="number" min="1" value="30" required></label><label class="field">Role<select name="role"><option value="company_admin">Company Admin</option><option value="engineer">Engineer</option><option value="manager">Manager</option></select></label><div class="wide"><button class="btn">Create live contractor account</button><div id="msg" class="msg">No company created yet.</div></div></form></div></div><script>
-  document.getElementById('form').addEventListener('submit',async(e)=>{e.preventDefault();const f=new FormData(e.currentTarget);const payload={companyName:f.get('companyName'),fullName:f.get('fullName'),email:f.get('email'),password:f.get('password'),licenceDays:Number(f.get('licenceDays')),role:f.get('role')};const r=await fetch('/api/admin/contractors',{method:'POST',headers:{'content-type':'application/json','x-admin-password':String(f.get('ownerPassword')||'')},body:JSON.stringify(payload)});const j=await r.json().catch(()=>({}));document.getElementById('msg').textContent=r.ok?`Created: ${j.companyName}\nLogin: ${j.email}\nLicence: ${j.licenceKey}\nExpires: ${j.expiresAt}`:(j.error||'Creation failed.');});
-  </script></body></html>`;
+function ownerPage() {
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Create Contractor</title><style>*{box-sizing:border-box}body{margin:0;background:#f4f7fb;font-family:Arial,sans-serif;color:#15243c;padding:28px}.card{max-width:760px;margin:auto;background:#fff;border:1px solid #dce5ef;border-radius:16px;padding:25px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.field{display:grid;gap:6px;font-size:12px;font-weight:800}.field input,.field select{padding:11px;border:1px solid #cbd5e1;border-radius:8px}.wide{grid-column:1/-1}.btn{border:0;background:#1267b3;color:#fff;padding:12px 16px;border-radius:8px;font-weight:900;margin-top:8px}.msg{margin-top:16px;padding:12px;background:#f8fafc;border-radius:8px;white-space:pre-wrap;font-size:12px}@media(max-width:650px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}}</style></head><body><div class="card"><h1>Create live contractor account</h1><p>This owner-only page creates an isolated company tenant and its first administrator.</p><form id="f" class="grid"><label class="field wide">Sindane owner password<input name="ownerPassword" type="password" required></label><label class="field wide">Company name<input name="companyName" required></label><label class="field">Administrator name<input name="fullName" required></label><label class="field">Administrator email<input name="email" type="email" required></label><label class="field">Contractor password<input name="password" type="password" minlength="10" required></label><label class="field">Licence days<input name="licenceDays" type="number" value="30" min="1"></label><label class="field">Role<select name="role"><option value="company_admin">Company Admin</option><option value="engineer">Engineer</option><option value="manager">Manager</option></select></label><div class="wide"><button class="btn">Create contractor</button><div id="msg" class="msg">No account created yet.</div></div></form></div><script>document.getElementById('f').onsubmit=async function(e){e.preventDefault();var f=new FormData(e.currentTarget);var p={companyName:f.get('companyName'),fullName:f.get('fullName'),email:f.get('email'),password:f.get('password'),licenceDays:Number(f.get('licenceDays')),role:f.get('role')};var r=await fetch('/api/admin/contractors',{method:'POST',headers:{'content-type':'application/json','x-admin-password':String(f.get('ownerPassword')||'')},body:JSON.stringify(p)});var j=await r.json().catch(function(){return {}});var m=document.getElementById('msg');m.textContent=r.ok?('Created: '+j.companyName+'\nLogin: '+j.email+'\nLicence: '+j.licenceKey+'\nExpires: '+j.expiresAt):(j.error||'Creation failed.')}</script></body></html>`;
 }
 
-function contractorAppPage() {
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Contractor Workspace | TMM Asset Health</title><style>
-*{box-sizing:border-box}body{margin:0;background:#f4f7fb;color:#13233c;font-family:Arial,sans-serif}.app{min-height:100vh;display:grid;grid-template-columns:250px 1fr}.side{background:#0b1c33;color:#fff;padding:20px 14px;display:flex;flex-direction:column}.brand{padding:6px 8px 18px;border-bottom:1px solid #233650}.brand b{display:block}.brand small{color:#8da5c4}.company{padding:13px;margin:16px 2px;border:1px solid #29405f;border-radius:10px;background:#112742}.company b,.company small{display:block}.company small{color:#9bb0ca;margin-top:4px}.nav{display:grid;gap:4px}.nav button{border:0;background:transparent;color:#b8c6d8;text-align:left;padding:11px;border-radius:8px;font-weight:800;cursor:pointer}.nav button.active,.nav button:hover{background:#1a3c66;color:white}.bottom{margin-top:auto;font-size:11px;color:#8da5c4}.main{min-width:0}.top{height:82px;background:white;border-bottom:1px solid #dbe4ee;padding:16px 24px;display:flex;align-items:center;justify-content:space-between}.top h1{font-size:22px;margin:2px 0}.top small{color:#7a889e}.actions{display:flex;gap:8px}.actions button{border:1px solid #d5dfeb;background:#fff;padding:9px 11px;border-radius:8px;font-weight:800;cursor:pointer}.content{padding:22px 24px}.hero{background:linear-gradient(120deg,#0f3158,#175886);color:#fff;border-radius:15px;padding:22px 24px}.hero h2{margin:4px 0}.hero p{margin:0;color:#c7daeb;font-size:13px}.metrics{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:14px 0}.metric,.panel{background:#fff;border:1px solid #dde5ee;border-radius:12px}.metric{padding:15px}.metric small{color:#77869a;font-weight:800}.metric b{display:block;font-size:25px;margin:7px 0}.tab{display:none}.tab.active{display:block}.grid{display:grid;grid-template-columns:1.1fr .9fr;gap:14px}.panel{padding:17px}.panel h3{margin:0 0 12px}.table{overflow:auto}table{width:100%;border-collapse:collapse;font-size:12px}th{background:#f7f9fc;text-align:left;padding:10px;color:#64748b;font-size:9px;text-transform:uppercase}td{padding:11px 10px;border-top:1px solid #edf1f5}.form{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}.form input,.form select{padding:10px;border:1px solid #cbd5e1;border-radius:7px;min-width:0}.form button,.upload button{border:0;background:#1267b3;color:#fff;border-radius:7px;padding:10px;font-weight:800;cursor:pointer}.msg{font-size:11px;color:#9a3412;min-height:16px}.upload{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.empty{padding:18px;color:#7a889e;text-align:center}.pill{display:inline-block;padding:4px 7px;border-radius:999px;background:#edf2f7;font-size:9px;font-weight:800}.good{background:#e2f6eb;color:#177245}.bad{background:#ffe4e4;color:#a82828}.warn{background:#fff0d7;color:#9a5a00}@media(max-width:1050px){.app{grid-template-columns:80px 1fr}.brand small,.company,.bottom{display:none}.nav button{font-size:0;text-align:center}.nav button:before{content:'•';font-size:18px}.metrics{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}}@media(max-width:680px){.app{display:block}.side{display:block}.nav{grid-template-columns:repeat(4,1fr);overflow:auto}.nav button{padding:8px}.top{height:auto;padding:13px 15px}.content{padding:14px}.metrics{grid-template-columns:1fr 1fr}.form{grid-template-columns:1fr}}
-</style></head><body><div class="app"><aside class="side"><div class="brand"><b>TMM Asset Health</b><small>Sindane Asset Solutions</small></div><div class="company"><b id="companyName">Company workspace</b><small id="userName">Loading…</small></div><div class="nav"><button class="active" data-tab="dashboard">Dashboard</button><button data-tab="fleet">Fleet</button><button data-tab="breakdowns">Breakdowns</button><button data-tab="maintenance">Maintenance</button><button data-tab="workorders">Work orders</button><button data-tab="production">Production</button><button data-tab="documents">Documents</button><button data-tab="reports">Reports</button></div><div class="bottom">Tenant-isolated D1 + R2 workspace</div></aside><main class="main"><header class="top"><div><small>CONTRACTOR LIVE PORTAL</small><h1 id="title">Operations Dashboard</h1></div><div class="actions"><button onclick="refreshCurrent()">Refresh</button><button onclick="logout()">Sign out</button></div></header><div class="content">
-<section id="dashboard" class="tab active"><div class="hero"><small>LIVE COMPANY DATA</small><h2 id="welcome">Contractor workspace</h2><p>Fleet, downtime, maintenance, production and documents are filtered on the server by your signed-in company.</p></div><div class="metrics"><div class="metric"><small>Fleet availability</small><b id="mAvailability">0%</b><span>Live fleet status</span></div><div class="metric"><small>Units operating</small><b id="mOperating">0 / 0</b><span>Current status</span></div><div class="metric"><small>Open breakdowns</small><b id="mBreakdowns">0</b><span>Needs attention</span></div><div class="metric"><small>Open work orders</small><b id="mWorkOrders">0</b><span>Maintenance actions</span></div><div class="metric"><small>Latest production</small><b id="mProduction">0 t</b><span id="mProductionDate">No records</span></div></div><div class="grid"><div class="panel"><h3>Fleet status</h3><div id="dashFleet"></div></div><div class="panel"><h3>Latest breakdowns</h3><div id="dashBreakdowns"></div></div></div></section>
-<section id="fleet" class="tab"><div class="panel"><h3>Fleet register</h3><form id="fleetForm" class="form"><input name="fleetNumber" placeholder="Fleet no. e.g. ADT-01" required><input name="category" placeholder="Machine type" required><input name="site" placeholder="Site / section"><input name="operatingHours" type="number" step="0.1" placeholder="Current hours"><input name="nextServiceHours" type="number" step="0.1" placeholder="Next service meter"><button>Add machine</button></form><div id="fleetMsg" class="msg"></div><div id="fleetTable" class="table"></div></div></section>
-<section id="breakdowns" class="tab"><div class="panel"><h3>Breakdown register</h3><form id="breakForm" class="form"><input name="fleetNumber" placeholder="Fleet no." required><input name="description" placeholder="Fault description" required><select name="severity"><option>medium</option><option>high</option><option>critical</option><option>low</option></select><input name="system" placeholder="System e.g. Hydraulic"><input name="component" placeholder="Component"><button>Capture breakdown</button></form><div id="breakMsg" class="msg"></div><div id="breakTable" class="table"></div></div></section>
-<section id="maintenance" class="tab"><div class="panel"><h3>Maintenance due</h3><p>Calculated from each machine's current hour meter and next service meter.</p><div id="maintenanceTable" class="table"></div></div></section>
+function appPage() {
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Contractor Workspace</title><style>*{box-sizing:border-box}body{margin:0;background:#f4f7fb;color:#14213d;font-family:Arial,sans-serif}.app{min-height:100vh;display:grid;grid-template-columns:245px 1fr}.side{background:#0c1b33;color:#fff;padding:20px 14px;display:flex;flex-direction:column}.brand{font-weight:900;padding:7px;border-bottom:1px solid #243750}.brand small{display:block;color:#91a8c8;margin-top:4px}.company{margin:16px 0;padding:12px;background:#112642;border:1px solid #29405f;border-radius:10px}.company b,.company small{display:block}.company small{color:#91a8c8;margin-top:4px}.nav{display:grid;gap:4px}.nav button{background:transparent;border:0;color:#bcc9da;text-align:left;padding:11px;border-radius:8px;font-weight:800}.nav button.active,.nav button:hover{background:#1a3d68;color:#fff}.secure{margin-top:auto;font-size:10px;color:#7fd7a9}.main{min-width:0}.top{height:80px;background:#fff;border-bottom:1px solid #dce4ed;padding:15px 24px;display:flex;align-items:center;justify-content:space-between}.top h1{margin:2px 0;font-size:22px}.top small{color:#758399}.top button{border:1px solid #d5deea;background:#fff;border-radius:8px;padding:8px 10px;font-weight:800}.content{padding:22px 24px}.hero{background:linear-gradient(120deg,#10355d,#185c8d);color:#fff;padding:22px;border-radius:14px}.hero h2{margin:5px 0}.hero p{margin:0;color:#c8daea;font-size:13px}.metrics{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:14px 0}.metric,.panel{background:#fff;border:1px solid #dce5ef;border-radius:12px}.metric{padding:15px}.metric small{color:#748398;font-weight:800}.metric b{font-size:24px;display:block;margin:7px 0}.panel{padding:17px}.tab{display:none}.tab.active{display:block}.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.form{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:12px}.form input,.form select{padding:10px;border:1px solid #cbd5e1;border-radius:7px}.form button,.upload button{border:0;background:#1267b3;color:#fff;border-radius:7px;padding:10px;font-weight:800}.table{overflow:auto}table{width:100%;border-collapse:collapse;font-size:12px}th{background:#f7f9fc;text-align:left;padding:10px;font-size:9px;text-transform:uppercase;color:#64748b}td{border-top:1px solid #edf1f5;padding:10px}.msg{font-size:11px;color:#9a3412;min-height:16px}.empty{padding:18px;text-align:center;color:#7b8798}.upload{display:flex;gap:9px;flex-wrap:wrap;align-items:center}@media(max-width:1050px){.metrics{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}}@media(max-width:760px){.app{display:block}.side{display:block}.company,.secure{display:none}.nav{grid-template-columns:repeat(4,1fr);overflow:auto}.nav button{font-size:10px;padding:8px}.top{height:auto;padding:12px 14px}.content{padding:14px}.form{grid-template-columns:1fr}}</style></head><body><div class="app"><aside class="side"><div class="brand">TMM Asset Health<small>Sindane Asset Solutions</small></div><div class="company"><b id="company">Company</b><small id="user">Loading...</small></div><nav class="nav"><button class="active" data-tab="dashboard">Dashboard</button><button data-tab="fleet">Fleet</button><button data-tab="breakdowns">Breakdowns</button><button data-tab="maintenance">Maintenance</button><button data-tab="workorders">Work orders</button><button data-tab="production">Production</button><button data-tab="documents">Documents</button><button data-tab="reports">Reports</button></nav><div class="secure">Server-side tenant isolation enabled</div></aside><main class="main"><header class="top"><div><small>CONTRACTOR LIVE PORTAL</small><h1 id="title">Operations Dashboard</h1></div><div><button onclick="load(current)">Refresh</button> <button onclick="signout()">Sign out</button></div></header><div class="content">
+<section id="dashboard" class="tab active"><div class="hero"><small>LIVE COMPANY DATA</small><h2 id="welcome">Contractor workspace</h2><p>Every record below is filtered on the server using your signed-in company session.</p></div><div class="metrics"><div class="metric"><small>Availability</small><b id="ma">0%</b></div><div class="metric"><small>Operating</small><b id="mo">0 / 0</b></div><div class="metric"><small>Breakdowns</small><b id="mb">0</b></div><div class="metric"><small>Work orders</small><b id="mw">0</b></div><div class="metric"><small>Production</small><b id="mp">0 t</b><span id="mpd"></span></div></div><div class="grid"><div class="panel"><h3>Fleet status</h3><div id="df"></div></div><div class="panel"><h3>Open breakdowns</h3><div id="db"></div></div></div></section>
+<section id="fleet" class="tab"><div class="panel"><h3>Fleet register</h3><form id="fleetForm" class="form"><input name="fleetNumber" placeholder="Fleet no." required><input name="category" placeholder="Machine type" required><input name="site" placeholder="Site"><input name="operatingHours" type="number" step="0.1" placeholder="Current hours"><input name="nextServiceHours" type="number" step="0.1" placeholder="Next service meter"><button>Add machine</button></form><div id="fleetMsg" class="msg"></div><div id="fleetTable" class="table"></div></div></section>
+<section id="breakdowns" class="tab"><div class="panel"><h3>Breakdown register</h3><form id="breakForm" class="form"><input name="fleetNumber" placeholder="Fleet no." required><input name="description" placeholder="Fault description" required><select name="severity"><option>medium</option><option>high</option><option>critical</option><option>low</option></select><input name="system" placeholder="System"><input name="component" placeholder="Component"><button>Capture breakdown</button></form><div id="breakMsg" class="msg"></div><div id="breakTable" class="table"></div></div></section>
+<section id="maintenance" class="tab"><div class="panel"><h3>Maintenance due</h3><div id="maintTable" class="table"></div></div></section>
 <section id="workorders" class="tab"><div class="panel"><h3>Work orders</h3><form id="woForm" class="form"><input name="fleetNumber" placeholder="Fleet no." required><input name="title" placeholder="Work required" required><select name="priority"><option>medium</option><option>high</option><option>critical</option><option>low</option></select><input name="assignedTo" placeholder="Assigned to"><input name="dueAt" type="date"><button>Create work order</button></form><div id="woMsg" class="msg"></div><div id="woTable" class="table"></div></div></section>
-<section id="production" class="tab"><div class="panel"><h3>Production records</h3><form id="prodForm" class="form"><input name="reportDate" type="date" required><input name="fleetNumber" placeholder="Fleet / Plant" value="Plant"><input name="tonnes" type="number" step="0.1" placeholder="Tonnes"><input name="operatingHours" type="number" step="0.1" placeholder="Operating hours"><input name="unplannedDowntime" type="number" step="0.1" placeholder="Unplanned downtime"><button>Save production</button></form><div id="prodMsg" class="msg"></div><div id="prodTable" class="table"></div></div></section>
-<section id="documents" class="tab"><div class="panel"><h3>Company documents</h3><form id="docForm" class="upload"><input name="file" type="file" required><select name="category"><option value="general">General</option><option value="purchase_order">Purchase order</option><option value="inspection">Inspection</option><option value="oem">OEM / service</option><option value="job_card">Job card</option></select><button>Upload to secure R2</button></form><div id="docMsg" class="msg"></div><div id="docTable" class="table"></div></div></section>
-<section id="reports" class="tab"><div class="panel"><h3>Reports</h3><p>The live records in this workspace are ready for daily, weekly, monthly, downtime Pareto and maintenance compliance reports. Report export is the next module after tenant onboarding is verified.</p><button onclick="window.print()">Print current workspace</button></div></section>
+<section id="production" class="tab"><div class="panel"><h3>Production</h3><form id="prodForm" class="form"><input name="reportDate" type="date" required><input name="fleetNumber" value="Plant" placeholder="Fleet / Plant"><input name="tonnes" type="number" step="0.1" placeholder="Tonnes"><input name="operatingHours" type="number" step="0.1" placeholder="Operating h"><input name="unplannedDowntime" type="number" step="0.1" placeholder="Downtime h"><button>Save production</button></form><div id="prodMsg" class="msg"></div><div id="prodTable" class="table"></div></div></section>
+<section id="documents" class="tab"><div class="panel"><h3>Secure documents</h3><form id="docForm" class="upload"><input name="file" type="file" required><select name="category"><option value="general">General</option><option value="purchase_order">Purchase order</option><option value="inspection">Inspection</option><option value="oem">OEM / service</option><option value="job_card">Job card</option></select><button>Upload to R2</button></form><div id="docMsg" class="msg"></div><div id="docTable" class="table"></div></div></section>
+<section id="reports" class="tab"><div class="panel"><h3>Reports</h3><p>Daily, weekly, monthly, downtime Pareto and maintenance compliance exports will use only this tenant's records.</p><button onclick="window.print()">Print current view</button></div></section>
 </div></main></div><script>
-const titles={dashboard:'Operations Dashboard',fleet:'Fleet',breakdowns:'Breakdowns',maintenance:'Maintenance',workorders:'Work orders',production:'Production',documents:'Documents',reports:'Reports'};let current='dashboard';
-function esc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}function n(v){return Number(v||0)}
-async function api(path,opt){const r=await fetch(path,opt);if(r.status===401){location.href='/contractor-login';throw new Error('Sign in required')}const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Request failed');return j}
-function table(headers,rows){if(!rows.length)return '<div class="empty">No records yet.</div>';return '<table><thead><tr>'+headers.map(h=>'<th>'+esc(h[0])+'</th>').join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+headers.map(h=>'<td>'+esc(r[h[1]]??'')+'</td>').join('')+'</tr>').join('')+'</tbody></table>'}
-async function me(){const j=await api('/api/contractor/me');document.getElementById('companyName').textContent=j.company.name;document.getElementById('userName').textContent=j.user.fullName+' · '+j.user.role;document.getElementById('welcome').textContent='Welcome, '+j.user.fullName;}
-async function dashboard(){const j=await api('/api/contractor/dashboard');const m=j.metrics;document.getElementById('mAvailability').textContent=n(m.availability).toFixed(1)+'%';document.getElementById('mOperating').textContent=m.operating+' / '+m.fleetTotal;document.getElementById('mBreakdowns').textContent=m.openBreakdowns;document.getElementById('mWorkOrders').textContent=m.openWorkOrders;document.getElementById('mProduction').textContent=n(m.productionToday).toLocaleString()+' t';document.getElementById('mProductionDate').textContent=m.productionDate||'No records';document.getElementById('dashFleet').innerHTML=table([['Fleet','fleetNumber'],['Type','category'],['Site','site'],['Status','status']],j.machines.slice(0,8));document.getElementById('dashBreakdowns').innerHTML=table([['Fleet','fleetNumber'],['Severity','severity'],['Fault','description'],['Opened','openedAt']],j.breakdowns.slice(0,8));}
-async function fleet(){const j=await api('/api/contractor/fleet');document.getElementById('fleetTable').innerHTML=table([['Fleet','fleetNumber'],['Machine','category'],['Site','site'],['Status','status'],['Hours','operatingHours'],['Next service','nextServiceHours']],j.machines);document.getElementById('maintenanceTable').innerHTML=table([['Fleet','fleetNumber'],['Machine','category'],['Hours','operatingHours'],['Next service','nextServiceHours'],['Due in','dueIn']],j.machines.map(x=>({...x,dueIn:x.nextServiceHours==null?'Not set':(n(x.nextServiceHours)-n(x.operatingHours)).toFixed(1)+' h'})).sort((a,b)=>n(a.nextServiceHours)-n(a.operatingHours)-n(b.nextServiceHours)+n(b.operatingHours)));}
-async function breakdowns(){const j=await api('/api/contractor/breakdowns');document.getElementById('breakTable').innerHTML=table([['Fleet','fleetNumber'],['Severity','severity'],['System','system'],['Component','component'],['Description','description'],['Opened','openedAt'],['Status','status']],j.events)}
-async function workorders(){const j=await api('/api/contractor/work-orders');document.getElementById('woTable').innerHTML=table([['Fleet','fleetNumber'],['Work','title'],['Priority','priority'],['Assigned','assignedTo'],['Due','dueAt'],['Status','status']],j.workOrders)}
-async function production(){const j=await api('/api/contractor/production');document.getElementById('prodTable').innerHTML=table([['Date','reportDate'],['Fleet / Plant','fleetNumber'],['Tonnes','tonnes'],['Operating h','operatingHours'],['Downtime h','unplannedDowntime']],j.records)}
-async function documents(){const j=await api('/api/contractor/documents');document.getElementById('docTable').innerHTML=j.documents.length?'<table><thead><tr><th>File</th><th>Category</th><th>Size</th><th>Uploaded</th><th></th></tr></thead><tbody>'+j.documents.map(d=>'<tr><td>'+esc(d.fileName)+'</td><td>'+esc(d.category)+'</td><td>'+Math.round(n(d.sizeBytes)/1024)+' KB</td><td>'+esc(d.createdAt)+'</td><td><a href="/api/contractor/documents/'+d.id+'/download">Download</a></td></tr>').join('')+'</tbody></table>':'<div class="empty">No documents yet.</div>'}
-async function load(id){if(id==='dashboard')await dashboard();if(id==='fleet'||id==='maintenance')await fleet();if(id==='breakdowns')await breakdowns();if(id==='workorders')await workorders();if(id==='production')await production();if(id==='documents')await documents()}
-function openTab(id){current=id;document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.nav button').forEach(x=>x.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelector('[data-tab="'+id+'"]').classList.add('active');document.getElementById('title').textContent=titles[id];load(id).catch(e=>console.error(e))}document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>openTab(b.dataset.tab));function refreshCurrent(){load(current)}async function logout(){await fetch('/api/contractor/logout',{method:'POST'});location.href='/contractor-login'}
-function bindJson(formId,url,msgId,after){document.getElementById(formId).addEventListener('submit',async e=>{e.preventDefault();const f=new FormData(e.currentTarget);const payload=Object.fromEntries(f.entries());try{await api(url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});document.getElementById(msgId).textContent='Saved successfully.';e.currentTarget.reset();await after()}catch(err){document.getElementById(msgId).textContent=err.message}})}
-bindJson('fleetForm','/api/contractor/fleet','fleetMsg',fleet);bindJson('breakForm','/api/contractor/breakdowns','breakMsg',breakdowns);bindJson('woForm','/api/contractor/work-orders','woMsg',workorders);bindJson('prodForm','/api/contractor/production','prodMsg',production);document.querySelector('#prodForm [name=reportDate]').value=new Date().toISOString().slice(0,10);
-document.getElementById('docForm').addEventListener('submit',async e=>{e.preventDefault();try{const r=await fetch('/api/contractor/documents',{method:'POST',body:new FormData(e.currentTarget)});const j=await r.json();if(!r.ok)throw new Error(j.error||'Upload failed');document.getElementById('docMsg').textContent='Uploaded securely.';e.currentTarget.reset();await documents()}catch(err){document.getElementById('docMsg').textContent=err.message}});(async()=>{try{await me();await dashboard()}catch{location.href='/contractor-login'}})();
+var current='dashboard';var titles={dashboard:'Operations Dashboard',fleet:'Fleet',breakdowns:'Breakdowns',maintenance:'Maintenance',workorders:'Work orders',production:'Production',documents:'Documents',reports:'Reports'};
+function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(m){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]})}function num(v){return Number(v||0)}
+async function api(path,opt){var r=await fetch(path,opt);if(r.status===401){location.href='/contractor-login';throw new Error('Sign in required')}var j=await r.json().catch(function(){return {}});if(!r.ok)throw new Error(j.error||'Request failed');return j}
+function tbl(cols,rows){if(!rows||!rows.length)return '<div class="empty">No records yet.</div>';var h='<table><thead><tr>';cols.forEach(function(c){h+='<th>'+esc(c[0])+'</th>'});h+='</tr></thead><tbody>';rows.forEach(function(r){h+='<tr>';cols.forEach(function(c){h+='<td>'+esc(r[c[1]])+'</td>'});h+='</tr>'});return h+'</tbody></table>'}
+async function loadMe(){var j=await api('/api/contractor/me');document.getElementById('company').textContent=j.company.name;document.getElementById('user').textContent=j.user.fullName+' - '+j.user.role;document.getElementById('welcome').textContent='Welcome, '+j.user.fullName}
+async function dashboard(){var j=await api('/api/contractor/dashboard'),m=j.metrics;document.getElementById('ma').textContent=num(m.availability).toFixed(1)+'%';document.getElementById('mo').textContent=m.operating+' / '+m.fleetTotal;document.getElementById('mb').textContent=m.openBreakdowns;document.getElementById('mw').textContent=m.openWorkOrders;document.getElementById('mp').textContent=num(m.production).toLocaleString()+' t';document.getElementById('mpd').textContent=m.productionDate||'No records';document.getElementById('df').innerHTML=tbl([['Fleet','fleetNumber'],['Type','category'],['Site','site'],['Status','status']],j.fleet.slice(0,8));document.getElementById('db').innerHTML=tbl([['Fleet','fleetNumber'],['Severity','severity'],['Fault','description'],['Opened','openedAt']],j.breakdowns.slice(0,8))}
+async function fleet(){var j=await api('/api/contractor/fleet');document.getElementById('fleetTable').innerHTML=tbl([['Fleet','fleetNumber'],['Machine','category'],['Site','site'],['Status','status'],['Hours','operatingHours'],['Next service','nextServiceHours']],j.machines);var a=j.machines.map(function(x){var y=Object.assign({},x);y.dueIn=x.nextServiceHours==null?'Not set':(num(x.nextServiceHours)-num(x.operatingHours)).toFixed(1)+' h';return y});document.getElementById('maintTable').innerHTML=tbl([['Fleet','fleetNumber'],['Machine','category'],['Hours','operatingHours'],['Next service','nextServiceHours'],['Due in','dueIn']],a)}
+async function breakdowns(){var j=await api('/api/contractor/breakdowns');document.getElementById('breakTable').innerHTML=tbl([['Fleet','fleetNumber'],['Severity','severity'],['System','system'],['Component','component'],['Fault','description'],['Opened','openedAt'],['Status','status']],j.events)}
+async function workorders(){var j=await api('/api/contractor/work-orders');document.getElementById('woTable').innerHTML=tbl([['Fleet','fleetNumber'],['Work','title'],['Priority','priority'],['Assigned','assignedTo'],['Due','dueAt'],['Status','status']],j.workOrders)}
+async function production(){var j=await api('/api/contractor/production');document.getElementById('prodTable').innerHTML=tbl([['Date','reportDate'],['Fleet / Plant','fleetNumber'],['Tonnes','tonnes'],['Operating h','operatingHours'],['Downtime h','unplannedDowntime']],j.records)}
+async function documents(){var j=await api('/api/contractor/documents');if(!j.documents.length){document.getElementById('docTable').innerHTML='<div class="empty">No documents yet.</div>';return}var h='<table><thead><tr><th>File</th><th>Category</th><th>Size</th><th>Uploaded</th><th></th></tr></thead><tbody>';j.documents.forEach(function(d){h+='<tr><td>'+esc(d.fileName)+'</td><td>'+esc(d.category)+'</td><td>'+Math.round(num(d.sizeBytes)/1024)+' KB</td><td>'+esc(d.createdAt)+'</td><td><a href="/api/contractor/documents/'+d.id+'/download">Download</a></td></tr>'});document.getElementById('docTable').innerHTML=h+'</tbody></table>'}
+async function load(id){if(id==='dashboard')return dashboard();if(id==='fleet'||id==='maintenance')return fleet();if(id==='breakdowns')return breakdowns();if(id==='workorders')return workorders();if(id==='production')return production();if(id==='documents')return documents()}
+function openTab(id){current=id;document.querySelectorAll('.tab').forEach(function(x){x.classList.remove('active')});document.querySelectorAll('.nav button').forEach(function(x){x.classList.remove('active')});document.getElementById(id).classList.add('active');document.querySelector('[data-tab="'+id+'"]').classList.add('active');document.getElementById('title').textContent=titles[id];load(id).catch(function(e){console.error(e)})}document.querySelectorAll('.nav button').forEach(function(b){b.onclick=function(){openTab(b.dataset.tab)}});
+function bindForm(id,url,msg,after){document.getElementById(id).onsubmit=async function(e){e.preventDefault();var f=new FormData(e.currentTarget),p={};f.forEach(function(v,k){p[k]=v});try{await api(url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(p)});document.getElementById(msg).textContent='Saved successfully.';e.currentTarget.reset();await after()}catch(err){document.getElementById(msg).textContent=err.message}}}
+bindForm('fleetForm','/api/contractor/fleet','fleetMsg',fleet);bindForm('breakForm','/api/contractor/breakdowns','breakMsg',breakdowns);bindForm('woForm','/api/contractor/work-orders','woMsg',workorders);bindForm('prodForm','/api/contractor/production','prodMsg',production);document.querySelector('#prodForm [name=reportDate]').value=new Date().toISOString().slice(0,10);
+document.getElementById('docForm').onsubmit=async function(e){e.preventDefault();try{var r=await fetch('/api/contractor/documents',{method:'POST',body:new FormData(e.currentTarget)}),j=await r.json();if(!r.ok)throw new Error(j.error||'Upload failed');document.getElementById('docMsg').textContent='Uploaded securely.';e.currentTarget.reset();await documents()}catch(err){document.getElementById('docMsg').textContent=err.message}};
+async function signout(){await fetch('/api/contractor/logout',{method:'POST'});location.href='/contractor-login'};(async function(){try{await loadMe();await dashboard()}catch(e){location.href='/contractor-login'}})();
 </script></body></html>`;
 }
 
 export async function handleContractorLive(request: Request, env: ContractorEnv): Promise<Response | null> {
-  const url = new URL(request.url);
-  const path = url.pathname;
-  if (!path.startsWith("/contractor") && !path.startsWith("/api/contractor") && path !== "/api/admin/contractors" && path !== "/owner/contractors") return null;
+  const url = new URL(request.url), path = url.pathname;
+  if (!path.startsWith("/contractor") && !path.startsWith("/api/contractor") && path !== "/owner/contractors" && path !== "/owner/contractors/" && path !== "/api/admin/contractors") return null;
   try {
     await ensureSchema(env);
-    if (path === "/contractor-login" || path === "/contractor-login/") {
-      const session = await getSession(request, env);
-      if (session) return Response.redirect(new URL("/contractor", request.url), 302);
-      return html(loginPage());
-    }
-    if (path === "/owner/contractors" || path === "/owner/contractors/") return html(ownerSetupPage());
-    if (path === "/api/admin/contractors" && request.method === "POST") return createContractor(request, env);
+    if (path === "/contractor-login" || path === "/contractor-login/") return (await sessionFor(request, env)) ? Response.redirect(new URL("/contractor", request.url), 302) : responseHtml(loginPage());
+    if (path === "/owner/contractors" || path === "/owner/contractors/") return responseHtml(ownerPage());
+    if (path === "/api/admin/contractors" && request.method === "POST") return createCompany(request, env);
     if (path === "/api/contractor/login" && request.method === "POST") return login(request, env);
     if (path === "/api/contractor/logout" && request.method === "POST") return logout(request, env);
-    const session = await requireSession(request, env);
-    if (!session) {
-      if (path === "/contractor" || path === "/contractor/") return Response.redirect(new URL("/contractor-login", request.url), 302);
-      return json({ error: "Sign in required." }, 401);
-    }
-    if (path === "/contractor" || path === "/contractor/") return html(contractorAppPage());
-    const response = await contractorData(request, env, session, path);
-    return response || json({ error: "Not found." }, 404);
-  } catch (error) {
-    console.error("CONTRACTOR_LIVE_ERROR", { path, message: error instanceof Error ? error.message : String(error) });
-    return path.startsWith("/api/") ? json({ error: "Contractor service error. The event has been logged." }, 500) : html("<h1>Contractor service temporarily unavailable</h1><p>The error has been logged.</p>", 500);
+    const s = await sessionFor(request, env);
+    if (!s) return (path === "/contractor" || path === "/contractor/") ? Response.redirect(new URL("/contractor-login", request.url), 302) : responseJson({ error: "Sign in required." }, 401);
+    if (path === "/contractor" || path === "/contractor/") return responseHtml(appPage());
+    return (await dataApi(request, env, s, path)) || responseJson({ error: "Not found." }, 404);
+  } catch (e) {
+    console.error("CONTRACTOR_LIVE_ERROR", { path, message: e instanceof Error ? e.message : String(e) });
+    return path.startsWith("/api/") ? responseJson({ error: "Contractor service error. The event has been logged." }, 500) : responseHtml("<h1>Contractor service temporarily unavailable</h1><p>The error has been logged.</p>", 500);
   }
 }
