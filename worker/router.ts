@@ -1,7 +1,7 @@
 import legacyWorker from "./index";
-import { handleContractorLive, type ContractorEnv } from "./contractor-live";
+import { handleContractorLiveV2, type ContractorEnvV2 } from "./contractor-live-v2";
 
-interface Env extends ContractorEnv {
+interface Env extends ContractorEnvV2 {
   ASSETS: Fetcher;
   IMAGES?: {
     input(stream: ReadableStream): {
@@ -29,7 +29,7 @@ const disabledLegacyApis = [
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const contractor = await handleContractorLive(request, env);
+    const contractor = await handleContractorLiveV2(request, env);
     if (contractor) return contractor;
 
     const pathname = new URL(request.url).pathname;
