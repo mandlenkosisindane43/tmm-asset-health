@@ -1,6 +1,6 @@
 import legacyWorker from "./index";
 import { handleContractorLiveV2, type ContractorEnvV2 } from "./contractor-live-v2";
-import { ownerContractorsPage } from "./owner-contractors-page";
+import { ownerContractorsFormPage, createOwnerContractorFromForm } from "./owner-contractors-server";
 
 interface Env extends ContractorEnvV2 {
   ASSETS: Fetcher;
@@ -52,12 +52,16 @@ async function ensureContractorSessionCompatibility(env: Env) {
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const pathname = new URL(request.url).pathname;
-    const contractorManaged = pathname === "/contractor-health" || pathname === "/owner/contractors" || pathname === "/contractor-login" || pathname === "/contractor" || pathname.startsWith("/api/contractor/") || pathname === "/api/admin/contractors";
+    const contractorManaged = pathname === "/contractor-health" || pathname === "/owner/contractors" || pathname === "/owner/contractors/create" || pathname === "/contractor-login" || pathname === "/contractor" || pathname.startsWith("/api/contractor/") || pathname === "/api/admin/contractors";
 
     if (contractorManaged) await ensureContractorSessionCompatibility(env);
 
     if (pathname === "/owner/contractors" && request.method === "GET") {
-      return ownerContractorsPage();
+      return ownerContractorsFormPage();
+    }
+
+    if (pathname === "/owner/contractors/create" && request.method === "POST") {
+      return createOwnerContractorFromForm(request, env);
     }
 
     const contractor = await handleContractorLiveV2(request, env);
