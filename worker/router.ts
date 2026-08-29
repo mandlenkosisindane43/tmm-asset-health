@@ -1,5 +1,6 @@
 import legacyWorker from "./index";
 import { handleContractorLiveV2, type ContractorEnvV2 } from "./contractor-live-v2";
+import { ownerContractorsPage } from "./owner-contractors-page";
 
 interface Env extends ContractorEnvV2 {
   ASSETS: Fetcher;
@@ -54,6 +55,10 @@ export default {
     const contractorManaged = pathname === "/contractor-health" || pathname === "/owner/contractors" || pathname === "/contractor-login" || pathname === "/contractor" || pathname.startsWith("/api/contractor/") || pathname === "/api/admin/contractors";
 
     if (contractorManaged) await ensureContractorSessionCompatibility(env);
+
+    if (pathname === "/owner/contractors" && request.method === "GET") {
+      return ownerContractorsPage();
+    }
 
     const contractor = await handleContractorLiveV2(request, env);
     if (contractor) return contractor;
