@@ -2,7 +2,7 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "tmm-asset-health",
   "account_id": "ba53c9a85c6f300723d5d58f899722f9",
-  "main": "./worker/index.ts",
+  "main": "./worker/router.ts",
   "compatibility_date": "2026-08-28",
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
