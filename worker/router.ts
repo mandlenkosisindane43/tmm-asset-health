@@ -1,6 +1,7 @@
 import legacyWorker from "./index";
 import { handleContractorLiveV2, type ContractorEnvV2 } from "./contractor-live-v2";
-import { ownerContractorsFormPage, createOwnerContractorFromForm } from "./owner-contractors-server";
+import { ownerContractorsFormPage } from "./owner-contractors-server";
+import { handleContractorAuthFix } from "./contractor-auth-fix";
 
 interface Env extends ContractorEnvV2 {
   ASSETS: Fetcher;
@@ -40,7 +41,7 @@ async function ensureContractorSessionCompatibility(env: Env) {
         await env.DB.prepare("DROP TABLE contractor_sessions").run();
       }
     } catch {
-      // The v2 service will create the table if it does not exist.
+      // The v2 service/auth handler will create the table if it does not exist.
     }
   })().catch((error) => {
     sessionCompatibilityReady = null;
@@ -60,9 +61,10 @@ export default {
       return ownerContractorsFormPage();
     }
 
-    if (pathname === "/owner/contractors/create" && request.method === "POST") {
-      return createOwnerContractorFromForm(request, env);
-    }
+    // Cloudflare-compatible password hashing for account creation and login.
+    // This handler uses PBKDF2-SHA256 with 100,000 iterations, the Workers limit.
+    const authFix = await handleContractorAuthFix(request, env);
+    if (authFix) return authFix;
 
     const contractor = await handleContractorLiveV2(request, env);
     if (contractor) return contractor;
