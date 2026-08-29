@@ -27,12 +27,37 @@ const disabledLegacyApis = [
   "/api/quotations",
 ];
 
+let sessionCompatibilityReady: Promise<void> | null = null;
+
+async function ensureContractorSessionCompatibility(env: Env) {
+  if (sessionCompatibilityReady) return sessionCompatibilityReady;
+  sessionCompatibilityReady = (async () => {
+    try {
+      const info = await env.DB.prepare("PRAGMA table_info(contractor_sessions)").all<Record<string, unknown>>();
+      const names = new Set((info.results || []).map((row) => String(row.name || "")));
+      if (names.has("user_id") && !names.has("account_id")) {
+        await env.DB.prepare("DROP TABLE contractor_sessions").run();
+      }
+    } catch {
+      // The v2 service will create the table if it does not exist.
+    }
+  })().catch((error) => {
+    sessionCompatibilityReady = null;
+    throw error;
+  });
+  return sessionCompatibilityReady;
+}
+
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const pathname = new URL(request.url).pathname;
+    const contractorManaged = pathname === "/contractor-health" || pathname === "/owner/contractors" || pathname === "/contractor-login" || pathname === "/contractor" || pathname.startsWith("/api/contractor/") || pathname === "/api/admin/contractors";
+
+    if (contractorManaged) await ensureContractorSessionCompatibility(env);
+
     const contractor = await handleContractorLiveV2(request, env);
     if (contractor) return contractor;
 
-    const pathname = new URL(request.url).pathname;
     if (disabledLegacyApis.some((prefix) => pathname === prefix || pathname.startsWith(prefix + "/"))) {
       return Response.json(
         { error: "Legacy operational endpoint disabled. Use the tenant-scoped contractor API." },
