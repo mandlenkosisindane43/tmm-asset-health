@@ -2,6 +2,7 @@ import worker from "./router";
 import { handleUserInvitations, type InvitationEnv } from "./user-invitations";
 import { handleInviteDelivery } from "./invite-delivery";
 import { handleRoleDashboardsV4 } from "./role-dashboards-v4";
+import { handleTenantIsolationAudit } from "./tenant-isolation-audit";
 
 interface ExecutionContext {
   waitUntil(promise: Promise<unknown>): void;
@@ -10,6 +11,7 @@ interface ExecutionContext {
 
 interface PolishEnv extends InvitationEnv {
   ASSETS?: Fetcher;
+  ADMIN_PASSWORD?: string;
 }
 
 export default {
@@ -20,6 +22,10 @@ export default {
     if (request.method === "GET" && env.ASSETS && ["/sindane-logo-sidebar.svg", "/sindane-logo.png"].includes(requestUrl.pathname)) {
       return env.ASSETS.fetch(request);
     }
+
+    // Owner-only Alpha/Beta security lab for proving D1 tenant separation.
+    const tenantAudit = await handleTenantIsolationAudit(request, env);
+    if (tenantAudit) return tenantAudit;
 
     const delivery = await handleInviteDelivery(request, env);
     if (delivery) return delivery;
