@@ -3,6 +3,7 @@ import { handleUserInvitations, type InvitationEnv } from "./user-invitations";
 import { handleInviteDelivery } from "./invite-delivery";
 import { handleRoleDashboardsV4 } from "./role-dashboards-v4";
 import { handleTenantIsolationAudit } from "./tenant-isolation-audit";
+import { decodeSindaneLogoSvg } from "./sindane-logo-data";
 
 interface ExecutionContext {
   waitUntil(promise: Promise<unknown>): void;
@@ -14,38 +15,24 @@ interface PolishEnv extends InvitationEnv {
   ADMIN_PASSWORD?: string;
 }
 
-const BRAND_LOGO_RAW = "https://raw.githubusercontent.com/mandlenkosisindane43/tmm-asset-health/main/public/sindane-logo-sidebar.svg";
-
-async function serveBrandLogo(request: Request, env: PolishEnv) {
-  try {
-    const raw = await fetch(BRAND_LOGO_RAW, { headers: { accept: "image/svg+xml,image/*" } });
-    if (raw.ok) {
-      return new Response(raw.body, {
-        status: 200,
-        headers: {
-          "content-type": "image/svg+xml; charset=utf-8",
-          "cache-control": "public, max-age=3600, stale-while-revalidate=86400",
-          "x-content-type-options": "nosniff",
-        },
-      });
-    }
-  } catch {
-    // Fall back to the Workers assets binding below.
-  }
-  if (env.ASSETS) {
-    const asset = await env.ASSETS.fetch(request);
-    if (asset.ok) return asset;
-  }
-  return new Response("Sindane logo unavailable", { status: 404, headers: { "cache-control": "no-store" } });
+function serveBrandLogo() {
+  return new Response(decodeSindaneLogoSvg(), {
+    status: 200,
+    headers: {
+      "content-type": "image/svg+xml; charset=utf-8",
+      "cache-control": "no-store",
+      "x-content-type-options": "nosniff",
+    },
+  });
 }
 
 export default {
   async fetch(request: Request, env: PolishEnv, ctx: ExecutionContext): Promise<Response> {
     const requestUrl = new URL(request.url);
 
-    // Serve the Sindane logo from a same-origin Worker route so browser CSP never blocks it.
+    // Serve the actual Sindane logo bytes directly from the Worker. No external/static asset dependency.
     if (request.method === "GET" && ["/sindane-logo-sidebar.svg", "/sindane-logo.png"].includes(requestUrl.pathname)) {
-      return serveBrandLogo(request, env);
+      return serveBrandLogo();
     }
 
     // Owner-only Alpha/Beta security lab for proving D1 tenant separation.
@@ -75,7 +62,7 @@ export default {
       let body = await response.text();
       body = body.replace(
         `<div class="brand">TMM Asset Health<small>Sindane Asset Solutions</small></div>`,
-        `<div class="brand"><img src="/sindane-logo-sidebar.svg?v=2" alt="Sindane Asset Solutions"><div class="brand-title">TMM Asset Health</div><small>Sindane Asset Solutions</small></div>`,
+        `<div class="brand"><img src="/sindane-logo-sidebar.svg?v=3" alt="Sindane Asset Solutions"><div class="brand-title">TMM Asset Health</div><small>Sindane Asset Solutions</small></div>`,
       );
       body = body.replace(
         `.box{width:min(430px,100%);background:#fff;padding:32px;border-radius:18px}`,
