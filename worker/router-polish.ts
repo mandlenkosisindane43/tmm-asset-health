@@ -42,6 +42,62 @@ export default {
     const response = await worker.fetch(request, env as never, ctx);
     const url = new URL(request.url);
 
+    // Make the contractor login easier to read and use the real Sindane Asset Solutions logo.
+    if (request.method === "GET" && url.pathname === "/contractor-login") {
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.includes("text/html")) return response;
+
+      let body = await response.text();
+      body = body.replace(
+        `<div class="brand">TMM Asset Health<small>Sindane Asset Solutions</small></div>`,
+        `<div class="brand"><img src="/sindane-logo-sidebar.svg" alt="Sindane Asset Solutions"><div class="brand-title">TMM Asset Health</div><small>Sindane Asset Solutions</small></div>`,
+      );
+      body = body.replace(
+        `.box{width:min(430px,100%);background:#fff;padding:32px;border-radius:18px}`,
+        `.box{width:min(500px,100%);background:#fff;padding:38px 40px;border-radius:20px;box-shadow:0 20px 55px rgba(0,0,0,.22)}`,
+      );
+      body = body.replace(
+        `.brand{font-weight:900;color:#0f3158}.brand small{display:block;color:#64748b;margin-top:4px}`,
+        `.brand{text-align:center;font-weight:900;color:#0f3158}.brand img{display:block;width:190px;max-width:80%;height:145px;object-fit:contain;margin:0 auto 6px}.brand-title{font-size:23px;line-height:1.2}.brand small{display:block;color:#64748b;margin-top:5px;font-size:14px}`,
+      );
+      body = body.replace(
+        `.tag{margin:20px 0 6px;color:#1267b3;font-size:11px;font-weight:900}`,
+        `.tag{margin:22px 0 7px;color:#b77c00;font-size:13px;font-weight:900;letter-spacing:.04em}`,
+      );
+      body = body.replace(
+        `.box h1{margin:0 0 8px}`,
+        `.box h1{margin:0 0 9px;font-size:30px;line-height:1.15}`,
+      );
+      body = body.replace(
+        `.box p{color:#64748b;font-size:13px;line-height:1.5}`,
+        `.box p{color:#526171;font-size:16px;line-height:1.55}`,
+      );
+      body = body.replace(
+        `.field{display:grid;gap:7px;margin-top:15px;font-size:12px;font-weight:800}`,
+        `.field{display:grid;gap:8px;margin-top:18px;font-size:15px;font-weight:800;color:#24354a}`,
+      );
+      body = body.replace(
+        `.field input{padding:13px;border:1px solid #cbd5e1;border-radius:9px;font-size:15px}`,
+        `.field input{padding:15px 14px;border:1px solid #b9c6d4;border-radius:10px;font-size:17px;min-height:50px;outline:none}.field input:focus{border-color:#11975c;box-shadow:0 0 0 3px rgba(17,151,92,.12)}`,
+      );
+      body = body.replace(
+        `.btn{width:100%;margin-top:20px;border:0;background:#1267b3;color:#fff;padding:13px;border-radius:9px;font-weight:900}`,
+        `.btn{width:100%;margin-top:23px;border:0;background:#11975c;color:#fff;padding:15px 14px;border-radius:10px;font-size:16px;font-weight:900;cursor:pointer}.btn:hover{background:#0c814d}`,
+      );
+      body = body.replace(
+        `.msg{min-height:20px;color:#b91c1c;font-size:12px;margin-top:12px}.demo{margin-top:18px;font-size:12px}.demo a{color:#1267b3;font-weight:800}`,
+        `.msg{min-height:22px;color:#b91c1c;font-size:14px;line-height:1.45;margin-top:13px}.demo{margin-top:20px;font-size:14px;text-align:center}.demo a{color:#087548;font-weight:800}`,
+      );
+
+      const headers = new Headers(response.headers);
+      headers.delete("content-length");
+      return new Response(body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+      });
+    }
+
     if (request.method !== "GET" || url.pathname !== "/contractor") return response;
     const contentType = response.headers.get("content-type") || "";
     if (!contentType.includes("text/html")) return response;
