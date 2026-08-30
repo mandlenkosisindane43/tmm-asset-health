@@ -1,5 +1,4 @@
-import { ownerSignaturePhotoDataUri } from "./owner-signature-photo";
-
 export function ownerSignatureClearDataUri() {
-  return ownerSignaturePhotoDataUri();
+  const blank = '<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1" viewBox="0 0 1 1"></svg>';
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(blank)}`;
 }
