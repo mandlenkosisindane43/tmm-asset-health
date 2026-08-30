@@ -1,20 +1,37 @@
 import worker from "./router";
 import { handleUserInvitations, type InvitationEnv } from "./user-invitations";
 import { handleInviteDelivery } from "./invite-delivery";
+import { handleRoleDashboardsV4 } from "./role-dashboards-v4";
 
 interface ExecutionContext {
   waitUntil(promise: Promise<unknown>): void;
   passThroughOnException(): void;
 }
 
+interface PolishEnv extends InvitationEnv {
+  ASSETS?: Fetcher;
+}
+
 export default {
-  async fetch(request: Request, env: InvitationEnv, ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: PolishEnv, ctx: ExecutionContext): Promise<Response> {
+    const requestUrl = new URL(request.url);
+
+    // Explicitly serve the approved Sindane sidebar assets from the Workers assets binding.
+    if (request.method === "GET" && env.ASSETS && ["/sindane-logo-sidebar.svg", "/sindane-logo.png"].includes(requestUrl.pathname)) {
+      return env.ASSETS.fetch(request);
+    }
+
     const delivery = await handleInviteDelivery(request, env);
     if (delivery) return delivery;
 
     // Public acceptance page and authenticated invitation sender run before the base router.
     const invitation = await handleUserInvitations(request, env);
     if (invitation) return invitation;
+
+    // Engineer, Supervisor, Mechanic and Manager land on the v4 tenant-scoped dashboards.
+    // The handler returns null for Company Admin/Owner sessions so the existing admin workspace remains unchanged.
+    const roleDashboard = await handleRoleDashboardsV4(request, env);
+    if (roleDashboard) return roleDashboard;
 
     const response = await worker.fetch(request, env as never, ctx);
     const url = new URL(request.url);
