@@ -14,13 +14,38 @@ interface PolishEnv extends InvitationEnv {
   ADMIN_PASSWORD?: string;
 }
 
+const BRAND_LOGO_RAW = "https://raw.githubusercontent.com/mandlenkosisindane43/tmm-asset-health/main/public/sindane-logo-sidebar.svg";
+
+async function serveBrandLogo(request: Request, env: PolishEnv) {
+  try {
+    const raw = await fetch(BRAND_LOGO_RAW, { headers: { accept: "image/svg+xml,image/*" } });
+    if (raw.ok) {
+      return new Response(raw.body, {
+        status: 200,
+        headers: {
+          "content-type": "image/svg+xml; charset=utf-8",
+          "cache-control": "public, max-age=3600, stale-while-revalidate=86400",
+          "x-content-type-options": "nosniff",
+        },
+      });
+    }
+  } catch {
+    // Fall back to the Workers assets binding below.
+  }
+  if (env.ASSETS) {
+    const asset = await env.ASSETS.fetch(request);
+    if (asset.ok) return asset;
+  }
+  return new Response("Sindane logo unavailable", { status: 404, headers: { "cache-control": "no-store" } });
+}
+
 export default {
   async fetch(request: Request, env: PolishEnv, ctx: ExecutionContext): Promise<Response> {
     const requestUrl = new URL(request.url);
 
-    // Explicitly serve the approved Sindane sidebar assets from the Workers assets binding.
-    if (request.method === "GET" && env.ASSETS && ["/sindane-logo-sidebar.svg", "/sindane-logo.png"].includes(requestUrl.pathname)) {
-      return env.ASSETS.fetch(request);
+    // Serve the Sindane logo from a same-origin Worker route so browser CSP never blocks it.
+    if (request.method === "GET" && ["/sindane-logo-sidebar.svg", "/sindane-logo.png"].includes(requestUrl.pathname)) {
+      return serveBrandLogo(request, env);
     }
 
     // Owner-only Alpha/Beta security lab for proving D1 tenant separation.
@@ -50,7 +75,7 @@ export default {
       let body = await response.text();
       body = body.replace(
         `<div class="brand">TMM Asset Health<small>Sindane Asset Solutions</small></div>`,
-        `<div class="brand"><img src="/sindane-logo-sidebar.svg" alt="Sindane Asset Solutions"><div class="brand-title">TMM Asset Health</div><small>Sindane Asset Solutions</small></div>`,
+        `<div class="brand"><img src="/sindane-logo-sidebar.svg?v=2" alt="Sindane Asset Solutions"><div class="brand-title">TMM Asset Health</div><small>Sindane Asset Solutions</small></div>`,
       );
       body = body.replace(
         `.box{width:min(430px,100%);background:#fff;padding:32px;border-radius:18px}`,
@@ -58,7 +83,7 @@ export default {
       );
       body = body.replace(
         `.brand{font-weight:900;color:#0f3158}.brand small{display:block;color:#64748b;margin-top:4px}`,
-        `.brand{text-align:center;font-weight:900;color:#0f3158}.brand img{display:block;width:190px;max-width:80%;height:145px;object-fit:contain;margin:0 auto 6px}.brand-title{font-size:23px;line-height:1.2}.brand small{display:block;color:#64748b;margin-top:5px;font-size:14px}`,
+        `.brand{text-align:center;font-weight:900;color:#0f3158}.brand img{display:block;width:210px;max-width:86%;height:158px;object-fit:contain;margin:0 auto 4px}.brand-title{font-size:23px;line-height:1.2}.brand small{display:block;color:#64748b;margin-top:5px;font-size:14px}`,
       );
       body = body.replace(
         `.tag{margin:20px 0 6px;color:#1267b3;font-size:11px;font-weight:900}`,
