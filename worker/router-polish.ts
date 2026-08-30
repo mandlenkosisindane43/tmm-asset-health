@@ -3,7 +3,7 @@ import { handleUserInvitations, type InvitationEnv } from "./user-invitations";
 import { handleInviteDelivery } from "./invite-delivery";
 import { handleRoleDashboardsV4 } from "./role-dashboards-v4";
 import { handleTenantIsolationAudit } from "./tenant-isolation-audit";
-import { decodeSindaneLogoSvg } from "./sindane-logo-data";
+import { decodeSindaneLogoWebp, sindaneLogoDataUri } from "./sindane-logo-data";
 
 interface ExecutionContext {
   waitUntil(promise: Promise<unknown>): void;
@@ -16,10 +16,10 @@ interface PolishEnv extends InvitationEnv {
 }
 
 function serveBrandLogo() {
-  return new Response(decodeSindaneLogoSvg(), {
+  return new Response(decodeSindaneLogoWebp(), {
     status: 200,
     headers: {
-      "content-type": "image/svg+xml; charset=utf-8",
+      "content-type": "image/webp",
       "cache-control": "no-store",
       "x-content-type-options": "nosniff",
     },
@@ -30,7 +30,7 @@ export default {
   async fetch(request: Request, env: PolishEnv, ctx: ExecutionContext): Promise<Response> {
     const requestUrl = new URL(request.url);
 
-    // Serve the actual Sindane logo bytes directly from the Worker. No external/static asset dependency.
+    // Serve the exact Sindane logo bytes directly from the Worker for dashboard/sidebar uses.
     if (request.method === "GET" && ["/sindane-logo-sidebar.svg", "/sindane-logo.png"].includes(requestUrl.pathname)) {
       return serveBrandLogo();
     }
@@ -54,7 +54,7 @@ export default {
     const response = await worker.fetch(request, env as never, ctx);
     const url = new URL(request.url);
 
-    // Make the contractor login easier to read and use the real Sindane Asset Solutions logo.
+    // Contractor login: exact logo is embedded as a data URI so there is no separate image request to fail.
     if (request.method === "GET" && url.pathname === "/contractor-login") {
       const contentType = response.headers.get("content-type") || "";
       if (!contentType.includes("text/html")) return response;
@@ -62,7 +62,7 @@ export default {
       let body = await response.text();
       body = body.replace(
         `<div class="brand">TMM Asset Health<small>Sindane Asset Solutions</small></div>`,
-        `<div class="brand"><img src="/sindane-logo-sidebar.svg?v=3" alt="Sindane Asset Solutions"><div class="brand-title">TMM Asset Health</div><small>Sindane Asset Solutions</small></div>`,
+        `<div class="brand"><img src="${sindaneLogoDataUri()}" alt="Sindane Asset Solutions"><div class="brand-title">TMM Asset Health</div><small>Sindane Asset Solutions</small></div>`,
       );
       body = body.replace(
         `.box{width:min(430px,100%);background:#fff;padding:32px;border-radius:18px}`,
@@ -70,7 +70,7 @@ export default {
       );
       body = body.replace(
         `.brand{font-weight:900;color:#0f3158}.brand small{display:block;color:#64748b;margin-top:4px}`,
-        `.brand{text-align:center;font-weight:900;color:#0f3158}.brand img{display:block;width:210px;max-width:86%;height:158px;object-fit:contain;margin:0 auto 4px}.brand-title{font-size:23px;line-height:1.2}.brand small{display:block;color:#64748b;margin-top:5px;font-size:14px}`,
+        `.brand{text-align:center;font-weight:900;color:#0f3158}.brand img{display:block;width:210px;max-width:86%;height:158px;object-fit:contain;margin:0 auto 4px;border-radius:4px}.brand-title{font-size:23px;line-height:1.2}.brand small{display:block;color:#64748b;margin-top:5px;font-size:14px}`,
       );
       body = body.replace(
         `.tag{margin:20px 0 6px;color:#1267b3;font-size:11px;font-weight:900}`,
