@@ -54,7 +54,7 @@ async function currentLicenceSession(request: Request, env: PolishEnv): Promise<
   if (!token) return null;
   try {
     const row = await env.DB.prepare(`SELECT s.company_id AS companyId,s.account_id AS accountId,s.expires_at AS sessionExpires,
-      a.full_name AS fullName,a.role,a.status AS accountStatus,
+      a.full_name AS fullName,COALESCE(NULLIF(s.active_role,''),a.role) AS role,a.status AS accountStatus,
       c.name AS companyName,c.licence_key AS licenceKey,c.licence_status AS licenceStatus,c.expires_at AS expiresAt,
       c.grace_days AS graceDays,c.max_users AS maxUsers
       FROM contractor_sessions s

@@ -1,5 +1,6 @@
 import commercialWorker from "./router-commercial";
 import { sindaneLogoDataUri } from "./sindane-logo-data";
+import { ensureAccountRoles } from "./account-roles";
 
 interface ExecutionContext {
   waitUntil(promise: Promise<unknown>): void;
@@ -48,11 +49,12 @@ async function sha256(v: string) {
   return Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
 }
 async function session(request: Request, env: Env): Promise<Session | null> {
+  await ensureAccountRoles(env);
   const token = getCookie(request);
   if (!token) return null;
   try {
     const row = await env.DB.prepare(`SELECT s.company_id AS companyId,s.account_id AS accountId,s.expires_at AS sessionExpires,
-      a.email,a.full_name AS fullName,a.role,a.status AS accountStatus,c.name AS companyName,
+      a.email,a.full_name AS fullName,COALESCE(NULLIF(s.active_role,''),a.role) AS role,a.status AS accountStatus,c.name AS companyName,
       c.licence_status AS licenceStatus,c.expires_at AS expiresAt
       FROM contractor_sessions s
       JOIN contractor_accounts a ON a.id=s.account_id AND a.company_id=s.company_id
@@ -123,7 +125,7 @@ function hrefFor(view: string) {
 }
 function shell(s: Session, active: string, title: string, body: string) {
   const nav = navFor(s.role);
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} · TMM Asset Health</title>${css}</head><body><div class="layout"><aside class="sidebar"><div class="brand"><img src="${sindaneLogoDataUri()}" alt="Sindane Asset Solutions"></div><nav class="nav">${nav.map(x=>`<a class="${active===x[0]?'active':''}" href="${hrefFor(x[0])}"><span>${x[1]}</span>${esc(x[2])}</a>`).join('')}</nav><div class="sitebox"><small>Current Company</small><b>${esc(s.companyName)}</b></div><div class="profile"><div class="avatar">${esc((s.fullName||'U')[0].toUpperCase())}</div><div><b>${esc(s.fullName)}</b><small>${esc(roleTitle(s.role))}</small></div></div><form class="signout" method="post" action="/api/contractor/logout"><button type="submit">↪ &nbsp; Sign out</button></form></aside><main class="main"><header class="top"><div class="top-left"><span style="font-size:21px">☰</span><div class="search">⌕ &nbsp; ${esc(title)}</div></div><div class="top-right"><button class="printbtn no-print" type="button" onclick="window.print()">🖨 Print</button><span class="top-pill">${esc(s.companyName)}</span><span class="userdot">${esc((s.fullName||'U')[0].toUpperCase())}</span><span style="font-size:10px"><b>${esc(s.fullName)}</b><br>${esc(roleTitle(s.role))}</span></div></header><div class="content">${body}</div></main></div></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} · TMM Asset Health</title>${css}</head><body><div class="layout"><aside class="sidebar"><div class="brand"><img src="${sindaneLogoDataUri()}" alt="Sindane Asset Solutions"></div><nav class="nav">${nav.map(x=>`<a class="${active===x[0]?'active':''}" href="${hrefFor(x[0])}"><span>${x[1]}</span>${esc(x[2])}</a>`).join('')}<a href="/select-role"><span>⇄</span>Switch Role</a></nav><div class="sitebox"><small>Current Company</small><b>${esc(s.companyName)}</b></div><div class="profile"><div class="avatar">${esc((s.fullName||'U')[0].toUpperCase())}</div><div><b>${esc(s.fullName)}</b><small>${esc(roleTitle(s.role))}</small></div></div><form class="signout" method="post" action="/api/contractor/logout"><button type="submit">↪ &nbsp; Sign out</button></form></aside><main class="main"><header class="top"><div class="top-left"><span style="font-size:21px">☰</span><div class="search">⌕ &nbsp; ${esc(title)}</div></div><div class="top-right"><button class="printbtn no-print" type="button" onclick="window.print()">🖨 Print</button><span class="top-pill">${esc(s.companyName)}</span><span class="userdot">${esc((s.fullName||'U')[0].toUpperCase())}</span><span style="font-size:10px"><b>${esc(s.fullName)}</b><br>${esc(roleTitle(s.role))}</span></div></header><div class="content">${body}</div></main></div></body></html>`;
 }
 function html(body: string, status = 200) {
   return new Response(body, { status, headers: {

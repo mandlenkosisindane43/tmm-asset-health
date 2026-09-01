@@ -1,5 +1,6 @@
 import baseWorker from "./router-polish";
 import { sindaneLogoDataUri } from "./sindane-logo-data";
+import { ensureAccountRoles, roleLabel, rolesForAccount, validRoles } from "./account-roles";
 
 interface ExecutionContext {
   waitUntil(promise: Promise<unknown>): void;
@@ -38,7 +39,6 @@ function email(value: unknown) { return text(value, 200).toLowerCase(); }
 function bytesToHex(bytes: Uint8Array) { return Array.from(bytes, b => b.toString(16).padStart(2, "0")).join(""); }
 function hexToBytes(value: string) { const out = new Uint8Array(value.length / 2); for (let i = 0; i < out.length; i++) out[i] = parseInt(value.slice(i * 2, i * 2 + 2), 16); return out; }
 function b64url(bytes: Uint8Array) { let s = ""; bytes.forEach(b => s += String.fromCharCode(b)); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, ""); }
-function roleLabel(role: string) { return ({ company_admin: "Company Administrator", manager: "Mine Manager", engineer: "Engineer", supervisor: "Supervisor", mechanic: "Mechanic" } as Record<string,string>)[role] || role; }
 function getCookie(request: Request, name: string) {
   const raw = request.headers.get("cookie") || "";
   for (const part of raw.split(";")) { const i = part.indexOf("="); if (i > -1 && part.slice(0, i).trim() === name) return part.slice(i + 1).trim(); }
@@ -68,6 +68,7 @@ async function ensureSessions(env: CommercialEnv) {
     expires_at TEXT NOT NULL,
     created_at TEXT NOT NULL
   )`).run();
+  await ensureAccountRoles(env);
 }
 
 async function currentSession(request: Request, env: CommercialEnv): Promise<SessionInfo | null> {
@@ -75,7 +76,7 @@ async function currentSession(request: Request, env: CommercialEnv): Promise<Ses
   if (!token) return null;
   try {
     const row = await env.DB.prepare(`SELECT s.company_id AS companyId,s.account_id AS accountId,s.expires_at AS sessionExpires,
-      a.email,a.full_name AS fullName,a.role,a.status AS accountStatus,
+      a.email,a.full_name AS fullName,COALESCE(NULLIF(s.active_role,''),a.role) AS role,a.status AS accountStatus,
       c.name AS companyName,c.licence_key AS licenceKey,c.licence_status AS licenceStatus,c.expires_at AS expiresAt,c.max_users AS maxUsers
       FROM contractor_sessions s
       JOIN contractor_accounts a ON a.id=s.account_id AND a.company_id=s.company_id
@@ -116,15 +117,35 @@ async function commercialLogin(request: Request, env: CommercialEnv) {
   const now = new Date();
   const sessionExpiry = new Date(Date.now() + 12 * 3600000);
   await env.DB.prepare("DELETE FROM contractor_sessions WHERE expires_at<?").bind(now.toISOString()).run();
-  await env.DB.prepare("INSERT INTO contractor_sessions(token_hash,company_id,account_id,expires_at,created_at) VALUES(?,?,?,?,?)")
-    .bind(await sha256(token), Number(row.companyId), Number(row.accountId), sessionExpiry.toISOString(), now.toISOString()).run();
+  const roles = await rolesForAccount(env, Number(row.accountId), Number(row.companyId));
+  const initialRole = roles[0] || String(row.role || "mechanic");
+  await env.DB.prepare("INSERT INTO contractor_sessions(token_hash,company_id,account_id,expires_at,created_at,active_role) VALUES(?,?,?,?,?,?)")
+    .bind(await sha256(token), Number(row.companyId), Number(row.accountId), sessionExpiry.toISOString(), now.toISOString(), initialRole).run();
 
   const status = String(row.licenceStatus || "").toLowerCase();
   const expiry = new Date(String(row.expiresAt || "")).getTime();
   const locked = !["active", "trial"].includes(status) || !Number.isFinite(expiry) || Date.now() > expiry;
-  return json({ ok: true, locked, redirect: locked ? "/subscription-locked" : "/contractor" }, 200, {
+  return json({ ok: true, locked, redirect: locked ? "/subscription-locked" : roles.length > 1 ? "/select-role" : "/contractor" }, 200, {
     "set-cookie": `${COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=43200`,
   });
+}
+
+async function selectRole(request: Request, env: CommercialEnv) {
+  await ensureSessions(env);
+  const s = await currentSession(request, env);
+  if (!s) return Response.redirect(new URL("/contractor-login", request.url).toString(), 302);
+  const roles = await rolesForAccount(env, s.accountId, s.companyId);
+  if (request.method === "POST") {
+    const form = await request.formData();
+    const selected = validRoles([form.get("role")])[0];
+    if (!selected || !roles.includes(selected)) return standalonePage("Choose role", `<div class="notice">That role is not assigned to your account.</div><a class="btn" href="/select-role">Try again</a>`, 403);
+    const token = getCookie(request, COOKIE);
+    await env.DB.prepare("UPDATE contractor_sessions SET active_role=? WHERE token_hash=? AND account_id=? AND company_id=?")
+      .bind(selected, await sha256(token), s.accountId, s.companyId).run();
+    return Response.redirect(new URL("/contractor", request.url).toString(), 303);
+  }
+  if (request.method !== "GET") return new Response("Method not allowed", { status: 405 });
+  return standalonePage("Choose workspace role", `<section class="card"><h1>Choose your role</h1><p class="muted">${esc(s.fullName)}, this email has more than one role in <b>${esc(s.companyName)}</b>. Choose the workspace you want to use now.</p><form method="post" action="/select-role">${roles.map(role => `<label class="field" style="display:block;border:1px solid #dce5e8;border-radius:9px;padding:12px"><input type="radio" name="role" value="${esc(role)}" ${role===s.role?'checked':''} required> ${esc(roleLabel(role))}</label>`).join("")}<button class="btn" type="submit">Open selected workspace</button></form></section>`);
 }
 
 function standalonePage(title: string, body: string, status = 200) {
@@ -274,9 +295,11 @@ export default {
     const path = url.pathname;
 
     if (path === "/api/contractor/login" && request.method === "POST") return commercialLogin(request, env);
+    if (path === "/select-role") return selectRole(request, env);
     if (path === "/owner/licence-control") return handleOwnerControl(request, env);
     if (path === "/contractor-licence") return Response.redirect(new URL("/contractor?view=licence", request.url).toString(), 302);
 
+    await ensureSessions(env);
     const s = await currentSession(request, env);
 
     if (s && !licenceActive(s) && protectedContractorPath(path) && path !== "/api/contractor/logout" && path !== "/contractor-login") {
