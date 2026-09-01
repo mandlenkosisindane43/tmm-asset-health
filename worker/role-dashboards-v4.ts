@@ -274,9 +274,9 @@ function navFor(role: string) {
     ["♧", "Alerts", "#alerts"],
   ];
 }
-function shell(s: RoleSession, body: string, site: string) {
+function shell(s: RoleSession, body: string, site: string, periodLabel = "Last 30 days") {
   const nav = [...navFor(s.role), ["◈", "Trial Analysis", "/trial-demo"]];
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(roleTitle(s.role))} Dashboard · TMM Asset Health</title>${css}</head><body><div class="layout"><aside class="sidebar"><div class="brand"><img src="/sindane-logo-sidebar.svg" alt="Sindane Asset Solutions"></div><nav class="nav">${nav.map((x, i) => `<a class="${i === 0 ? "active" : ""}" href="${x[2]}"><span>${x[0]}</span>${esc(x[1])}</a>`).join("")}</nav><div class="sitebox"><small>Current Site / Company</small><b>${esc(site || s.companyName)}</b></div><div class="profile"><div class="avatar">${esc((s.fullName || "U").slice(0, 1).toUpperCase())}</div><div><b>${esc(s.fullName)}</b><small>${esc(roleTitle(s.role))}</small></div></div><form class="signout" method="post" action="/api/contractor/logout"><button type="submit">↪ &nbsp; Sign out</button></form></aside><main class="main"><header class="top"><div class="top-left"><span class="hamb">☰</span><div class="search">⌕ &nbsp; Search machines, faults, work orders, inspections…</div></div><div class="top-right"><span class="top-pill">⌖ ${esc(site || s.companyName)}</span><span class="top-pill">▤ Last 30 days</span><span>↻</span><span>♧</span><span>?</span><span class="userdot">${esc((s.fullName || "U").slice(0, 1).toUpperCase())}</span><span><b>${esc(s.fullName)}</b><br><small>${esc(roleTitle(s.role))}</small></span></div></header>${body}</main></div></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(roleTitle(s.role))} Dashboard · TMM Asset Health</title>${css}</head><body><div class="layout"><aside class="sidebar"><div class="brand"><img src="/sindane-logo-sidebar.svg" alt="Sindane Asset Solutions"></div><nav class="nav">${nav.map((x, i) => `<a class="${i === 0 ? "active" : ""}" href="${x[2]}"><span>${x[0]}</span>${esc(x[1])}</a>`).join("")}</nav><div class="sitebox"><small>Current Site / Company</small><b>${esc(site || s.companyName)}</b></div><div class="profile"><div class="avatar">${esc((s.fullName || "U").slice(0, 1).toUpperCase())}</div><div><b>${esc(s.fullName)}</b><small>${esc(roleTitle(s.role))}</small></div></div><form class="signout" method="post" action="/api/contractor/logout"><button type="submit">↪ &nbsp; Sign out</button></form></aside><main class="main"><header class="top"><div class="top-left"><span class="hamb">☰</span><div class="search">⌕ &nbsp; Search machines, faults, work orders, inspections…</div></div><div class="top-right"><button class="top-pill" type="button" onclick="window.print()">🖨 Print</button><span class="top-pill">⌖ ${esc(site || s.companyName)}</span><span class="top-pill">▤ ${esc(periodLabel)}</span><span>↻</span><span>♧</span><span>?</span><span class="userdot">${esc((s.fullName || "U").slice(0, 1).toUpperCase())}</span><span><b>${esc(s.fullName)}</b><br><small>${esc(roleTitle(s.role))}</small></span></div></header>${body}</main></div></body></html>`;
 }
 function html(body: string, status = 200) {
   return new Response(body, {
@@ -294,6 +294,10 @@ function html(body: string, status = 200) {
 
 async function loadCommon(env: RoleDashboardEnv, s: RoleSession) {
   const cid = s.companyId;
+  const demoPeriod = await first(env,"SELECT period_start AS start,period_end AS end FROM demo_import_batches_v1 WHERE company_id=? ORDER BY id DESC LIMIT 1",[cid]);
+  const reportStart = demoPeriod?.start ? String(demoPeriod.start) : daysAgo(45);
+  const reportEnd = demoPeriod?.end ? String(demoPeriod.end) : "9999-12-31";
+  const periodLabel = demoPeriod?.start ? `${String(demoPeriod.start)} – ${String(demoPeriod.end)} Trial` : "Last 30 days";
   const machines = await all(
     env,
     "SELECT id,fleet_number AS fleet,category,site,status,operating_hours AS hours,next_service_hours AS nextService FROM machines WHERE company_id=? ORDER BY fleet_number LIMIT 500",
@@ -306,8 +310,8 @@ async function loadCommon(env: RoleDashboardEnv, s: RoleSession) {
   );
   const production = await all(
     env,
-    "SELECT report_date AS date,fleet_number AS fleet,shift_hours AS shiftHours,planned_downtime AS planned,unplanned_downtime AS unplanned,operating_hours AS operating,productive_hours AS productive,tonnes FROM production_records WHERE company_id=? AND report_date>=? ORDER BY report_date",
-    [cid, daysAgo(45)],
+    "SELECT report_date AS date,fleet_number AS fleet,shift_hours AS shiftHours,planned_downtime AS planned,unplanned_downtime AS unplanned,operating_hours AS operating,productive_hours AS productive,tonnes FROM production_records WHERE company_id=? AND report_date>=? AND report_date<=? ORDER BY report_date",
+    [cid, reportStart, reportEnd],
   );
   const work = await all(
     env,
@@ -335,6 +339,7 @@ async function loadCommon(env: RoleDashboardEnv, s: RoleSession) {
     [cid],
   );
   return {
+    periodLabel,
     machines,
     events,
     production,
@@ -831,7 +836,7 @@ async function manager(
       )
       .join("") || '<div class="empty">No work orders recorded.</div>'
   }</section></div><div class="security">◈ Executive totals include only records where company_id = ${s.companyId}. No cross-company aggregation is performed.</div></div>`;
-  return html(shell(s, body, String(c.settings?.defaultSite || s.companyName)));
+  return html(shell(s, body, String(c.settings?.defaultSite || s.companyName), String(c.periodLabel || "Last 30 days")));
 }
 
 export async function handleRoleDashboardsV4(
