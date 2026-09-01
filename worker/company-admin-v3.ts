@@ -1,5 +1,12 @@
 import * as XLSX from "xlsx";
-import { ACCOUNT_ROLES, ensureAccountRoles, replaceAccountRoles, roleLabel as roleName, rolesForAccount, validRoles } from "./account-roles";
+import {
+  ACCOUNT_ROLES,
+  ensureAccountRoles,
+  replaceAccountRoles,
+  roleLabel as roleName,
+  rolesForAccount,
+  validRoles,
+} from "./account-roles";
 
 export interface CompanyAdminEnv {
   DB: D1Database;
@@ -42,38 +49,100 @@ const PBKDF2_ITERATIONS = 100000;
 let schemaReady: Promise<void> | null = null;
 
 function esc(v: unknown) {
-  return String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] || c));
+  return String(v ?? "").replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        c
+      ] || c,
+  );
 }
-function txt(v: unknown, max = 240) { return String(v ?? "").trim().slice(0, max); }
-function lower(v: unknown) { return txt(v, 200).toLowerCase(); }
-function num(v: unknown, fallback = 0) { const n = Number(v); return Number.isFinite(n) ? n : fallback; }
-function isoDate() { return new Date().toISOString().slice(0, 10); }
-function monthStart() { return new Date().toISOString().slice(0, 7) + "-01"; }
-function uid() { return crypto.randomUUID(); }
-function bytesToHex(bytes: Uint8Array) { return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join(""); }
-function hexToBytes(value: string) { const out = new Uint8Array(value.length / 2); for (let i = 0; i < out.length; i++) out[i] = parseInt(value.slice(i * 2, i * 2 + 2), 16); return out; }
-async function sha256(value: string) { return bytesToHex(new Uint8Array(await crypto.subtle.digest("SHA-256", enc.encode(value)))); }
+function txt(v: unknown, max = 240) {
+  return String(v ?? "")
+    .trim()
+    .slice(0, max);
+}
+function lower(v: unknown) {
+  return txt(v, 200).toLowerCase();
+}
+function num(v: unknown, fallback = 0) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+function isoDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+function monthStart() {
+  return new Date().toISOString().slice(0, 7) + "-01";
+}
+function uid() {
+  return crypto.randomUUID();
+}
+function bytesToHex(bytes: Uint8Array) {
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+function hexToBytes(value: string) {
+  const out = new Uint8Array(value.length / 2);
+  for (let i = 0; i < out.length; i++)
+    out[i] = parseInt(value.slice(i * 2, i * 2 + 2), 16);
+  return out;
+}
+async function sha256(value: string) {
+  return bytesToHex(
+    new Uint8Array(await crypto.subtle.digest("SHA-256", enc.encode(value))),
+  );
+}
 async function passwordHash(password: string, saltHex: string) {
-  const key = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveBits"]);
-  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt: hexToBytes(saltHex), iterations: PBKDF2_ITERATIONS }, key, 256);
+  const key = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"],
+  );
+  const bits = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      hash: "SHA-256",
+      salt: hexToBytes(saltHex),
+      iterations: PBKDF2_ITERATIONS,
+    },
+    key,
+    256,
+  );
   return bytesToHex(new Uint8Array(bits));
 }
 function getCookie(request: Request) {
   const raw = request.headers.get("cookie") || "";
   for (const part of raw.split(";")) {
     const i = part.indexOf("=");
-    if (i > -1 && part.slice(0, i).trim() === COOKIE) return part.slice(i + 1).trim();
+    if (i > -1 && part.slice(0, i).trim() === COOKIE)
+      return part.slice(i + 1).trim();
   }
   return "";
 }
 function responseHtml(body: string, status = 200) {
-  return new Response(body, { status, headers: {
-    "content-type": "text/html; charset=utf-8", "cache-control": "private, no-store", "x-frame-options": "DENY",
-    "referrer-policy": "same-origin", "content-security-policy": "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'"
-  }});
+  return new Response(body, {
+    status,
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "private, no-store",
+      "x-frame-options": "DENY",
+      "referrer-policy": "same-origin",
+      "content-security-policy":
+        "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'",
+    },
+  });
 }
-function redirect(location: string) { return new Response(null, { status: 303, headers: { location, "cache-control": "no-store" } }); }
-function toastUrl(view: string, message: string, type = "ok") { return `/contractor?view=${encodeURIComponent(view)}&msg=${encodeURIComponent(message)}&tone=${encodeURIComponent(type)}`; }
+function redirect(location: string) {
+  return new Response(null, {
+    status: 303,
+    headers: { location, "cache-control": "no-store" },
+  });
+}
+function toastUrl(view: string, message: string, type = "ok") {
+  return `/contractor?view=${encodeURIComponent(view)}&msg=${encodeURIComponent(message)}&tone=${encodeURIComponent(type)}`;
+}
 
 async function ensureSchema(env: CompanyAdminEnv) {
   if (schemaReady) return schemaReady;
@@ -88,88 +157,219 @@ async function ensureSchema(env: CompanyAdminEnv) {
       `CREATE TABLE IF NOT EXISTS contractor_documents (id INTEGER PRIMARY KEY AUTOINCREMENT,company_id INTEGER NOT NULL,uploaded_by INTEGER NOT NULL,file_name TEXT NOT NULL,object_key TEXT NOT NULL UNIQUE,content_type TEXT,size_bytes INTEGER NOT NULL DEFAULT 0,category TEXT NOT NULL DEFAULT 'general',created_at TEXT NOT NULL)`,
       `CREATE TABLE IF NOT EXISTS machines (id INTEGER PRIMARY KEY AUTOINCREMENT,company_id INTEGER NOT NULL,fleet_number TEXT NOT NULL,category TEXT NOT NULL,site TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'operating',operating_hours REAL NOT NULL DEFAULT 0,availability_target REAL NOT NULL DEFAULT 0.9,next_service_hours REAL,created_at TEXT NOT NULL)`,
       `CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT,company_id INTEGER NOT NULL,fleet_number TEXT NOT NULL,event_type TEXT NOT NULL,severity TEXT NOT NULL,system_name TEXT NOT NULL,component TEXT NOT NULL,description TEXT NOT NULL,opened_at TEXT NOT NULL,closed_at TEXT,downtime_hours REAL NOT NULL DEFAULT 0,status TEXT NOT NULL DEFAULT 'open',action TEXT,spares_status TEXT,expected_return TEXT,oil_litres_lost REAL NOT NULL DEFAULT 0,created_at TEXT NOT NULL)`,
-      `CREATE TABLE IF NOT EXISTS production_records (id INTEGER PRIMARY KEY AUTOINCREMENT,company_id INTEGER NOT NULL,report_date TEXT NOT NULL,fleet_number TEXT NOT NULL,shift_hours REAL NOT NULL DEFAULT 24,planned_downtime REAL NOT NULL DEFAULT 0,unplanned_downtime REAL NOT NULL DEFAULT 0,operating_hours REAL NOT NULL DEFAULT 0,productive_hours REAL NOT NULL DEFAULT 0,tonnes REAL NOT NULL DEFAULT 0,source_file TEXT,created_at TEXT NOT NULL)`
+      `CREATE TABLE IF NOT EXISTS production_records (id INTEGER PRIMARY KEY AUTOINCREMENT,company_id INTEGER NOT NULL,report_date TEXT NOT NULL,fleet_number TEXT NOT NULL,shift_hours REAL NOT NULL DEFAULT 24,planned_downtime REAL NOT NULL DEFAULT 0,unplanned_downtime REAL NOT NULL DEFAULT 0,operating_hours REAL NOT NULL DEFAULT 0,productive_hours REAL NOT NULL DEFAULT 0,tonnes REAL NOT NULL DEFAULT 0,source_file TEXT,created_at TEXT NOT NULL)`,
     ];
     for (const s of statements) await env.DB.prepare(s).run();
     await ensureAccountRoles(env);
-  })().catch((e) => { schemaReady = null; throw e; });
+  })().catch((e) => {
+    schemaReady = null;
+    throw e;
+  });
   return schemaReady;
 }
 
-async function session(request: Request, env: CompanyAdminEnv): Promise<AdminSession | null> {
+async function session(
+  request: Request,
+  env: CompanyAdminEnv,
+): Promise<AdminSession | null> {
   const token = getCookie(request);
   if (!token) return null;
-  const row = await env.DB.prepare(`SELECT s.company_id AS companyId,s.account_id AS accountId,s.expires_at AS sessionExpires,a.email,a.full_name AS fullName,COALESCE(NULLIF(s.active_role,''),a.role) AS role,a.status AS accountStatus,c.name AS companyName,c.licence_status AS licenceStatus,c.expires_at AS licenceExpires,c.grace_days AS graceDays FROM contractor_sessions s JOIN contractor_accounts a ON a.id=s.account_id AND a.company_id=s.company_id JOIN companies c ON c.id=s.company_id WHERE s.token_hash=? LIMIT 1`).bind(await sha256(token)).first<Record<string, unknown>>();
-  if (!row || String(row.accountStatus) !== "active" || new Date(String(row.sessionExpires)).getTime() < Date.now()) return null;
+  const row = await env.DB.prepare(
+    `SELECT s.company_id AS companyId,s.account_id AS accountId,s.expires_at AS sessionExpires,a.email,a.full_name AS fullName,COALESCE(NULLIF(s.active_role,''),a.role) AS role,a.status AS accountStatus,c.name AS companyName,c.licence_status AS licenceStatus,c.expires_at AS licenceExpires,c.grace_days AS graceDays FROM contractor_sessions s JOIN contractor_accounts a ON a.id=s.account_id AND a.company_id=s.company_id JOIN companies c ON c.id=s.company_id WHERE s.token_hash=? LIMIT 1`,
+  )
+    .bind(await sha256(token))
+    .first<Record<string, unknown>>();
+  if (
+    !row ||
+    String(row.accountStatus) !== "active" ||
+    new Date(String(row.sessionExpires)).getTime() < Date.now()
+  )
+    return null;
   const status = String(row.licenceStatus || "").toLowerCase();
-  const licenceEnd = new Date(String(row.licenceExpires)).getTime() + num(row.graceDays) * 86400000;
-  if (!["active", "trial"].includes(status) || Date.now() > licenceEnd) return null;
-  return { companyId: num(row.companyId), accountId: num(row.accountId), email: String(row.email), fullName: String(row.fullName), role: String(row.role), companyName: String(row.companyName), licenceStatus: String(row.licenceStatus), licenceExpiresAt: String(row.licenceExpires) };
+  const licenceEnd =
+    new Date(String(row.licenceExpires)).getTime() +
+    num(row.graceDays) * 86400000;
+  if (!["active", "trial"].includes(status) || Date.now() > licenceEnd)
+    return null;
+  return {
+    companyId: num(row.companyId),
+    accountId: num(row.accountId),
+    email: String(row.email),
+    fullName: String(row.fullName),
+    role: String(row.role),
+    companyName: String(row.companyName),
+    licenceStatus: String(row.licenceStatus),
+    licenceExpiresAt: String(row.licenceExpires),
+  };
 }
 
-function icon(symbol: string, tone = "green") { return `<span class="circle ${tone}">${symbol}</span>`; }
+function icon(symbol: string, tone = "green") {
+  return `<span class="circle ${tone}">${symbol}</span>`;
+}
 function sidebar(s: AdminSession, active: string) {
   const items = [
-    ["dashboard","⌂","Dashboard"],["users","♙","Users"],["fleet","▣","Fleet"],["daily","▤","Daily Reports"],["reports","▥","Reports Centre"],["alerts","♧","Alerts"],["setup","▦","Company Setup"],["documents","▱","Documents"],["settings","⚙","Settings"],["switch-role","⇄","Switch Role"]
+    ["dashboard", "⌂", "Dashboard"],
+    ["users", "♙", "Users"],
+    ["fleet", "▣", "Fleet"],
+    ["daily", "▤", "Daily Reports"],
+    ["trial-demo", "◈", "Previous Month Trial"],
+    ["reports", "▥", "Reports Centre"],
+    ["alerts", "♧", "Alerts"],
+    ["setup", "▦", "Company Setup"],
+    ["documents", "▱", "Documents"],
+    ["settings", "⚙", "Settings"],
+    ["switch-role", "⇄", "Switch Role"],
   ];
-  return `<aside class="side"><div class="logo"><img src="/sindane-logo.png" alt="Sindane Asset Solutions"><div class="tag">TRACK. PREVENT. PERFORM.</div></div><nav>${items.map(([id,ic,label]) => `<a class="${active===id?'active':''}" href="${id==='reports'?'/contractor-reports':id==='switch-role'?'/select-role':`/contractor?view=${id}`}"><span>${ic}</span>${label}</a>`).join("")}</nav><div class="userbox"><div class="avatar">●</div><div><b>${esc(s.fullName)}</b><small>${esc(roleName(s.role))}</small></div></div></aside>`;
+  return `<aside class="side"><div class="logo"><img src="/sindane-logo.png" alt="Sindane Asset Solutions"><div class="tag">TRACK. PREVENT. PERFORM.</div></div><nav>${items.map(([id, ic, label]) => `<a class="${active === id ? "active" : ""}" href="${id === "reports" ? "/contractor-reports" : id === "trial-demo" ? "/trial-demo" : id === "switch-role" ? "/select-role" : `/contractor?view=${id}`}"><span>${ic}</span>${label}</a>`).join("")}</nav><div class="userbox"><div class="avatar">●</div><div><b>${esc(s.fullName)}</b><small>${esc(roleName(s.role))}</small></div></div></aside>`;
 }
-function baseCss() { return `<style>
+function baseCss() {
+  return `<style>
 *{box-sizing:border-box}body{margin:0;background:#f5f7fa;color:#111827;font-family:Arial,Helvetica,sans-serif}.app{min-height:100vh;display:grid;grid-template-columns:255px 1fr}.side{background:linear-gradient(180deg,#071622,#06131e);color:white;min-height:100vh;padding:18px;position:sticky;top:0;height:100vh}.logo{text-align:center;padding:4px 8px 22px;border-bottom:1px solid #243541}.logo img{max-width:178px;width:100%;height:105px;object-fit:contain}.tag{font-size:8px;letter-spacing:.25em;color:#e2a900;font-weight:800;margin-top:-8px}.side nav{padding-top:18px;display:grid;gap:7px}.side nav a{display:flex;gap:13px;align-items:center;color:#edf4f2;text-decoration:none;padding:13px 14px;border-radius:8px;font-size:14px}.side nav a span{width:22px;text-align:center;font-size:20px}.side nav a.active,.side nav a:hover{background:#0a7a49}.userbox{position:absolute;left:18px;right:18px;bottom:24px;border-top:1px solid #2c3a46;padding-top:18px;display:flex;gap:10px;align-items:center}.avatar{width:38px;height:38px;border-radius:50%;background:#069354;display:grid;place-items:center}.userbox b,.userbox small{display:block}.userbox b{font-size:12px}.userbox small{font-size:10px;color:#c3ced6;margin-top:3px}.main{min-width:0}.topbar{height:58px;background:#fff;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;padding:0 26px;position:sticky;top:0;z-index:9}.topbar .right{display:flex;align-items:center;gap:14px;font-size:12px}.bell{position:relative;font-size:21px}.badge{display:inline-grid;place-items:center;min-width:22px;height:22px;border-radius:11px;padding:0 6px;background:#f4ae00;color:#151515;font-size:10px;font-weight:900}.content{padding:20px 22px 36px;max-width:1650px;margin:auto}.pagehead{display:flex;justify-content:space-between;align-items:end;margin-bottom:14px}.pagehead h1{font-size:29px;margin:0}.pagehead p{margin:3px 0 0;color:#4b5563}.company{font-size:12px;font-weight:700}.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}.kpi{background:#fff;border:1px solid #e2e7ec;border-radius:11px;padding:14px;display:flex;gap:12px;align-items:center;min-height:98px;box-shadow:0 2px 8px rgba(15,23,42,.03)}.circle{width:49px;height:49px;border-radius:50%;display:grid;place-items:center;font-size:21px;background:#087849;color:#fff;flex:0 0 auto}.circle.amber{background:#f3a400}.circle.red{background:#dc1717}.kpi small,.kpi b,.kpi em{display:block}.kpi small{font-size:10px;color:#4b5563}.kpi b{font-size:25px;margin:4px 0}.kpi em{font-size:9px;color:#087849;font-style:normal}.kpi em.warn{color:#e28c00}.kpi em.bad{color:#e01818}.dashboard-grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:13px;margin-top:13px}.dashmain{display:grid;gap:13px}.row3{display:grid;grid-template-columns:.95fr 1.35fr 1.05fr;gap:13px}.row4{display:grid;grid-template-columns:1.05fr 1.1fr 1.1fr 1.15fr;gap:13px}.panel{background:#fff;border:1px solid #dfe5eb;border-radius:11px;padding:14px;box-shadow:0 2px 8px rgba(15,23,42,.025)}.panel h2{font-size:14px;margin:0 0 12px}.actions{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}.action{border:1px solid #e3e8ed;border-radius:9px;min-height:91px;text-decoration:none;color:#086d43;display:grid;place-items:center;text-align:center;padding:10px;font-size:11px;font-weight:800}.action span{display:block;font-size:26px;margin-bottom:4px}.link{display:inline-block;margin-top:12px;color:#067344;text-decoration:none;font-size:11px;font-weight:800}.exports{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.export{border:1px solid #e3e8ed;border-radius:8px;text-align:center;padding:13px 5px;font-size:10px;text-decoration:none;color:#111827}.export b{display:block;font-size:20px;margin-bottom:7px}.export .excel{color:#087a47}.export .word{color:#1168ca}.export .pdf{color:#dc1515}.export .folder{color:#e9a200}.mini-table{width:100%;border-collapse:collapse;font-size:10px}.mini-table th{text-align:left;color:#4b5563;background:#f8fafc;padding:7px;border-bottom:1px solid #e7eaee}.mini-table td{padding:8px 7px;border-bottom:1px solid #eef1f4}.critical{color:#e01818}.pending{color:#e89b00}.sideform{background:#fff;border:1px solid #dfe5eb;border-radius:11px;padding:14px;align-self:start;position:sticky;top:72px}.sideform h2{font-size:13px;margin:0 0 15px}.steps{font-size:11px;font-weight:800;margin:15px 0 8px}.choice{display:grid;grid-template-columns:1fr 1fr;gap:8px}.choice label{border:1px solid #dfe5eb;border-radius:8px;padding:12px 8px;text-align:center;font-size:11px}.choice input{margin-right:5px}.units{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}.units label{font-size:10px;border:1px solid #dfe5eb;border-radius:7px;padding:8px 4px;text-align:center}.field{display:grid;gap:5px;font-size:10px;font-weight:800;margin:8px 0}.field input,.field select,.field textarea{width:100%;padding:9px;border:1px solid #cfd8e1;border-radius:7px;font:inherit;background:#fff}.field textarea{min-height:62px}.twocol{display:grid;grid-template-columns:1fr 1fr;gap:8px}.btn{border:0;background:#087849;color:#fff;padding:10px 13px;border-radius:8px;font-weight:800;cursor:pointer;text-decoration:none;display:inline-block;font-size:11px}.btn.blue{background:#1169b3}.btn.red{background:#b42318}.btn.gray{background:#eef2f6;color:#24364b;border:1px solid #d6dee6}.btn.amber{background:#e99b00}.btnrow{display:flex;flex-wrap:wrap;gap:7px;margin:11px 0}.notice{padding:10px 12px;border-radius:8px;background:#eaf7ef;color:#166534;font-size:11px;margin-bottom:12px}.notice.err{background:#fff0f0;color:#a11b1b}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:11px}.card{background:#fff;border:1px solid #dfe5eb;border-radius:10px;padding:15px}.card h3{margin:0 0 5px;font-size:14px}.card p{font-size:11px;color:#667085;line-height:1.45}.bigtable{width:100%;border-collapse:collapse;font-size:11px}.bigtable th{text-align:left;padding:10px;background:#f5f7fa;color:#566579}.bigtable td{padding:10px;border-bottom:1px solid #edf0f3}.section{margin-top:13px}.section h2{font-size:18px;margin:0 0 11px}.split{display:grid;grid-template-columns:1fr 1fr;gap:13px}.pill{display:inline-block;padding:4px 7px;border-radius:999px;font-size:9px;font-weight:800;background:#e7f6ee;color:#0b7443}.pill.red{background:#ffe4e4;color:#b42318}.pill.amber{background:#fff2da;color:#996000}.foot{margin-top:16px;background:#071d2c;color:#fff;padding:14px 22px;display:flex;justify-content:space-between;font-size:9px;letter-spacing:.02em}.foot .brandline{letter-spacing:.3em;color:#e8ab00;font-weight:900}.empty{padding:20px;color:#718096;text-align:center;font-size:11px}.subnav{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px}.subnav a{background:#fff;border:1px solid #dce3e9;border-radius:8px;padding:9px 11px;text-decoration:none;color:#23364e;font-size:11px;font-weight:800}.subnav a.current{background:#087849;color:#fff}.rolehero{background:linear-gradient(120deg,#092235,#0c7048);color:#fff;padding:24px;border-radius:14px;margin-bottom:14px;display:flex;gap:18px;align-items:center}.rolehero img{width:115px;height:75px;object-fit:contain;background:#fff;border-radius:10px;padding:6px}.rolehero h1{margin:0 0 5px}.rolehero p{margin:0;color:#d5e4df}.setup-list{display:grid;gap:9px}.setup-list a{display:block;text-decoration:none;color:#111827;border-bottom:1px solid #eef1f3;padding:9px 0}.setup-list b{display:block;font-size:11px}.setup-list small{color:#6b7280}.filebox{border:1px dashed #b7c2cd;border-radius:9px;padding:12px;background:#fafcfd}.green{color:#087849}.redtxt{color:#d41414}.ambertxt{color:#e59400}
 @media(max-width:1250px){.kpis{grid-template-columns:repeat(3,1fr)}.row3,.row4{grid-template-columns:1fr 1fr}.dashboard-grid{grid-template-columns:1fr}.sideform{position:relative;top:0}.cards{grid-template-columns:1fr 1fr}}@media(max-width:820px){.app{display:block}.side{position:relative;height:auto;min-height:0}.side nav{grid-template-columns:repeat(3,1fr)}.side nav a{font-size:0;justify-content:center}.side nav a span{font-size:21px}.userbox{display:none}.logo img{height:75px}.kpis{grid-template-columns:1fr 1fr}.row3,.row4,.split{grid-template-columns:1fr}.actions{grid-template-columns:1fr 1fr}.content{padding:14px}.topbar{padding:0 14px}.pagehead h1{font-size:23px}}@media print{.side,.topbar,.sideform,.btnrow,.foot{display:none!important}.app{display:block}.content{padding:0}.panel{box-shadow:none}}
-</style>`; }
+</style>`;
+}
 
-function shell(s: AdminSession, active: string, title: string, body: string, alertCount = 0) {
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} · TMM Asset Health</title>${baseCss()}</head><body><div class="app">${sidebar(s,active)}<main class="main"><header class="topbar"><div>☰</div><div class="right"><span class="bell">♟</span>${alertCount?`<span class="badge">${alertCount}</span>`:''}<span>▦</span><span class="company">${esc(s.companyName)}</span><form method="post" action="/api/contractor/logout"><button class="btn gray" type="submit">Sign out</button></form></div></header><div class="content">${body}</div><footer class="foot"><span>◈ Secure. Reliable. Insightful. &nbsp; | &nbsp; TMM Asset Health v3.0.0 &nbsp; | &nbsp; © 2026 Sindane Asset Solutions.</span><span class="brandline">TRACK. PREVENT. PERFORM.</span></footer></main></div></body></html>`;
+function shell(
+  s: AdminSession,
+  active: string,
+  title: string,
+  body: string,
+  alertCount = 0,
+) {
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} · TMM Asset Health</title>${baseCss()}</head><body><div class="app">${sidebar(s, active)}<main class="main"><header class="topbar"><div>☰</div><div class="right"><span class="bell">♟</span>${alertCount ? `<span class="badge">${alertCount}</span>` : ""}<span>▦</span><span class="company">${esc(s.companyName)}</span><form method="post" action="/api/contractor/logout"><button class="btn gray" type="submit">Sign out</button></form></div></header><div class="content">${body}</div><footer class="foot"><span>◈ Secure. Reliable. Insightful. &nbsp; | &nbsp; TMM Asset Health v3.0.0 &nbsp; | &nbsp; © 2026 Sindane Asset Solutions.</span><span class="brandline">TRACK. PREVENT. PERFORM.</span></footer></main></div></body></html>`;
 }
 
 async function getSettings(env: CompanyAdminEnv, cid: number) {
-  const row = await env.DB.prepare("SELECT * FROM company_settings_v3 WHERE company_id=? LIMIT 1").bind(cid).first<Record<string, unknown>>();
-  return { contactEmail:String(row?.contact_email||""), contactPhone:String(row?.contact_phone||""), operatingHours:num(row?.operating_hours,24), dailyTarget:num(row?.daily_production_target), availabilityTarget:num(row?.availability_target,90), defaultSite:String(row?.default_site||"") };
+  const row = await env.DB.prepare(
+    "SELECT * FROM company_settings_v3 WHERE company_id=? LIMIT 1",
+  )
+    .bind(cid)
+    .first<Record<string, unknown>>();
+  return {
+    contactEmail: String(row?.contact_email || ""),
+    contactPhone: String(row?.contact_phone || ""),
+    operatingHours: num(row?.operating_hours, 24),
+    dailyTarget: num(row?.daily_production_target),
+    availabilityTarget: num(row?.availability_target, 90),
+    defaultSite: String(row?.default_site || ""),
+  };
 }
 
 async function dashboardMetrics(env: CompanyAdminEnv, s: AdminSession) {
   const cid = s.companyId;
-  const machines = await env.DB.prepare("SELECT COUNT(*) AS n FROM machines WHERE company_id=?").bind(cid).first<Record<string,unknown>>();
-  const users = await env.DB.prepare("SELECT COUNT(*) AS n FROM contractor_accounts WHERE company_id=? AND status='active'").bind(cid).first<Record<string,unknown>>();
-  const missing = await env.DB.prepare(`SELECT COUNT(*) AS n FROM machines m WHERE m.company_id=? AND lower(m.status) NOT IN ('retired','inactive') AND NOT EXISTS (SELECT 1 FROM daily_reports_v3 d WHERE d.company_id=m.company_id AND d.fleet_number=m.fleet_number AND d.report_date=?)`).bind(cid,isoDate()).first<Record<string,unknown>>();
-  const approvals = await env.DB.prepare("SELECT COUNT(*) AS n FROM approvals_v3 WHERE company_id=? AND status='pending'").bind(cid).first<Record<string,unknown>>();
-  const criticalEvents = await env.DB.prepare("SELECT COUNT(*) AS n FROM events WHERE company_id=? AND status!='closed' AND lower(severity) IN ('critical','high')").bind(cid).first<Record<string,unknown>>();
-  const overdue = await env.DB.prepare("SELECT COUNT(*) AS n FROM machines WHERE company_id=? AND next_service_hours IS NOT NULL AND operating_hours>=next_service_hours").bind(cid).first<Record<string,unknown>>();
-  const monthly = await env.DB.prepare("SELECT SUM(shift_hours-planned_downtime) AS scheduled,SUM(operating_hours) AS operating FROM production_records WHERE company_id=? AND report_date>=?").bind(cid,monthStart()).first<Record<string,unknown>>();
-  const scheduled = num(monthly?.scheduled), operating = num(monthly?.operating), availability = scheduled>0?Math.max(0,Math.min(100,operating/scheduled*100)):0;
-  return { machines:num(machines?.n), users:num(users?.n), missing:num(missing?.n), approvals:num(approvals?.n), critical:num(criticalEvents?.n)+num(overdue?.n), availability };
+  const machines = await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM machines WHERE company_id=?",
+  )
+    .bind(cid)
+    .first<Record<string, unknown>>();
+  const users = await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM contractor_accounts WHERE company_id=? AND status='active'",
+  )
+    .bind(cid)
+    .first<Record<string, unknown>>();
+  const missing = await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM machines m WHERE m.company_id=? AND lower(m.status) NOT IN ('retired','inactive') AND NOT EXISTS (SELECT 1 FROM daily_reports_v3 d WHERE d.company_id=m.company_id AND d.fleet_number=m.fleet_number AND d.report_date=?)`,
+  )
+    .bind(cid, isoDate())
+    .first<Record<string, unknown>>();
+  const approvals = await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM approvals_v3 WHERE company_id=? AND status='pending'",
+  )
+    .bind(cid)
+    .first<Record<string, unknown>>();
+  const criticalEvents = await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM events WHERE company_id=? AND status!='closed' AND lower(severity) IN ('critical','high')",
+  )
+    .bind(cid)
+    .first<Record<string, unknown>>();
+  const overdue = await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM machines WHERE company_id=? AND next_service_hours IS NOT NULL AND operating_hours>=next_service_hours",
+  )
+    .bind(cid)
+    .first<Record<string, unknown>>();
+  const monthly = await env.DB.prepare(
+    "SELECT SUM(shift_hours-planned_downtime) AS scheduled,SUM(operating_hours) AS operating FROM production_records WHERE company_id=? AND report_date>=?",
+  )
+    .bind(cid, monthStart())
+    .first<Record<string, unknown>>();
+  const scheduled = num(monthly?.scheduled),
+    operating = num(monthly?.operating),
+    availability =
+      scheduled > 0
+        ? Math.max(0, Math.min(100, (operating / scheduled) * 100))
+        : 0;
+  return {
+    machines: num(machines?.n),
+    users: num(users?.n),
+    missing: num(missing?.n),
+    approvals: num(approvals?.n),
+    critical: num(criticalEvents?.n) + num(overdue?.n),
+    availability,
+  };
 }
 
 async function dashboardPage(env: CompanyAdminEnv, s: AdminSession, url: URL) {
-  const m = await dashboardMetrics(env,s), cid=s.companyId;
-  const recent = (await env.DB.prepare("SELECT title,published_at AS publishedAt,report_type AS reportType,period_key AS periodKey FROM report_history_v3 WHERE company_id=? ORDER BY published_at DESC LIMIT 5").bind(cid).all<Record<string,unknown>>()).results;
-  const missingRows = (await env.DB.prepare(`SELECT m.fleet_number AS fleet,m.site FROM machines m WHERE m.company_id=? AND lower(m.status) NOT IN ('retired','inactive') AND NOT EXISTS (SELECT 1 FROM daily_reports_v3 d WHERE d.company_id=m.company_id AND d.fleet_number=m.fleet_number AND d.report_date=?) ORDER BY m.site,m.fleet_number LIMIT 5`).bind(cid,isoDate()).all<Record<string,unknown>>()).results;
-  const alerts = (await env.DB.prepare("SELECT fleet_number AS fleet,description,severity,opened_at AS openedAt FROM events WHERE company_id=? AND status!='closed' AND lower(severity) IN ('critical','high') ORDER BY id DESC LIMIT 5").bind(cid).all<Record<string,unknown>>()).results;
-  const approvals = (await env.DB.prepare("SELECT id,title,submitted_by AS submittedBy,created_at AS createdAt,approval_type AS approvalType FROM approvals_v3 WHERE company_id=? AND status='pending' ORDER BY id DESC LIMIT 5").bind(cid).all<Record<string,unknown>>()).results;
-  const settings = await getSettings(env,cid);
-  const msg = url.searchParams.get("msg"); const tone = url.searchParams.get("tone")==="err"?"err":"";
-  const quick = [["users","♙","Invite User"],["fleet","▣","Add / Import Machines"],["daily","⇧","Import Daily Report"],["reports","▥","Open Reports Centre"],["weekly","▤","Update Weekly"],["monthly","▤","Update Monthly"]];
-  const body = `${msg?`<div class="notice ${tone}">${esc(msg)}</div>`:""}<div class="pagehead"><div><h1>TMM Asset Health</h1><p>Company Administrator Dashboard</p></div><div class="company">${esc(s.companyName)}</div></div>
+  const m = await dashboardMetrics(env, s),
+    cid = s.companyId;
+  const recent = (
+    await env.DB.prepare(
+      "SELECT title,published_at AS publishedAt,report_type AS reportType,period_key AS periodKey FROM report_history_v3 WHERE company_id=? ORDER BY published_at DESC LIMIT 5",
+    )
+      .bind(cid)
+      .all<Record<string, unknown>>()
+  ).results;
+  const missingRows = (
+    await env.DB.prepare(
+      `SELECT m.fleet_number AS fleet,m.site FROM machines m WHERE m.company_id=? AND lower(m.status) NOT IN ('retired','inactive') AND NOT EXISTS (SELECT 1 FROM daily_reports_v3 d WHERE d.company_id=m.company_id AND d.fleet_number=m.fleet_number AND d.report_date=?) ORDER BY m.site,m.fleet_number LIMIT 5`,
+    )
+      .bind(cid, isoDate())
+      .all<Record<string, unknown>>()
+  ).results;
+  const alerts = (
+    await env.DB.prepare(
+      "SELECT fleet_number AS fleet,description,severity,opened_at AS openedAt FROM events WHERE company_id=? AND status!='closed' AND lower(severity) IN ('critical','high') ORDER BY id DESC LIMIT 5",
+    )
+      .bind(cid)
+      .all<Record<string, unknown>>()
+  ).results;
+  const approvals = (
+    await env.DB.prepare(
+      "SELECT id,title,submitted_by AS submittedBy,created_at AS createdAt,approval_type AS approvalType FROM approvals_v3 WHERE company_id=? AND status='pending' ORDER BY id DESC LIMIT 5",
+    )
+      .bind(cid)
+      .all<Record<string, unknown>>()
+  ).results;
+  const settings = await getSettings(env, cid);
+  const msg = url.searchParams.get("msg");
+  const tone = url.searchParams.get("tone") === "err" ? "err" : "";
+  const quick = [
+    ["users", "♙", "Invite User"],
+    ["fleet", "▣", "Add / Import Machines"],
+    ["daily", "⇧", "Import Daily Report"],
+    ["reports", "▥", "Open Reports Centre"],
+    ["weekly", "▤", "Update Weekly"],
+    ["monthly", "▤", "Update Monthly"],
+  ];
+  const body = `${msg ? `<div class="notice ${tone}">${esc(msg)}</div>` : ""}<div class="pagehead"><div><h1>TMM Asset Health</h1><p>Company Administrator Dashboard</p></div><div class="company">${esc(s.companyName)}</div></div>
   <div class="kpis">
    <div class="kpi">${icon("▣")}<div><small>Total Machines</small><b>${m.machines}</b><em>Live fleet register</em></div></div>
    <div class="kpi">${icon("♙")}<div><small>Active Users</small><b>${m.users}</b><em>Role-based access</em></div></div>
-   <div class="kpi">${icon("▤","amber")}<div><small>Missing Daily Reports</small><b>${m.missing}</b><em class="warn">Needs follow-up</em></div></div>
+   <div class="kpi">${icon("▤", "amber")}<div><small>Missing Daily Reports</small><b>${m.missing}</b><em class="warn">Needs follow-up</em></div></div>
    <div class="kpi">${icon("✓")}<div><small>Pending Approvals</small><b>${m.approvals}</b><em class="warn">Requires review</em></div></div>
-   <div class="kpi">${icon("!","red")}<div><small>Critical Alerts</small><b>${m.critical}</b><em class="bad">Immediate action</em></div></div>
+   <div class="kpi">${icon("!", "red")}<div><small>Critical Alerts</small><b>${m.critical}</b><em class="bad">Immediate action</em></div></div>
    <div class="kpi">${icon("◉")}<div><small>Monthly Availability</small><b>${m.availability.toFixed(1)}%</b><em>Calculated from reports</em></div></div>
   </div>
   <div class="dashboard-grid"><div class="dashmain"><div class="row3">
-    <section class="panel"><h2>Quick Actions</h2><div class="actions">${quick.map(([view,ic,label])=>`<a class="action" href="${view==='reports'?'/contractor-reports':view==='weekly'?'/contractor?view=reports-admin&type=weekly':view==='monthly'?'/contractor?view=reports-admin&type=monthly':`/contractor?view=${view}`}"><span>${ic}</span>${label}</a>`).join("")}</div><a class="link" href="/contractor?view=setup">View all actions →</a></section>
-    <section class="panel"><h2>Recent Reports</h2>${recent.length?`<table class="mini-table"><tbody>${recent.map(r=>`<tr><td>${esc(r.title)}</td><td>${esc(String(r.publishedAt).slice(0,10))}</td><td>${esc(r.periodKey)}</td></tr>`).join("")}</tbody></table>`:`<div class="empty">No published reports yet.</div>`}<a class="link" href="/contractor-reports">Go to Reports Centre →</a></section>
+    <section class="panel"><h2>Quick Actions</h2><div class="actions">${quick.map(([view, ic, label]) => `<a class="action" href="${view === "reports" ? "/contractor-reports" : view === "weekly" ? "/contractor?view=reports-admin&type=weekly" : view === "monthly" ? "/contractor?view=reports-admin&type=monthly" : `/contractor?view=${view}`}"><span>${ic}</span>${label}</a>`).join("")}</div><a class="link" href="/contractor?view=setup">View all actions →</a></section>
+    <section class="panel"><h2>Recent Reports</h2>${recent.length ? `<table class="mini-table"><tbody>${recent.map((r) => `<tr><td>${esc(r.title)}</td><td>${esc(String(r.publishedAt).slice(0, 10))}</td><td>${esc(r.periodKey)}</td></tr>`).join("")}</tbody></table>` : `<div class="empty">No published reports yet.</div>`}<a class="link" href="/contractor-reports">Go to Reports Centre →</a></section>
     <section class="panel"><h2>Report Exports</h2><div class="exports"><a class="export" href="/company-admin/export?format=xlsx&period=month"><b class="excel">X</b>Excel<br><small>.xlsx</small></a><a class="export" href="/company-admin/export?format=word&period=month"><b class="word">W</b>Word<br><small>.doc</small></a><a class="export" href="/contractor-reports?type=monthly"><b class="pdf">PDF</b>Print<br><small>Save PDF</small></a><a class="export" href="/contractor?view=documents"><b class="folder">▰</b>Archive<br><small>Documents</small></a></div><a class="link" href="/contractor?view=reports-admin">View all exports →</a></section>
   </div><div class="row4">
-    <section class="panel"><h2>Missing Daily Reports <span class="badge" style="background:#df1616;color:#fff;float:right">${m.missing}</span></h2>${missingRows.length?`<table class="mini-table"><thead><tr><th>Date</th><th>Site</th><th>Machine</th></tr></thead><tbody>${missingRows.map(r=>`<tr><td>${isoDate()}</td><td>${esc(r.site)}</td><td>${esc(r.fleet)}</td></tr>`).join("")}</tbody></table>`:`<div class="empty">All current fleet reports received.</div>`}<a class="link redtxt" href="/contractor?view=daily">View all missing reports →</a></section>
-    <section class="panel"><h2>Critical Alerts <span class="badge" style="background:#df1616;color:#fff;float:right">${m.critical}</span></h2>${alerts.length?`<table class="mini-table"><thead><tr><th>Machine</th><th>Alert</th><th>Severity</th></tr></thead><tbody>${alerts.map(r=>`<tr><td>${esc(r.fleet)}</td><td class="critical">${esc(r.description)}</td><td>${esc(r.severity)}</td></tr>`).join("")}</tbody></table>`:`<div class="empty">No critical breakdown events.</div>`}<a class="link redtxt" href="/contractor?view=alerts">View all alerts →</a></section>
-    <section class="panel"><h2>Pending Approvals <span class="badge" style="float:right">${m.approvals}</span></h2>${approvals.length?`<table class="mini-table"><thead><tr><th>Request</th><th>Submitted By</th><th>Date</th></tr></thead><tbody>${approvals.map(r=>`<tr><td>${esc(r.title)}</td><td>${esc(r.submittedBy)}</td><td>${esc(String(r.createdAt).slice(0,10))}</td></tr>`).join("")}</tbody></table>`:`<div class="empty">No pending approvals.</div>`}<a class="link ambertxt" href="/contractor?view=approvals">Review approvals →</a></section>
+    <section class="panel"><h2>Missing Daily Reports <span class="badge" style="background:#df1616;color:#fff;float:right">${m.missing}</span></h2>${missingRows.length ? `<table class="mini-table"><thead><tr><th>Date</th><th>Site</th><th>Machine</th></tr></thead><tbody>${missingRows.map((r) => `<tr><td>${isoDate()}</td><td>${esc(r.site)}</td><td>${esc(r.fleet)}</td></tr>`).join("")}</tbody></table>` : `<div class="empty">All current fleet reports received.</div>`}<a class="link redtxt" href="/contractor?view=daily">View all missing reports →</a></section>
+    <section class="panel"><h2>Critical Alerts <span class="badge" style="background:#df1616;color:#fff;float:right">${m.critical}</span></h2>${alerts.length ? `<table class="mini-table"><thead><tr><th>Machine</th><th>Alert</th><th>Severity</th></tr></thead><tbody>${alerts.map((r) => `<tr><td>${esc(r.fleet)}</td><td class="critical">${esc(r.description)}</td><td>${esc(r.severity)}</td></tr>`).join("")}</tbody></table>` : `<div class="empty">No critical breakdown events.</div>`}<a class="link redtxt" href="/contractor?view=alerts">View all alerts →</a></section>
+    <section class="panel"><h2>Pending Approvals <span class="badge" style="float:right">${m.approvals}</span></h2>${approvals.length ? `<table class="mini-table"><thead><tr><th>Request</th><th>Submitted By</th><th>Date</th></tr></thead><tbody>${approvals.map((r) => `<tr><td>${esc(r.title)}</td><td>${esc(r.submittedBy)}</td><td>${esc(String(r.createdAt).slice(0, 10))}</td></tr>`).join("")}</tbody></table>` : `<div class="empty">No pending approvals.</div>`}<a class="link ambertxt" href="/contractor?view=approvals">Review approvals →</a></section>
     <section class="panel"><h2>Company Setup</h2><div class="setup-list"><a href="/contractor?view=setup"><b>♙ Company Details</b><small>View and update company information</small></a><a href="/contractor?view=setup#sites"><b>⌖ Sites Management</b><small>Add and manage company sites</small></a><a href="/contractor?view=users"><b>♙ Users & Roles</b><small>Manage users and permissions</small></a><a href="/contractor?view=alerts"><b>♧ Alert Rules</b><small>Configure notification contacts</small></a><a href="/contractor?view=settings"><b>⚙ Targets & Preferences</b><small>Operating hours and KPI targets</small></a></div><a class="link" href="/contractor?view=setup">Go to Company Setup →</a></section>
   </div></div>${dailyCapturePanel(settings)}</div>`;
-  return responseHtml(shell(s,"dashboard","Dashboard",body,m.critical));
+  return responseHtml(shell(s, "dashboard", "Dashboard", body, m.critical));
 }
 
 function dailyCapturePanel(settings: Awaited<ReturnType<typeof getSettings>>) {
@@ -177,170 +377,1050 @@ function dailyCapturePanel(settings: Awaited<ReturnType<typeof getSettings>>) {
 }
 
 async function usersPage(env: CompanyAdminEnv, s: AdminSession, url: URL) {
-  const rows=(await env.DB.prepare(`SELECT a.id,a.email,a.full_name AS fullName,a.role,a.status,a.created_at AS createdAt,
+  const rows = (
+    await env.DB.prepare(
+      `SELECT a.id,a.email,a.full_name AS fullName,a.role,a.status,a.created_at AS createdAt,
     COALESCE((SELECT group_concat(r.role,',') FROM contractor_account_roles_v1 r WHERE r.account_id=a.id AND r.company_id=a.company_id),a.role) AS roles
-    FROM contractor_accounts a WHERE a.company_id=? ORDER BY a.id`).bind(s.companyId).all<Record<string,unknown>>()).results;
-  const msg=url.searchParams.get("msg"), tone=url.searchParams.get("tone")==="err"?"err":"";
-  const roleChecks=(selected:string[]=[])=>ACCOUNT_ROLES.map(role=>`<label style="display:inline-block;margin:4px 9px 4px 0;font-size:10px"><input type="checkbox" name="role" value="${role}" ${selected.includes(role)?'checked':''}> ${esc(roleName(role))}</label>`).join('');
-  const body=`${msg?`<div class="notice ${tone}">${esc(msg)}</div>`:""}<div class="pagehead"><div><h1>Users & Roles</h1><p>One email can hold several roles in this company. Users choose a workspace role after signing in.</p></div></div><div class="split"><section class="panel"><h2>Create user or add roles</h2><form method="post" action="/company-admin/users/add"><label class="field">Full name<input name="fullName" required></label><label class="field">Email<input name="email" type="email" required></label><div class="field">Roles<div>${roleChecks(['mechanic'])}</div></div><label class="field">Temporary password<input name="password" type="password" minlength="10"><small>Required for a new email. Leave blank when adding roles to an existing user.</small></label><button class="btn" type="submit">Save User & Roles</button></form></section><section class="panel"><h2>Company users</h2><table class="bigtable"><thead><tr><th>Name</th><th>Email</th><th>Roles</th><th>Status</th><th>Access</th></tr></thead><tbody>${rows.map(r=>{const selected=String(r.roles||r.role).split(',').filter(Boolean);return `<tr><td>${esc(r.fullName)}</td><td><form method="post" action="/company-admin/users/email"><input type="hidden" name="id" value="${r.id}"><input name="email" type="email" value="${esc(r.email)}" required style="width:190px"><button class="btn gray" type="submit">Change email</button></form></td><td><form method="post" action="/company-admin/users/roles"><input type="hidden" name="id" value="${r.id}">${roleChecks(selected)}<button class="btn gray" type="submit">Save roles</button></form></td><td><span class="pill ${r.status==='active'?'':'red'}">${esc(r.status)}</span></td><td><form method="post" action="/company-admin/users/toggle"><input type="hidden" name="id" value="${r.id}"><input type="hidden" name="next" value="${r.status==='active'?'inactive':'active'}"><button class="btn gray" type="submit">${r.status==='active'?'Deactivate':'Activate'}</button></form></td></tr>`}).join("")}</tbody></table></section></div>`;
-  return responseHtml(shell(s,"users","Users",body));
+    FROM contractor_accounts a WHERE a.company_id=? ORDER BY a.id`,
+    )
+      .bind(s.companyId)
+      .all<Record<string, unknown>>()
+  ).results;
+  const msg = url.searchParams.get("msg"),
+    tone = url.searchParams.get("tone") === "err" ? "err" : "";
+  const roleChecks = (selected: string[] = []) =>
+    ACCOUNT_ROLES.map(
+      (role) =>
+        `<label style="display:inline-block;margin:4px 9px 4px 0;font-size:10px"><input type="checkbox" name="role" value="${role}" ${selected.includes(role) ? "checked" : ""}> ${esc(roleName(role))}</label>`,
+    ).join("");
+  const body = `${msg ? `<div class="notice ${tone}">${esc(msg)}</div>` : ""}<div class="pagehead"><div><h1>Users & Roles</h1><p>One email can hold several roles in this company. Users choose a workspace role after signing in.</p></div></div><div class="split"><section class="panel"><h2>Create user or add roles</h2><form method="post" action="/company-admin/users/add"><label class="field">Full name<input name="fullName" required></label><label class="field">Email<input name="email" type="email" required></label><div class="field">Roles<div>${roleChecks(["mechanic"])}</div></div><label class="field">Temporary password<input name="password" type="password" minlength="10"><small>Required for a new email. Leave blank when adding roles to an existing user.</small></label><button class="btn" type="submit">Save User & Roles</button></form></section><section class="panel"><h2>Company users</h2><table class="bigtable"><thead><tr><th>Name</th><th>Email</th><th>Roles</th><th>Status</th><th>Access</th></tr></thead><tbody>${rows
+    .map((r) => {
+      const selected = String(r.roles || r.role)
+        .split(",")
+        .filter(Boolean);
+      return `<tr><td>${esc(r.fullName)}</td><td><form method="post" action="/company-admin/users/email"><input type="hidden" name="id" value="${r.id}"><input name="email" type="email" value="${esc(r.email)}" required style="width:190px"><button class="btn gray" type="submit">Change email</button></form></td><td><form method="post" action="/company-admin/users/roles"><input type="hidden" name="id" value="${r.id}">${roleChecks(selected)}<button class="btn gray" type="submit">Save roles</button></form></td><td><span class="pill ${r.status === "active" ? "" : "red"}">${esc(r.status)}</span></td><td><form method="post" action="/company-admin/users/toggle"><input type="hidden" name="id" value="${r.id}"><input type="hidden" name="next" value="${r.status === "active" ? "inactive" : "active"}"><button class="btn gray" type="submit">${r.status === "active" ? "Deactivate" : "Activate"}</button></form></td></tr>`;
+    })
+    .join("")}</tbody></table></section></div>`;
+  return responseHtml(shell(s, "users", "Users", body));
 }
 
 async function fleetPage(env: CompanyAdminEnv, s: AdminSession, url: URL) {
-  const rows=(await env.DB.prepare("SELECT id,fleet_number AS fleet,category,site,status,operating_hours AS hours,next_service_hours AS nextService FROM machines WHERE company_id=? ORDER BY fleet_number").bind(s.companyId).all<Record<string,unknown>>()).results;
-  const msg=url.searchParams.get("msg"), tone=url.searchParams.get("tone")==="err"?"err":"";
-  const body=`${msg?`<div class="notice ${tone}">${esc(msg)}</div>`:""}<div class="pagehead"><div><h1>Fleet</h1><p>Register machines manually or bulk-import machine records.</p></div></div><div class="split"><section class="panel"><h2>Add machine</h2><form method="post" action="/company-admin/fleet/add"><div class="twocol"><label class="field">Machine ID<input name="fleetNumber" required></label><label class="field">Type<input name="category" placeholder="ADT / Excavator / Dozer" required></label></div><div class="twocol"><label class="field">Site<input name="site" required></label><label class="field">Status<select name="status"><option>operating</option><option>attention</option><option>down</option><option>maintenance</option></select></label></div><div class="twocol"><label class="field">Hour meter<input name="operatingHours" type="number" min="0" step="0.1" value="0"></label><label class="field">Next service hour<input name="nextServiceHours" type="number" min="0" step="0.1"></label></div><button class="btn" type="submit">Register Machine</button></form><h2 style="margin-top:22px">Bulk import</h2><form method="post" action="/company-admin/fleet/import" enctype="multipart/form-data"><label class="field">Excel / CSV<input name="file" type="file" accept=".xlsx,.xls,.csv,text/csv" required></label><p style="font-size:10px;color:#687589">Recommended columns: Machine ID, Type, Site, Status, Hour Meter, Next Service Hour.</p><button class="btn blue" type="submit">Import Machines</button></form></section><section class="panel"><h2>Machine register</h2><table class="bigtable"><thead><tr><th>Machine ID</th><th>Type</th><th>Site</th><th>Status</th><th>Hour meter</th><th>Service due</th></tr></thead><tbody>${rows.map(r=>`<tr><td><b>${esc(r.fleet)}</b></td><td>${esc(r.category)}</td><td>${esc(r.site)}</td><td><span class="pill ${String(r.status).toLowerCase()==='down'?'red':String(r.status).toLowerCase()==='attention'?'amber':''}">${esc(r.status)}</span></td><td>${num(r.hours).toFixed(1)}</td><td>${r.nextService==null?'—':num(r.nextService).toFixed(1)}</td></tr>`).join("")}</tbody></table></section></div>`;
-  return responseHtml(shell(s,"fleet","Fleet",body));
+  const rows = (
+    await env.DB.prepare(
+      "SELECT id,fleet_number AS fleet,category,site,status,operating_hours AS hours,next_service_hours AS nextService FROM machines WHERE company_id=? ORDER BY fleet_number",
+    )
+      .bind(s.companyId)
+      .all<Record<string, unknown>>()
+  ).results;
+  const msg = url.searchParams.get("msg"),
+    tone = url.searchParams.get("tone") === "err" ? "err" : "";
+  const body = `${msg ? `<div class="notice ${tone}">${esc(msg)}</div>` : ""}<div class="pagehead"><div><h1>Fleet</h1><p>Register machines manually or bulk-import machine records.</p></div></div><div class="split"><section class="panel"><h2>Add machine</h2><form method="post" action="/company-admin/fleet/add"><div class="twocol"><label class="field">Machine ID<input name="fleetNumber" required></label><label class="field">Type<input name="category" placeholder="ADT / Excavator / Dozer" required></label></div><div class="twocol"><label class="field">Site<input name="site" required></label><label class="field">Status<select name="status"><option>operating</option><option>attention</option><option>down</option><option>maintenance</option></select></label></div><div class="twocol"><label class="field">Hour meter<input name="operatingHours" type="number" min="0" step="0.1" value="0"></label><label class="field">Next service hour<input name="nextServiceHours" type="number" min="0" step="0.1"></label></div><button class="btn" type="submit">Register Machine</button></form><h2 style="margin-top:22px">Bulk import</h2><form method="post" action="/company-admin/fleet/import" enctype="multipart/form-data"><label class="field">Excel / CSV<input name="file" type="file" accept=".xlsx,.xls,.csv,text/csv" required></label><p style="font-size:10px;color:#687589">Recommended columns: Machine ID, Type, Site, Status, Hour Meter, Next Service Hour.</p><button class="btn blue" type="submit">Import Machines</button></form></section><section class="panel"><h2>Machine register</h2><table class="bigtable"><thead><tr><th>Machine ID</th><th>Type</th><th>Site</th><th>Status</th><th>Hour meter</th><th>Service due</th></tr></thead><tbody>${rows.map((r) => `<tr><td><b>${esc(r.fleet)}</b></td><td>${esc(r.category)}</td><td>${esc(r.site)}</td><td><span class="pill ${String(r.status).toLowerCase() === "down" ? "red" : String(r.status).toLowerCase() === "attention" ? "amber" : ""}">${esc(r.status)}</span></td><td>${num(r.hours).toFixed(1)}</td><td>${r.nextService == null ? "—" : num(r.nextService).toFixed(1)}</td></tr>`).join("")}</tbody></table></section></div>`;
+  return responseHtml(shell(s, "fleet", "Fleet", body));
 }
 
 async function dailyPage(env: CompanyAdminEnv, s: AdminSession, url: URL) {
-  const settings=await getSettings(env,s.companyId);
-  const rows=(await env.DB.prepare("SELECT id,report_date AS reportDate,site,fleet_number AS fleet,activity,capture_basis AS basis,time_value AS timeValue,time_unit AS timeUnit,hour_meter_start AS meterStart,hour_meter_end AS meterEnd,duration_hours AS duration,tonnes,fault_reason AS fault,status,source_kind AS sourceKind FROM daily_reports_v3 WHERE company_id=? ORDER BY report_date DESC,id DESC LIMIT 150").bind(s.companyId).all<Record<string,unknown>>()).results;
-  const missing=(await env.DB.prepare(`SELECT m.fleet_number AS fleet,m.site FROM machines m WHERE m.company_id=? AND lower(m.status) NOT IN ('retired','inactive') AND NOT EXISTS (SELECT 1 FROM daily_reports_v3 d WHERE d.company_id=m.company_id AND d.fleet_number=m.fleet_number AND d.report_date=?) ORDER BY m.site,m.fleet_number`).bind(s.companyId,isoDate()).all<Record<string,unknown>>()).results;
-  const msg=url.searchParams.get("msg"), tone=url.searchParams.get("tone")==="err"?"err":"";
-  const body=`${msg?`<div class="notice ${tone}">${esc(msg)}</div>`:""}<div class="pagehead"><div><h1>Daily Reports</h1><p>Manual capture or automatic Excel/CSV import. Time or hour-meter based.</p></div></div><div class="dashboard-grid"><div><section class="panel"><h2>Missing reports today (${missing.length})</h2>${missing.length?`<table class="bigtable"><thead><tr><th>Date</th><th>Site</th><th>Machine</th></tr></thead><tbody>${missing.map(r=>`<tr><td>${isoDate()}</td><td>${esc(r.site)}</td><td>${esc(r.fleet)}</td></tr>`).join("")}</tbody></table>`:`<div class="empty">No missing reports for registered machines.</div>`}</section><section class="panel section"><h2>Daily report history</h2><table class="bigtable"><thead><tr><th>Date</th><th>Site</th><th>Machine</th><th>Activity</th><th>Capture</th><th>Duration h</th><th>Tonnes</th><th>Fault / reason</th><th>Source</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.reportDate)}</td><td>${esc(r.site)}</td><td>${esc(r.fleet)}</td><td>${esc(r.activity)}</td><td>${esc(r.basis)}${r.basis==='time'?` (${esc(r.timeUnit)})`:''}</td><td>${num(r.duration).toFixed(3)}</td><td>${r.tonnes==null?'—':num(r.tonnes).toFixed(2)}</td><td>${esc(r.fault||'—')}</td><td>${esc(r.sourceKind)}</td></tr>`).join("")}</tbody></table></section></div>${dailyCapturePanel(settings)}</div>`;
-  return responseHtml(shell(s,"daily","Daily Reports",body));
+  const settings = await getSettings(env, s.companyId);
+  const rows = (
+    await env.DB.prepare(
+      "SELECT id,report_date AS reportDate,site,fleet_number AS fleet,activity,capture_basis AS basis,time_value AS timeValue,time_unit AS timeUnit,hour_meter_start AS meterStart,hour_meter_end AS meterEnd,duration_hours AS duration,tonnes,fault_reason AS fault,status,source_kind AS sourceKind FROM daily_reports_v3 WHERE company_id=? ORDER BY report_date DESC,id DESC LIMIT 150",
+    )
+      .bind(s.companyId)
+      .all<Record<string, unknown>>()
+  ).results;
+  const missing = (
+    await env.DB.prepare(
+      `SELECT m.fleet_number AS fleet,m.site FROM machines m WHERE m.company_id=? AND lower(m.status) NOT IN ('retired','inactive') AND NOT EXISTS (SELECT 1 FROM daily_reports_v3 d WHERE d.company_id=m.company_id AND d.fleet_number=m.fleet_number AND d.report_date=?) ORDER BY m.site,m.fleet_number`,
+    )
+      .bind(s.companyId, isoDate())
+      .all<Record<string, unknown>>()
+  ).results;
+  const msg = url.searchParams.get("msg"),
+    tone = url.searchParams.get("tone") === "err" ? "err" : "";
+  const body = `${msg ? `<div class="notice ${tone}">${esc(msg)}</div>` : ""}<div class="pagehead"><div><h1>Daily Reports</h1><p>Manual capture or automatic Excel/CSV import. Time or hour-meter based.</p></div></div><div class="dashboard-grid"><div><section class="panel"><h2>Missing reports today (${missing.length})</h2>${missing.length ? `<table class="bigtable"><thead><tr><th>Date</th><th>Site</th><th>Machine</th></tr></thead><tbody>${missing.map((r) => `<tr><td>${isoDate()}</td><td>${esc(r.site)}</td><td>${esc(r.fleet)}</td></tr>`).join("")}</tbody></table>` : `<div class="empty">No missing reports for registered machines.</div>`}</section><section class="panel section"><h2>Daily report history</h2><table class="bigtable"><thead><tr><th>Date</th><th>Site</th><th>Machine</th><th>Activity</th><th>Capture</th><th>Duration h</th><th>Tonnes</th><th>Fault / reason</th><th>Source</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${esc(r.reportDate)}</td><td>${esc(r.site)}</td><td>${esc(r.fleet)}</td><td>${esc(r.activity)}</td><td>${esc(r.basis)}${r.basis === "time" ? ` (${esc(r.timeUnit)})` : ""}</td><td>${num(r.duration).toFixed(3)}</td><td>${r.tonnes == null ? "—" : num(r.tonnes).toFixed(2)}</td><td>${esc(r.fault || "—")}</td><td>${esc(r.sourceKind)}</td></tr>`).join("")}</tbody></table></section></div>${dailyCapturePanel(settings)}</div>`;
+  return responseHtml(shell(s, "daily", "Daily Reports", body));
 }
 
 async function alertsPage(env: CompanyAdminEnv, s: AdminSession, url: URL) {
-  const events=(await env.DB.prepare("SELECT id,fleet_number AS fleet,severity,system_name AS system,component,description,opened_at AS openedAt,downtime_hours AS downtime,status,spares_status AS spares FROM events WHERE company_id=? ORDER BY id DESC LIMIT 150").bind(s.companyId).all<Record<string,unknown>>()).results;
-  const contacts=(await env.DB.prepare("SELECT * FROM alert_contacts_v3 WHERE company_id=? ORDER BY active DESC,id DESC").bind(s.companyId).all<Record<string,unknown>>()).results;
-  const msg=url.searchParams.get("msg"), tone=url.searchParams.get("tone")==="err"?"err":"";
-  const body=`${msg?`<div class="notice ${tone}">${esc(msg)}</div>`:""}<div class="pagehead"><div><h1>Alerts</h1><p>Critical breakdowns, overdue maintenance, repeated failures, missing reports and urgent parts issues.</p></div></div><div class="split"><section class="panel"><h2>Configure alert contacts</h2><form method="post" action="/company-admin/alerts/contact"><div class="twocol"><label class="field">Contact name<input name="name" required></label><label class="field">Email<input name="email" type="email"></label></div><label class="field">Phone<input name="phone"></label><div class="cards" style="grid-template-columns:1fr 1fr"><label><input type="checkbox" name="breakdown" checked> Breakdown</label><label><input type="checkbox" name="serviceDue" checked> Service due</label><label><input type="checkbox" name="missingReport" checked> Missing report</label><label><input type="checkbox" name="po"> PO / Parts</label><label><input type="checkbox" name="critical" checked> Critical alert</label></div><button class="btn" type="submit" style="margin-top:12px">Add Alert Contact</button></form><h2 style="margin-top:20px">Notification contacts</h2><table class="bigtable"><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Coverage</th></tr></thead><tbody>${contacts.map(c=>`<tr><td>${esc(c.name)}</td><td>${esc(c.email)}</td><td>${esc(c.phone)}</td><td>${[c.breakdown?'Breakdown':'',c.service_due?'Service':'',c.missing_report?'Missing':'',c.po?'PO':'',c.critical?'Critical':''].filter(Boolean).join(', ')}</td></tr>`).join("")}</tbody></table></section><section class="panel"><h2>Alert register</h2><table class="bigtable"><thead><tr><th>Machine</th><th>Severity</th><th>Alert</th><th>Downtime h</th><th>Status</th></tr></thead><tbody>${events.map(e=>`<tr><td>${esc(e.fleet)}</td><td><span class="pill ${['critical','high'].includes(String(e.severity).toLowerCase())?'red':''}">${esc(e.severity)}</span></td><td>${esc(e.description)}</td><td>${num(e.downtime).toFixed(2)}</td><td>${esc(e.status)}</td></tr>`).join("")}</tbody></table></section></div>`;
-  return responseHtml(shell(s,"alerts","Alerts",body));
+  const events = (
+    await env.DB.prepare(
+      "SELECT id,fleet_number AS fleet,severity,system_name AS system,component,description,opened_at AS openedAt,downtime_hours AS downtime,status,spares_status AS spares FROM events WHERE company_id=? ORDER BY id DESC LIMIT 150",
+    )
+      .bind(s.companyId)
+      .all<Record<string, unknown>>()
+  ).results;
+  const contacts = (
+    await env.DB.prepare(
+      "SELECT * FROM alert_contacts_v3 WHERE company_id=? ORDER BY active DESC,id DESC",
+    )
+      .bind(s.companyId)
+      .all<Record<string, unknown>>()
+  ).results;
+  const msg = url.searchParams.get("msg"),
+    tone = url.searchParams.get("tone") === "err" ? "err" : "";
+  const body = `${msg ? `<div class="notice ${tone}">${esc(msg)}</div>` : ""}<div class="pagehead"><div><h1>Alerts</h1><p>Critical breakdowns, overdue maintenance, repeated failures, missing reports and urgent parts issues.</p></div></div><div class="split"><section class="panel"><h2>Configure alert contacts</h2><form method="post" action="/company-admin/alerts/contact"><div class="twocol"><label class="field">Contact name<input name="name" required></label><label class="field">Email<input name="email" type="email"></label></div><label class="field">Phone<input name="phone"></label><div class="cards" style="grid-template-columns:1fr 1fr"><label><input type="checkbox" name="breakdown" checked> Breakdown</label><label><input type="checkbox" name="serviceDue" checked> Service due</label><label><input type="checkbox" name="missingReport" checked> Missing report</label><label><input type="checkbox" name="po"> PO / Parts</label><label><input type="checkbox" name="critical" checked> Critical alert</label></div><button class="btn" type="submit" style="margin-top:12px">Add Alert Contact</button></form><h2 style="margin-top:20px">Notification contacts</h2><table class="bigtable"><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Coverage</th></tr></thead><tbody>${contacts.map((c) => `<tr><td>${esc(c.name)}</td><td>${esc(c.email)}</td><td>${esc(c.phone)}</td><td>${[c.breakdown ? "Breakdown" : "", c.service_due ? "Service" : "", c.missing_report ? "Missing" : "", c.po ? "PO" : "", c.critical ? "Critical" : ""].filter(Boolean).join(", ")}</td></tr>`).join("")}</tbody></table></section><section class="panel"><h2>Alert register</h2><table class="bigtable"><thead><tr><th>Machine</th><th>Severity</th><th>Alert</th><th>Downtime h</th><th>Status</th></tr></thead><tbody>${events.map((e) => `<tr><td>${esc(e.fleet)}</td><td><span class="pill ${["critical", "high"].includes(String(e.severity).toLowerCase()) ? "red" : ""}">${esc(e.severity)}</span></td><td>${esc(e.description)}</td><td>${num(e.downtime).toFixed(2)}</td><td>${esc(e.status)}</td></tr>`).join("")}</tbody></table></section></div>`;
+  return responseHtml(shell(s, "alerts", "Alerts", body));
 }
 
 async function approvalsPage(env: CompanyAdminEnv, s: AdminSession, url: URL) {
-  const rows=(await env.DB.prepare("SELECT * FROM approvals_v3 WHERE company_id=? ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END,id DESC").bind(s.companyId).all<Record<string,unknown>>()).results;
-  const msg=url.searchParams.get("msg"), tone=url.searchParams.get("tone")==="err"?"err":"";
-  const body=`${msg?`<div class="notice ${tone}">${esc(msg)}</div>`:""}<div class="pagehead"><div><h1>Pending Approvals</h1><p>Only controlled changes that require Company Administrator authority.</p></div></div><section class="panel"><table class="bigtable"><thead><tr><th>Type</th><th>Request</th><th>Submitted by</th><th>Details</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.approval_type)}</td><td>${esc(r.title)}</td><td>${esc(r.submitted_by)}</td><td>${esc(r.details)}</td><td><span class="pill ${r.status==='rejected'?'red':r.status==='pending'?'amber':''}">${esc(r.status)}</span></td><td>${r.status==='pending'?`<div class="btnrow"><form method="post" action="/company-admin/approvals/review"><input type="hidden" name="id" value="${r.id}"><input type="hidden" name="status" value="approved"><button class="btn" type="submit">Approve</button></form><form method="post" action="/company-admin/approvals/review"><input type="hidden" name="id" value="${r.id}"><input type="hidden" name="status" value="rejected"><button class="btn red" type="submit">Reject</button></form></div>`:'Reviewed'}</td></tr>`).join("")}</tbody></table></section>`;
-  return responseHtml(shell(s,"dashboard","Approvals",body));
+  const rows = (
+    await env.DB.prepare(
+      "SELECT * FROM approvals_v3 WHERE company_id=? ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END,id DESC",
+    )
+      .bind(s.companyId)
+      .all<Record<string, unknown>>()
+  ).results;
+  const msg = url.searchParams.get("msg"),
+    tone = url.searchParams.get("tone") === "err" ? "err" : "";
+  const body = `${msg ? `<div class="notice ${tone}">${esc(msg)}</div>` : ""}<div class="pagehead"><div><h1>Pending Approvals</h1><p>Only controlled changes that require Company Administrator authority.</p></div></div><section class="panel"><table class="bigtable"><thead><tr><th>Type</th><th>Request</th><th>Submitted by</th><th>Details</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${esc(r.approval_type)}</td><td>${esc(r.title)}</td><td>${esc(r.submitted_by)}</td><td>${esc(r.details)}</td><td><span class="pill ${r.status === "rejected" ? "red" : r.status === "pending" ? "amber" : ""}">${esc(r.status)}</span></td><td>${r.status === "pending" ? `<div class="btnrow"><form method="post" action="/company-admin/approvals/review"><input type="hidden" name="id" value="${r.id}"><input type="hidden" name="status" value="approved"><button class="btn" type="submit">Approve</button></form><form method="post" action="/company-admin/approvals/review"><input type="hidden" name="id" value="${r.id}"><input type="hidden" name="status" value="rejected"><button class="btn red" type="submit">Reject</button></form></div>` : "Reviewed"}</td></tr>`).join("")}</tbody></table></section>`;
+  return responseHtml(shell(s, "dashboard", "Approvals", body));
 }
 
-async function setupPage(env: CompanyAdminEnv, s: AdminSession, url: URL, active="setup") {
-  const settings=await getSettings(env,s.companyId);
-  const sites=(await env.DB.prepare("SELECT id,name,code,active FROM company_sites WHERE company_id=? ORDER BY active DESC,name").bind(s.companyId).all<Record<string,unknown>>()).results;
-  const msg=url.searchParams.get("msg"), tone=url.searchParams.get("tone")==="err"?"err":"";
-  const body=`${msg?`<div class="notice ${tone}">${esc(msg)}</div>`:""}<div class="pagehead"><div><h1>${active==='settings'?'Settings':'Company Setup'}</h1><p>Company details, sites, targets, operating hours, contacts and preferences.</p></div></div><div class="split"><section class="panel"><h2>Company details & KPI targets</h2><form method="post" action="/company-admin/setup/save"><label class="field">Company name<input value="${esc(s.companyName)}" disabled><small>Owner-controlled licence company name.</small></label><div class="twocol"><label class="field">Contact email<input name="contactEmail" type="email" value="${esc(settings.contactEmail)}"></label><label class="field">Contact phone<input name="contactPhone" value="${esc(settings.contactPhone)}"></label></div><div class="twocol"><label class="field">Operating hours per day<input name="operatingHours" type="number" min="0" max="24" step="0.1" value="${settings.operatingHours}"></label><label class="field">Default site<input name="defaultSite" value="${esc(settings.defaultSite)}"></label></div><div class="twocol"><label class="field">Daily production target (t)<input name="dailyTarget" type="number" min="0" step="0.01" value="${settings.dailyTarget}"></label><label class="field">Availability target (%)<input name="availabilityTarget" type="number" min="0" max="100" step="0.1" value="${settings.availabilityTarget}"></label></div><button class="btn" type="submit">Save Company Setup</button></form><div class="notice" style="margin-top:14px">Sindane Asset Solutions logo is enforced across all role dashboards.</div></section><section class="panel" id="sites"><h2>Sites Management</h2><form method="post" action="/company-admin/sites/add"><div class="twocol"><label class="field">Site name<input name="name" required></label><label class="field">Site code<input name="code"></label></div><button class="btn" type="submit">Add Site</button></form><table class="bigtable" style="margin-top:14px"><thead><tr><th>Site</th><th>Code</th><th>Status</th></tr></thead><tbody>${sites.map(r=>`<tr><td>${esc(r.name)}</td><td>${esc(r.code)}</td><td>${r.active?'<span class="pill">Active</span>':'<span class="pill red">Inactive</span>'}</td></tr>`).join("")}</tbody></table></section></div>`;
-  return responseHtml(shell(s,active,active==='settings'?'Settings':'Company Setup',body));
+async function setupPage(
+  env: CompanyAdminEnv,
+  s: AdminSession,
+  url: URL,
+  active = "setup",
+) {
+  const settings = await getSettings(env, s.companyId);
+  const sites = (
+    await env.DB.prepare(
+      "SELECT id,name,code,active FROM company_sites WHERE company_id=? ORDER BY active DESC,name",
+    )
+      .bind(s.companyId)
+      .all<Record<string, unknown>>()
+  ).results;
+  const msg = url.searchParams.get("msg"),
+    tone = url.searchParams.get("tone") === "err" ? "err" : "";
+  const body = `${msg ? `<div class="notice ${tone}">${esc(msg)}</div>` : ""}<div class="pagehead"><div><h1>${active === "settings" ? "Settings" : "Company Setup"}</h1><p>Company details, sites, targets, operating hours, contacts and preferences.</p></div></div><div class="split"><section class="panel"><h2>Company details & KPI targets</h2><form method="post" action="/company-admin/setup/save"><label class="field">Company name<input value="${esc(s.companyName)}" disabled><small>Owner-controlled licence company name.</small></label><div class="twocol"><label class="field">Contact email<input name="contactEmail" type="email" value="${esc(settings.contactEmail)}"></label><label class="field">Contact phone<input name="contactPhone" value="${esc(settings.contactPhone)}"></label></div><div class="twocol"><label class="field">Operating hours per day<input name="operatingHours" type="number" min="0" max="24" step="0.1" value="${settings.operatingHours}"></label><label class="field">Default site<input name="defaultSite" value="${esc(settings.defaultSite)}"></label></div><div class="twocol"><label class="field">Daily production target (t)<input name="dailyTarget" type="number" min="0" step="0.01" value="${settings.dailyTarget}"></label><label class="field">Availability target (%)<input name="availabilityTarget" type="number" min="0" max="100" step="0.1" value="${settings.availabilityTarget}"></label></div><button class="btn" type="submit">Save Company Setup</button></form><div class="notice" style="margin-top:14px">Sindane Asset Solutions logo is enforced across all role dashboards.</div></section><section class="panel" id="sites"><h2>Sites Management</h2><form method="post" action="/company-admin/sites/add"><div class="twocol"><label class="field">Site name<input name="name" required></label><label class="field">Site code<input name="code"></label></div><button class="btn" type="submit">Add Site</button></form><table class="bigtable" style="margin-top:14px"><thead><tr><th>Site</th><th>Code</th><th>Status</th></tr></thead><tbody>${sites.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.code)}</td><td>${r.active ? '<span class="pill">Active</span>' : '<span class="pill red">Inactive</span>'}</td></tr>`).join("")}</tbody></table></section></div>`;
+  return responseHtml(
+    shell(
+      s,
+      active,
+      active === "settings" ? "Settings" : "Company Setup",
+      body,
+    ),
+  );
 }
 
-async function documentsPage(env: CompanyAdminEnv,s:AdminSession,url:URL){
-  const rows=(await env.DB.prepare("SELECT id,file_name AS fileName,category,content_type AS contentType,size_bytes AS sizeBytes,created_at AS createdAt FROM contractor_documents WHERE company_id=? ORDER BY id DESC LIMIT 200").bind(s.companyId).all<Record<string,unknown>>()).results;
-  const msg=url.searchParams.get("msg"), tone=url.searchParams.get("tone")==="err"?"err":"";
-  const body=`${msg?`<div class="notice ${tone}">${esc(msg)}</div>`:""}<div class="pagehead"><div><h1>Documents</h1><p>Company-specific R2 document storage and report archive.</p></div></div><div class="split"><section class="panel"><h2>Upload document</h2><form method="post" action="/company-admin/documents/upload" enctype="multipart/form-data"><label class="field">Category<select name="category"><option>general</option><option>daily-report</option><option>purchase-order</option><option>quotation</option><option>maintenance</option><option>inspection</option><option>report-export</option></select></label><label class="field">File<input name="file" type="file" required></label><button class="btn" type="submit">Upload to Documents</button></form></section><section class="panel"><h2>Document archive</h2><table class="bigtable"><thead><tr><th>File</th><th>Category</th><th>Size</th><th>Date</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.fileName)}</td><td>${esc(r.category)}</td><td>${Math.round(num(r.sizeBytes)/1024)} KB</td><td>${esc(String(r.createdAt).slice(0,10))}</td></tr>`).join("")}</tbody></table></section></div>`;
-  return responseHtml(shell(s,"documents","Documents",body));
+async function documentsPage(env: CompanyAdminEnv, s: AdminSession, url: URL) {
+  const rows = (
+    await env.DB.prepare(
+      "SELECT id,file_name AS fileName,category,content_type AS contentType,size_bytes AS sizeBytes,created_at AS createdAt FROM contractor_documents WHERE company_id=? ORDER BY id DESC LIMIT 200",
+    )
+      .bind(s.companyId)
+      .all<Record<string, unknown>>()
+  ).results;
+  const msg = url.searchParams.get("msg"),
+    tone = url.searchParams.get("tone") === "err" ? "err" : "";
+  const body = `${msg ? `<div class="notice ${tone}">${esc(msg)}</div>` : ""}<div class="pagehead"><div><h1>Documents</h1><p>Company-specific R2 document storage and report archive.</p></div></div><div class="split"><section class="panel"><h2>Upload document</h2><form method="post" action="/company-admin/documents/upload" enctype="multipart/form-data"><label class="field">Category<select name="category"><option>general</option><option>daily-report</option><option>purchase-order</option><option>quotation</option><option>maintenance</option><option>inspection</option><option>report-export</option></select></label><label class="field">File<input name="file" type="file" required></label><button class="btn" type="submit">Upload to Documents</button></form></section><section class="panel"><h2>Document archive</h2><table class="bigtable"><thead><tr><th>File</th><th>Category</th><th>Size</th><th>Date</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${esc(r.fileName)}</td><td>${esc(r.category)}</td><td>${Math.round(num(r.sizeBytes) / 1024)} KB</td><td>${esc(String(r.createdAt).slice(0, 10))}</td></tr>`).join("")}</tbody></table></section></div>`;
+  return responseHtml(shell(s, "documents", "Documents", body));
 }
 
-async function reportsAdminPage(env:CompanyAdminEnv,s:AdminSession,url:URL){
-  const settings=await getSettings(env,s.companyId); const type=url.searchParams.get("type")||"weekly";
-  const history=(await env.DB.prepare("SELECT report_type AS reportType,period_key AS periodKey,title,status,published_at AS publishedAt FROM report_history_v3 WHERE company_id=? ORDER BY published_at DESC LIMIT 100").bind(s.companyId).all<Record<string,unknown>>()).results;
-  const today=isoDate(); const week=weekKey(today); const month=today.slice(0,7);
-  const body=`<div class="pagehead"><div><h1>Weekly & Monthly Reports</h1><p>Daily records are automatically aggregated. Review, publish, export, save and reopen.</p></div></div><div class="cards"><div class="card"><h3>Update Weekly</h3><p>Current week: ${week}</p><form method="post" action="/company-admin/reports/publish"><input type="hidden" name="reportType" value="weekly"><input type="hidden" name="periodKey" value="${week}"><button class="btn" type="submit">Update / Publish Weekly</button></form></div><div class="card"><h3>Update Monthly</h3><p>Current month: ${month}</p><form method="post" action="/company-admin/reports/publish"><input type="hidden" name="reportType" value="monthly"><input type="hidden" name="periodKey" value="${month}"><button class="btn" type="submit">Update / Publish Monthly</button></form></div><div class="card"><h3>Reports Centre</h3><p>Daily Operations, Weekly Fleet, Monthly Availability, Downtime Pareto, Maintenance Status and Production vs Target.</p><a class="btn blue" href="/contractor-reports">Open Reports Centre</a></div></div><section class="panel section"><h2>Export & Save</h2><div class="btnrow"><a class="btn" href="/company-admin/export?format=xlsx&period=${type==='monthly'?'month':'week'}">Export Excel</a><a class="btn blue" href="/company-admin/export?format=word&period=${type==='monthly'?'month':'week'}">Export Word</a><a class="btn red" href="/contractor-reports?type=${type==='monthly'?'monthly':'weekly'}">Print / Save PDF</a><form method="post" action="/company-admin/reports/save"><input type="hidden" name="reportType" value="${type==='monthly'?'monthly':'weekly'}"><input type="hidden" name="periodKey" value="${type==='monthly'?month:week}"><button class="btn amber" type="submit">Save to Documents</button></form></div><p style="font-size:11px;color:#65758a">Daily target: ${settings.dailyTarget.toLocaleString()} t · Availability target: ${settings.availabilityTarget.toFixed(1)}%</p></section><section class="panel section"><h2>Report History</h2><table class="bigtable"><thead><tr><th>Report</th><th>Period</th><th>Status</th><th>Published</th><th>Reopen</th></tr></thead><tbody>${history.map(r=>`<tr><td>${esc(r.title)}</td><td>${esc(r.periodKey)}</td><td>${esc(r.status)}</td><td>${esc(String(r.publishedAt).replace('T',' ').slice(0,16))}</td><td><a class="btn gray" href="/contractor-reports?type=${r.reportType==='monthly'?'monthly':'weekly'}">Reopen</a></td></tr>`).join("")}</tbody></table></section>`;
-  return responseHtml(shell(s,"reports","Reports",body));
+async function reportsAdminPage(
+  env: CompanyAdminEnv,
+  s: AdminSession,
+  url: URL,
+) {
+  const settings = await getSettings(env, s.companyId);
+  const type = url.searchParams.get("type") || "weekly";
+  const history = (
+    await env.DB.prepare(
+      "SELECT report_type AS reportType,period_key AS periodKey,title,status,published_at AS publishedAt FROM report_history_v3 WHERE company_id=? ORDER BY published_at DESC LIMIT 100",
+    )
+      .bind(s.companyId)
+      .all<Record<string, unknown>>()
+  ).results;
+  const today = isoDate();
+  const week = weekKey(today);
+  const month = today.slice(0, 7);
+  const body = `<div class="pagehead"><div><h1>Weekly & Monthly Reports</h1><p>Daily records are automatically aggregated. Review, publish, export, save and reopen.</p></div></div><div class="cards"><div class="card"><h3>Update Weekly</h3><p>Current week: ${week}</p><form method="post" action="/company-admin/reports/publish"><input type="hidden" name="reportType" value="weekly"><input type="hidden" name="periodKey" value="${week}"><button class="btn" type="submit">Update / Publish Weekly</button></form></div><div class="card"><h3>Update Monthly</h3><p>Current month: ${month}</p><form method="post" action="/company-admin/reports/publish"><input type="hidden" name="reportType" value="monthly"><input type="hidden" name="periodKey" value="${month}"><button class="btn" type="submit">Update / Publish Monthly</button></form></div><div class="card"><h3>Reports Centre</h3><p>Daily Operations, Weekly Fleet, Monthly Availability, Downtime Pareto, Maintenance Status and Production vs Target.</p><a class="btn blue" href="/contractor-reports">Open Reports Centre</a></div></div><section class="panel section"><h2>Export & Save</h2><div class="btnrow"><a class="btn" href="/company-admin/export?format=xlsx&period=${type === "monthly" ? "month" : "week"}">Export Excel</a><a class="btn blue" href="/company-admin/export?format=word&period=${type === "monthly" ? "month" : "week"}">Export Word</a><a class="btn red" href="/contractor-reports?type=${type === "monthly" ? "monthly" : "weekly"}">Print / Save PDF</a><form method="post" action="/company-admin/reports/save"><input type="hidden" name="reportType" value="${type === "monthly" ? "monthly" : "weekly"}"><input type="hidden" name="periodKey" value="${type === "monthly" ? month : week}"><button class="btn amber" type="submit">Save to Documents</button></form></div><p style="font-size:11px;color:#65758a">Daily target: ${settings.dailyTarget.toLocaleString()} t · Availability target: ${settings.availabilityTarget.toFixed(1)}%</p></section><section class="panel section"><h2>Report History</h2><table class="bigtable"><thead><tr><th>Report</th><th>Period</th><th>Status</th><th>Published</th><th>Reopen</th></tr></thead><tbody>${history.map((r) => `<tr><td>${esc(r.title)}</td><td>${esc(r.periodKey)}</td><td>${esc(r.status)}</td><td>${esc(String(r.publishedAt).replace("T", " ").slice(0, 16))}</td><td><a class="btn gray" href="/contractor-reports?type=${r.reportType === "monthly" ? "monthly" : "weekly"}">Reopen</a></td></tr>`).join("")}</tbody></table></section>`;
+  return responseHtml(shell(s, "reports", "Reports", body));
 }
 
-function weekKey(date:string){const d=new Date(date+"T00:00:00Z");const target=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()));const day=(target.getUTCDay()+6)%7;target.setUTCDate(target.getUTCDate()-day+3);const firstThursday=new Date(Date.UTC(target.getUTCFullYear(),0,4));const firstDay=(firstThursday.getUTCDay()+6)%7;firstThursday.setUTCDate(firstThursday.getUTCDate()-firstDay+3);const week=1+Math.round((target.getTime()-firstThursday.getTime())/604800000);return `${target.getUTCFullYear()}-W${String(week).padStart(2,'0')}`;}
-
-function roleDashboard(s:AdminSession){
-  const role=roleName(s.role); const cards = s.role==='mechanic' ? [["Fleet","/contractor?view=fleet"],["Daily Reports","/contractor?view=daily"],["Documents","/contractor?view=documents"],["Alerts","/contractor?view=alerts"]] : s.role==='manager' ? [["Reports Centre","/contractor-reports"],["Fleet","/contractor?view=fleet"],["Alerts","/contractor?view=alerts"],["Documents","/contractor?view=documents"]] : [["Fleet","/contractor?view=fleet"],["Daily Reports","/contractor?view=daily"],["Reports Centre","/contractor-reports"],["Alerts","/contractor?view=alerts"],["Documents","/contractor?view=documents"]];
-  const body=`<div class="rolehero"><img src="/sindane-logo.png" alt="Sindane Asset Solutions"><div><h1>${esc(role)} Dashboard</h1><p>${esc(s.companyName)} · Secure company workspace</p></div></div><div class="cards">${cards.map(c=>`<a class="card" href="${c[1]}" style="text-decoration:none;color:#111827"><h3>${c[0]}</h3><p>Open ${c[0]} for this company.</p><span class="green"><b>Open →</b></span></a>`).join("")}</div>`;
-  return responseHtml(shell(s,"dashboard",`${role} Dashboard`,body));
+function weekKey(date: string) {
+  const d = new Date(date + "T00:00:00Z");
+  const target = new Date(
+    Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()),
+  );
+  const day = (target.getUTCDay() + 6) % 7;
+  target.setUTCDate(target.getUTCDate() - day + 3);
+  const firstThursday = new Date(Date.UTC(target.getUTCFullYear(), 0, 4));
+  const firstDay = (firstThursday.getUTCDay() + 6) % 7;
+  firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDay + 3);
+  const week =
+    1 + Math.round((target.getTime() - firstThursday.getTime()) / 604800000);
+  return `${target.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
 }
 
-function durationHours(input:DailyInput){
-  if(input.captureBasis==='hour_meter'){
-    if(input.hourMeterStart==null||input.hourMeterEnd==null) throw new Error('Hour Meter capture requires both start and end meter readings.');
-    if(input.hourMeterEnd<input.hourMeterStart) throw new Error('Hour meter end cannot be less than the start reading.');
-    return input.hourMeterEnd-input.hourMeterStart;
+function roleDashboard(s: AdminSession) {
+  const role = roleName(s.role);
+  const cards =
+    s.role === "mechanic"
+      ? [
+          ["Fleet", "/contractor?view=fleet"],
+          ["Daily Reports", "/contractor?view=daily"],
+          ["Documents", "/contractor?view=documents"],
+          ["Alerts", "/contractor?view=alerts"],
+        ]
+      : s.role === "manager"
+        ? [
+            ["Reports Centre", "/contractor-reports"],
+            ["Fleet", "/contractor?view=fleet"],
+            ["Alerts", "/contractor?view=alerts"],
+            ["Documents", "/contractor?view=documents"],
+          ]
+        : [
+            ["Fleet", "/contractor?view=fleet"],
+            ["Daily Reports", "/contractor?view=daily"],
+            ["Reports Centre", "/contractor-reports"],
+            ["Alerts", "/contractor?view=alerts"],
+            ["Documents", "/contractor?view=documents"],
+          ];
+  const body = `<div class="rolehero"><img src="/sindane-logo.png" alt="Sindane Asset Solutions"><div><h1>${esc(role)} Dashboard</h1><p>${esc(s.companyName)} · Secure company workspace</p></div></div><div class="cards">${cards.map((c) => `<a class="card" href="${c[1]}" style="text-decoration:none;color:#111827"><h3>${c[0]}</h3><p>Open ${c[0]} for this company.</p><span class="green"><b>Open →</b></span></a>`).join("")}</div>`;
+  return responseHtml(shell(s, "dashboard", `${role} Dashboard`, body));
+}
+
+function durationHours(input: DailyInput) {
+  if (input.captureBasis === "hour_meter") {
+    if (input.hourMeterStart == null || input.hourMeterEnd == null)
+      throw new Error(
+        "Hour Meter capture requires both start and end meter readings.",
+      );
+    if (input.hourMeterEnd < input.hourMeterStart)
+      throw new Error("Hour meter end cannot be less than the start reading.");
+    return input.hourMeterEnd - input.hourMeterStart;
   }
-  if(input.timeValue<0) throw new Error('Time value cannot be negative.');
-  if(input.timeUnit==='seconds') return input.timeValue/3600;
-  if(input.timeUnit==='minutes') return input.timeValue/60;
+  if (input.timeValue < 0) throw new Error("Time value cannot be negative.");
+  if (input.timeUnit === "seconds") return input.timeValue / 3600;
+  if (input.timeUnit === "minutes") return input.timeValue / 60;
   return input.timeValue;
 }
 
-async function saveDaily(env:CompanyAdminEnv,s:AdminSession,input:DailyInput){
-  const duration=durationHours(input); const now=new Date().toISOString(); const tonnes=input.tonnes==null?null:Math.max(0,input.tonnes);
-  await env.DB.prepare(`INSERT INTO daily_reports_v3(company_id,report_date,site,fleet_number,activity,capture_basis,time_value,time_unit,hour_meter_start,hour_meter_end,duration_hours,tonnes,fault_reason,breakdown_start,breakdown_end,severity,source_kind,source_file,created_by,status,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(s.companyId,input.reportDate,input.site,input.fleetNumber,input.activity,input.captureBasis,input.captureBasis==='time'?input.timeValue:null,input.captureBasis==='time'?input.timeUnit:null,input.captureBasis==='hour_meter'?input.hourMeterStart:null,input.captureBasis==='hour_meter'?input.hourMeterEnd:null,duration,tonnes,input.faultReason||null,input.breakdownStart||null,input.breakdownEnd||null,input.severity,input.sourceKind,input.sourceFile||null,s.accountId,'saved',now).run();
-  const settings=await getSettings(env,s.companyId); const existing=await env.DB.prepare("SELECT id FROM production_records WHERE company_id=? AND report_date=? AND fleet_number=? ORDER BY id DESC LIMIT 1").bind(s.companyId,input.reportDate,input.fleetNumber).first<Record<string,unknown>>();
-  const operating=input.activity==='operating'?duration:0, downtime=input.activity==='downtime'?duration:0, ton=tonnes??0;
-  if(existing){await env.DB.prepare("UPDATE production_records SET operating_hours=operating_hours+?,productive_hours=productive_hours+?,unplanned_downtime=unplanned_downtime+?,tonnes=tonnes+?,source_file=COALESCE(?,source_file) WHERE id=?").bind(operating,operating,downtime,ton,input.sourceFile||null,existing.id).run();}
-  else {await env.DB.prepare("INSERT INTO production_records(company_id,report_date,fleet_number,shift_hours,planned_downtime,unplanned_downtime,operating_hours,productive_hours,tonnes,source_file,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)").bind(s.companyId,input.reportDate,input.fleetNumber,settings.operatingHours,0,downtime,operating,operating,ton,input.sourceFile||null,now).run();}
-  if(input.faultReason||input.activity==='downtime'){
-    const opened=input.breakdownStart?new Date(input.breakdownStart).toISOString():input.reportDate+'T00:00:00.000Z'; const closed=input.breakdownEnd?new Date(input.breakdownEnd).toISOString():null;
-    await env.DB.prepare("INSERT INTO events(company_id,fleet_number,event_type,severity,system_name,component,description,opened_at,closed_at,downtime_hours,status,action,spares_status,expected_return,oil_litres_lost,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(s.companyId,input.fleetNumber,'breakdown',input.severity,'Unspecified','Unspecified',input.faultReason||'Recorded downtime',opened,closed,duration,closed?'closed':'open',null,null,null,0,now).run();
+async function saveDaily(
+  env: CompanyAdminEnv,
+  s: AdminSession,
+  input: DailyInput,
+) {
+  const duration = durationHours(input);
+  const now = new Date().toISOString();
+  const tonnes = input.tonnes == null ? null : Math.max(0, input.tonnes);
+  await env.DB.prepare(
+    `INSERT INTO daily_reports_v3(company_id,report_date,site,fleet_number,activity,capture_basis,time_value,time_unit,hour_meter_start,hour_meter_end,duration_hours,tonnes,fault_reason,breakdown_start,breakdown_end,severity,source_kind,source_file,created_by,status,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+  )
+    .bind(
+      s.companyId,
+      input.reportDate,
+      input.site,
+      input.fleetNumber,
+      input.activity,
+      input.captureBasis,
+      input.captureBasis === "time" ? input.timeValue : null,
+      input.captureBasis === "time" ? input.timeUnit : null,
+      input.captureBasis === "hour_meter" ? input.hourMeterStart : null,
+      input.captureBasis === "hour_meter" ? input.hourMeterEnd : null,
+      duration,
+      tonnes,
+      input.faultReason || null,
+      input.breakdownStart || null,
+      input.breakdownEnd || null,
+      input.severity,
+      input.sourceKind,
+      input.sourceFile || null,
+      s.accountId,
+      "saved",
+      now,
+    )
+    .run();
+  const settings = await getSettings(env, s.companyId);
+  const existing = await env.DB.prepare(
+    "SELECT id FROM production_records WHERE company_id=? AND report_date=? AND fleet_number=? ORDER BY id DESC LIMIT 1",
+  )
+    .bind(s.companyId, input.reportDate, input.fleetNumber)
+    .first<Record<string, unknown>>();
+  const operating = input.activity === "operating" ? duration : 0,
+    downtime = input.activity === "downtime" ? duration : 0,
+    ton = tonnes ?? 0;
+  if (existing) {
+    await env.DB.prepare(
+      "UPDATE production_records SET operating_hours=operating_hours+?,productive_hours=productive_hours+?,unplanned_downtime=unplanned_downtime+?,tonnes=tonnes+?,source_file=COALESCE(?,source_file) WHERE id=?",
+    )
+      .bind(
+        operating,
+        operating,
+        downtime,
+        ton,
+        input.sourceFile || null,
+        existing.id,
+      )
+      .run();
+  } else {
+    await env.DB.prepare(
+      "INSERT INTO production_records(company_id,report_date,fleet_number,shift_hours,planned_downtime,unplanned_downtime,operating_hours,productive_hours,tonnes,source_file,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+    )
+      .bind(
+        s.companyId,
+        input.reportDate,
+        input.fleetNumber,
+        settings.operatingHours,
+        0,
+        downtime,
+        operating,
+        operating,
+        ton,
+        input.sourceFile || null,
+        now,
+      )
+      .run();
   }
-  if(input.captureBasis==='hour_meter'&&input.hourMeterEnd!=null){await env.DB.prepare("UPDATE machines SET operating_hours=CASE WHEN operating_hours<? THEN ? ELSE operating_hours END WHERE company_id=? AND fleet_number=?").bind(input.hourMeterEnd,input.hourMeterEnd,s.companyId,input.fleetNumber).run();}
-}
-
-function parseDailyRow(row:Record<string,unknown>, fileName:string):DailyInput{
-  const norm:Record<string,unknown>={}; Object.entries(row).forEach(([k,v])=>norm[k.toLowerCase().replace(/[^a-z0-9]/g,'')]=v);
-  const basis=lower(norm.capturebasis||norm.basis||'time').includes('meter')?'hour_meter':'time';
-  const unitRaw=lower(norm.timeunit||norm.unit||'hours'); const unit=unitRaw.startsWith('sec')?'seconds':unitRaw.startsWith('min')?'minutes':'hours';
-  const activity=lower(norm.activity||norm.type||'operating').includes('down')?'downtime':'operating';
-  const tonneVal=norm.tonnes??norm.tonnage??norm.tons; const tonnes=tonneVal==null||String(tonneVal).trim()===''?null:num(tonneVal);
-  return {reportDate:txt(norm.date||norm.reportdate||isoDate(),10),site:txt(norm.site||'Main Site',120),fleetNumber:txt(norm.machineid||norm.fleetnumber||norm.machine||norm.fleet,120),activity,captureBasis:basis,timeValue:num(norm.timevalue||norm.duration||norm.time),timeUnit:unit,hourMeterStart:norm.hourmeterstart==null?null:num(norm.hourmeterstart),hourMeterEnd:norm.hourmeterend==null?null:num(norm.hourmeterend),tonnes,faultReason:txt(norm.faultreason||norm.fault||norm.reason||'',500),breakdownStart:txt(norm.breakdownstart||norm.start||'',40),breakdownEnd:txt(norm.breakdownend||norm.end||'',40),severity:lower(norm.severity||'medium'),sourceKind:'import',sourceFile:fileName};
-}
-
-async function importWorkbook(file:File){
-  const ext=file.name.toLowerCase().split('.').pop(); const bytes=new Uint8Array(await file.arrayBuffer());
-  if(ext==='csv'){const text=new TextDecoder().decode(bytes);const lines=text.split(/\r?\n/).filter(Boolean);if(!lines.length)return[];const headers=parseCsvLine(lines[0]);return lines.slice(1).map(line=>{const vals=parseCsvLine(line);const obj:Record<string,unknown>={};headers.forEach((h,i)=>obj[h]=vals[i]??'');return obj;});}
-  const wb=XLSX.read(bytes,{type:'array',cellDates:false}); const sheet=wb.Sheets[wb.SheetNames[0]]; return XLSX.utils.sheet_to_json<Record<string,unknown>>(sheet,{defval:''});
-}
-function parseCsvLine(line:string){const out:string[]=[];let cur='',q=false;for(let i=0;i<line.length;i++){const c=line[i];if(c==='"'){if(q&&line[i+1]==='"'){cur+='"';i++;}else q=!q;}else if(c===','&&!q){out.push(cur.trim());cur='';}else cur+=c;}out.push(cur.trim());return out;}
-
-async function exportSummary(env:CompanyAdminEnv,s:AdminSession,format:string,period:string){
-  const today=isoDate(); const start=period==='month'?today.slice(0,7)+'-01':(()=>{const d=new Date(today+'T00:00:00Z');const day=d.getUTCDay()||7;d.setUTCDate(d.getUTCDate()-day+1);return d.toISOString().slice(0,10)})();
-  const rows=(await env.DB.prepare("SELECT report_date AS date,fleet_number AS fleet,SUM(operating_hours) AS operating,SUM(unplanned_downtime) AS downtime,SUM(tonnes) AS tonnes FROM production_records WHERE company_id=? AND report_date>=? GROUP BY report_date,fleet_number ORDER BY report_date,fleet_number").bind(s.companyId,start).all<Record<string,unknown>>()).results;
-  const data=[['Date','Fleet','Operating h','Downtime h','Tonnes'],...rows.map(r=>[String(r.date),String(r.fleet),num(r.operating),num(r.downtime),num(r.tonnes)])]; const base=`${s.companyName.replace(/[^a-z0-9]+/gi,'-').toLowerCase()}-${period}-report`;
-  if(format==='xlsx'){
-    const ws=XLSX.utils.aoa_to_sheet(data); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Report'); const buf=XLSX.write(wb,{bookType:'xlsx',type:'array'});
-    return new Response(buf,{headers:{'content-type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','content-disposition':`attachment; filename="${base}.xlsx"`,'cache-control':'private, no-store'}});
+  if (input.faultReason || input.activity === "downtime") {
+    const opened = input.breakdownStart
+      ? new Date(input.breakdownStart).toISOString()
+      : input.reportDate + "T00:00:00.000Z";
+    const closed = input.breakdownEnd
+      ? new Date(input.breakdownEnd).toISOString()
+      : null;
+    await env.DB.prepare(
+      "INSERT INTO events(company_id,fleet_number,event_type,severity,system_name,component,description,opened_at,closed_at,downtime_hours,status,action,spares_status,expected_return,oil_litres_lost,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+    )
+      .bind(
+        s.companyId,
+        input.fleetNumber,
+        "breakdown",
+        input.severity,
+        "Unspecified",
+        "Unspecified",
+        input.faultReason || "Recorded downtime",
+        opened,
+        closed,
+        duration,
+        closed ? "closed" : "open",
+        null,
+        null,
+        null,
+        0,
+        now,
+      )
+      .run();
   }
-  const table=`<html><head><meta charset="utf-8"></head><body><h1>${esc(s.companyName)} ${esc(period)} report</h1><table border="1" cellspacing="0" cellpadding="6">${data.map((r,i)=>`<tr>${r.map(c=>i===0?`<th>${esc(c)}</th>`:`<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</table></body></html>`;
-  return new Response(table,{headers:{'content-type':'application/msword; charset=utf-8','content-disposition':`attachment; filename="${base}.doc"`,'cache-control':'private, no-store'}});
+  if (input.captureBasis === "hour_meter" && input.hourMeterEnd != null) {
+    await env.DB.prepare(
+      "UPDATE machines SET operating_hours=CASE WHEN operating_hours<? THEN ? ELSE operating_hours END WHERE company_id=? AND fleet_number=?",
+    )
+      .bind(
+        input.hourMeterEnd,
+        input.hourMeterEnd,
+        s.companyId,
+        input.fleetNumber,
+      )
+      .run();
+  }
 }
 
-async function handlePost(request:Request,env:CompanyAdminEnv,s:AdminSession,path:string):Promise<Response|null>{
-  if(s.role!=='company_admin'&&s.role!=='admin') return responseHtml(shell(s,'dashboard','Access denied',`<div class="notice err">Company Administrator authority is required for this change.</div>`),403);
-  if(path==='/company-admin/users/add'){
-    const f=await request.formData();const fullName=txt(f.get('fullName'),120),email=lower(f.get('email')),roles=validRoles(f.getAll('role')),password=String(f.get('password')||'');if(!fullName||!email.includes('@')||!roles.length)return redirect(toastUrl('users','Enter a valid name and email, then select at least one role.','err'));
-    const existing=await env.DB.prepare("SELECT id,company_id AS companyId FROM contractor_accounts WHERE lower(email)=? LIMIT 1").bind(email).first<Record<string,unknown>>();
-    if(existing){if(num(existing.companyId)!==s.companyId)return redirect(toastUrl('users','That email belongs to another company account.','err'));const id=num(existing.id);const current=await rolesForAccount(env,id,s.companyId);await replaceAccountRoles(env,id,s.companyId,validRoles([...current,...roles]));return redirect(toastUrl('users',`Roles added to ${email}.`));}
-    if(password.length<10)return redirect(toastUrl('users','A new user requires a temporary password of at least 10 characters.','err'));
-    const salt=bytesToHex(crypto.getRandomValues(new Uint8Array(16))),hash=await passwordHash(password,salt),now=new Date().toISOString();const inserted=await env.DB.prepare("INSERT INTO contractor_accounts(company_id,email,full_name,role,status,password_hash,password_salt,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)").bind(s.companyId,email,fullName,roles[0],'active',hash,salt,now,now).run();const id=num(inserted.meta?.last_row_id);await replaceAccountRoles(env,id,s.companyId,roles);
-    return redirect(toastUrl('users',`User ${fullName} created with ${roles.length} role${roles.length===1?'':'s'}.`));
+function parseDailyRow(
+  row: Record<string, unknown>,
+  fileName: string,
+): DailyInput {
+  const norm: Record<string, unknown> = {};
+  Object.entries(row).forEach(
+    ([k, v]) => (norm[k.toLowerCase().replace(/[^a-z0-9]/g, "")] = v),
+  );
+  const basis = lower(norm.capturebasis || norm.basis || "time").includes(
+    "meter",
+  )
+    ? "hour_meter"
+    : "time";
+  const unitRaw = lower(norm.timeunit || norm.unit || "hours");
+  const unit = unitRaw.startsWith("sec")
+    ? "seconds"
+    : unitRaw.startsWith("min")
+      ? "minutes"
+      : "hours";
+  const activity = lower(norm.activity || norm.type || "operating").includes(
+    "down",
+  )
+    ? "downtime"
+    : "operating";
+  const tonneVal = norm.tonnes ?? norm.tonnage ?? norm.tons;
+  const tonnes =
+    tonneVal == null || String(tonneVal).trim() === "" ? null : num(tonneVal);
+  return {
+    reportDate: txt(norm.date || norm.reportdate || isoDate(), 10),
+    site: txt(norm.site || "Main Site", 120),
+    fleetNumber: txt(
+      norm.machineid || norm.fleetnumber || norm.machine || norm.fleet,
+      120,
+    ),
+    activity,
+    captureBasis: basis,
+    timeValue: num(norm.timevalue || norm.duration || norm.time),
+    timeUnit: unit,
+    hourMeterStart:
+      norm.hourmeterstart == null ? null : num(norm.hourmeterstart),
+    hourMeterEnd: norm.hourmeterend == null ? null : num(norm.hourmeterend),
+    tonnes,
+    faultReason: txt(norm.faultreason || norm.fault || norm.reason || "", 500),
+    breakdownStart: txt(norm.breakdownstart || norm.start || "", 40),
+    breakdownEnd: txt(norm.breakdownend || norm.end || "", 40),
+    severity: lower(norm.severity || "medium"),
+    sourceKind: "import",
+    sourceFile: fileName,
+  };
+}
+
+async function importWorkbook(file: File) {
+  const ext = file.name.toLowerCase().split(".").pop();
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  if (ext === "csv") {
+    const text = new TextDecoder().decode(bytes);
+    const lines = text.split(/\r?\n/).filter(Boolean);
+    if (!lines.length) return [];
+    const headers = parseCsvLine(lines[0]);
+    return lines.slice(1).map((line) => {
+      const vals = parseCsvLine(line);
+      const obj: Record<string, unknown> = {};
+      headers.forEach((h, i) => (obj[h] = vals[i] ?? ""));
+      return obj;
+    });
   }
-  if(path==='/company-admin/users/email'){const f=await request.formData();const id=num(f.get('id')),email=lower(f.get('email'));if(!id||!email.includes('@'))return redirect(toastUrl('users','Enter a valid email address.','err'));const exists=await env.DB.prepare("SELECT id FROM contractor_accounts WHERE lower(email)=? AND id<>? LIMIT 1").bind(email,id).first();if(exists)return redirect(toastUrl('users','That email is already used by another account.','err'));const result=await env.DB.prepare("UPDATE contractor_accounts SET email=?,updated_at=? WHERE id=? AND company_id=?").bind(email,new Date().toISOString(),id,s.companyId).run();if(!num(result.meta?.changes))return redirect(toastUrl('users','User not found.','err'));return redirect(toastUrl('users',`User email changed to ${email}.`));}
-  if(path==='/company-admin/users/roles'){const f=await request.formData();const id=num(f.get('id')),roles=validRoles(f.getAll('role'));if(!id||!roles.length)return redirect(toastUrl('users','Select at least one role.','err'));if(id===s.accountId&&!roles.includes('company_admin'))return redirect(toastUrl('users','Keep Company Administrator on your own signed-in account. Another administrator can change it later.','err'));const account=await env.DB.prepare("SELECT id FROM contractor_accounts WHERE id=? AND company_id=?").bind(id,s.companyId).first();if(!account)return redirect(toastUrl('users','User not found.','err'));await replaceAccountRoles(env,id,s.companyId,roles);return redirect(toastUrl('users','User roles updated.'))}
-  if(path==='/company-admin/users/toggle'){const f=await request.formData();const id=num(f.get('id')),next=lower(f.get('next'))==='active'?'active':'inactive';if(id===s.accountId&&next==='inactive')return redirect(toastUrl('users','You cannot deactivate your own signed-in administrator account.','err'));await env.DB.prepare("UPDATE contractor_accounts SET status=?,updated_at=? WHERE id=? AND company_id=?").bind(next,new Date().toISOString(),id,s.companyId).run();return redirect(toastUrl('users',`User access changed to ${next}.`));}
-  if(path==='/company-admin/fleet/add'){const f=await request.formData();const fleet=txt(f.get('fleetNumber'),120),category=txt(f.get('category'),120),site=txt(f.get('site'),120);if(!fleet||!category||!site)return redirect(toastUrl('fleet','Machine ID, type and site are required.','err'));await env.DB.prepare("INSERT INTO machines(company_id,fleet_number,category,site,status,operating_hours,availability_target,next_service_hours,created_at) VALUES(?,?,?,?,?,?,?,?,?)").bind(s.companyId,fleet,category,site,lower(f.get('status'))||'operating',num(f.get('operatingHours')),0.9,String(f.get('nextServiceHours')||'').trim()===''?null:num(f.get('nextServiceHours')),new Date().toISOString()).run();return redirect(toastUrl('fleet',`${fleet} registered successfully.`));}
-  if(path==='/company-admin/fleet/import'){const f=await request.formData();const file=f.get('file');if(!(file instanceof File))return redirect(toastUrl('fleet','Choose an Excel or CSV file.','err'));try{const rows=await importWorkbook(file);let count=0;for(const raw of rows){const n:Record<string,unknown>={};Object.entries(raw).forEach(([k,v])=>n[k.toLowerCase().replace(/[^a-z0-9]/g,'')]=v);const fleet=txt(n.machineid||n.fleetnumber||n.machine||n.fleet,120);if(!fleet)continue;await env.DB.prepare("INSERT INTO machines(company_id,fleet_number,category,site,status,operating_hours,availability_target,next_service_hours,created_at) VALUES(?,?,?,?,?,?,?,?,?)").bind(s.companyId,fleet,txt(n.type||n.category||'Machine',120),txt(n.site||'Main Site',120),lower(n.status||'operating'),num(n.hourmeter||n.operatinghours),0.9,String(n.nextservicehour||n.nextservicehours||'').trim()===''?null:num(n.nextservicehour||n.nextservicehours),new Date().toISOString()).run();count++;}return redirect(toastUrl('fleet',`${count} machine record(s) imported.`));}catch(e){return redirect(toastUrl('fleet',`Import failed: ${e instanceof Error?e.message:String(e)}`,'err'));}}
-  if(path==='/company-admin/daily/manual'){const f=await request.formData();try{const tonnesRaw=String(f.get('tonnes')||'').trim();await saveDaily(env,s,{reportDate:txt(f.get('reportDate'),10)||isoDate(),site:txt(f.get('site'),120),fleetNumber:txt(f.get('fleetNumber'),120),activity:lower(f.get('activity'))==='downtime'?'downtime':'operating',captureBasis:lower(f.get('captureBasis'))==='hour_meter'?'hour_meter':'time',timeValue:num(f.get('timeValue')),timeUnit:['hours','minutes','seconds'].includes(lower(f.get('timeUnit')))?lower(f.get('timeUnit')):'hours',hourMeterStart:String(f.get('hourMeterStart')||'').trim()===''?null:num(f.get('hourMeterStart')),hourMeterEnd:String(f.get('hourMeterEnd')||'').trim()===''?null:num(f.get('hourMeterEnd')),tonnes:tonnesRaw===''?null:num(tonnesRaw),faultReason:txt(f.get('faultReason'),500),breakdownStart:txt(f.get('breakdownStart'),40),breakdownEnd:txt(f.get('breakdownEnd'),40),severity:['low','medium','high','critical'].includes(lower(f.get('severity')))?lower(f.get('severity')):'medium',sourceKind:'manual',sourceFile:''});return redirect(toastUrl('daily','Daily report saved and production/breakdown data updated.'));}catch(e){return redirect(toastUrl('daily',e instanceof Error?e.message:String(e),'err'));}}
-  if(path==='/company-admin/daily/import'){const f=await request.formData();const file=f.get('file');if(!(file instanceof File))return redirect(toastUrl('daily','Choose an Excel or CSV file.','err'));try{let objectKey='';if(env.BUCKET){objectKey=`company/${s.companyId}/daily-imports/${isoDate()}/${uid()}-${file.name.replace(/[^a-zA-Z0-9._-]/g,'-')}`;await env.BUCKET.put(objectKey,await file.arrayBuffer(),{httpMetadata:{contentType:file.type||'application/octet-stream'}});await env.DB.prepare("INSERT INTO contractor_documents(company_id,uploaded_by,file_name,object_key,content_type,size_bytes,category,created_at) VALUES(?,?,?,?,?,?,?,?)").bind(s.companyId,s.accountId,file.name,objectKey,file.type||'application/octet-stream',file.size,'daily-report',new Date().toISOString()).run();}
-    const rows=await importWorkbook(file);let count=0;for(const raw of rows){const input=parseDailyRow(raw,file.name);if(!input.fleetNumber)continue;await saveDaily(env,s,input);count++;}return redirect(toastUrl('daily',`${count} daily report row(s) imported. Original file saved to Documents.`));}catch(e){return redirect(toastUrl('daily',`Daily report import failed: ${e instanceof Error?e.message:String(e)}`,'err'));}}
-  if(path==='/company-admin/alerts/contact'){const f=await request.formData();const name=txt(f.get('name'),120);if(!name)return redirect(toastUrl('alerts','Contact name is required.','err'));await env.DB.prepare("INSERT INTO alert_contacts_v3(company_id,name,email,phone,breakdown,service_due,missing_report,po,critical,active,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)").bind(s.companyId,name,lower(f.get('email')),txt(f.get('phone'),80),f.has('breakdown')?1:0,f.has('serviceDue')?1:0,f.has('missingReport')?1:0,f.has('po')?1:0,f.has('critical')?1:0,1,new Date().toISOString()).run();return redirect(toastUrl('alerts','Alert contact saved.'));}
-  if(path==='/company-admin/approvals/review'){const f=await request.formData();const status=lower(f.get('status'))==='approved'?'approved':'rejected';await env.DB.prepare("UPDATE approvals_v3 SET status=?,reviewed_at=? WHERE id=? AND company_id=? AND status='pending'").bind(status,new Date().toISOString(),num(f.get('id')),s.companyId).run();return redirect(toastUrl('approvals',`Approval marked ${status}.`));}
-  if(path==='/company-admin/setup/save'){const f=await request.formData();await env.DB.prepare(`INSERT INTO company_settings_v3(company_id,contact_email,contact_phone,operating_hours,daily_production_target,availability_target,default_site,updated_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(company_id) DO UPDATE SET contact_email=excluded.contact_email,contact_phone=excluded.contact_phone,operating_hours=excluded.operating_hours,daily_production_target=excluded.daily_production_target,availability_target=excluded.availability_target,default_site=excluded.default_site,updated_at=excluded.updated_at`).bind(s.companyId,lower(f.get('contactEmail')),txt(f.get('contactPhone'),80),Math.max(0,Math.min(24,num(f.get('operatingHours'),24))),Math.max(0,num(f.get('dailyTarget'))),Math.max(0,Math.min(100,num(f.get('availabilityTarget'),90))),txt(f.get('defaultSite'),120),new Date().toISOString()).run();return redirect(toastUrl('setup','Company setup and KPI targets updated.'));}
-  if(path==='/company-admin/sites/add'){const f=await request.formData();const name=txt(f.get('name'),120);if(!name)return redirect(toastUrl('setup','Site name is required.','err'));await env.DB.prepare("INSERT INTO company_sites(company_id,name,code,active,created_at) VALUES(?,?,?,?,?)").bind(s.companyId,name,txt(f.get('code'),50),1,new Date().toISOString()).run();return redirect(toastUrl('setup',`Site ${name} added.`));}
-  if(path==='/company-admin/reports/publish'){const f=await request.formData();const type=lower(f.get('reportType'))==='monthly'?'monthly':'weekly',period=txt(f.get('periodKey'),20),title=`${type==='monthly'?'Monthly Summary':'Weekly Fleet Summary'} — ${period}`;await env.DB.prepare(`INSERT INTO report_history_v3(company_id,report_type,period_key,title,status,published_by,published_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(company_id,report_type,period_key) DO UPDATE SET title=excluded.title,status='published',published_by=excluded.published_by,published_at=excluded.published_at`).bind(s.companyId,type,period,title,'published',s.accountId,new Date().toISOString()).run();return redirect(toastUrl('reports-admin',`${title} updated and published.`));}
-  if(path==='/company-admin/reports/save'){const f=await request.formData();const type=lower(f.get('reportType'))==='monthly'?'monthly':'weekly',period=txt(f.get('periodKey'),20);if(!env.BUCKET)return redirect(toastUrl('reports-admin','R2 storage is not available.','err'));const exportRes=await exportSummary(env,s,'word',type==='monthly'?'month':'week');const bytes=await exportRes.arrayBuffer();const name=`${s.companyName.replace(/[^a-z0-9]+/gi,'-')}-${type}-${period}.doc`;const key=`company/${s.companyId}/report-exports/${period}/${uid()}-${name}`;await env.BUCKET.put(key,bytes,{httpMetadata:{contentType:'application/msword'}});await env.DB.prepare("INSERT INTO contractor_documents(company_id,uploaded_by,file_name,object_key,content_type,size_bytes,category,created_at) VALUES(?,?,?,?,?,?,?,?)").bind(s.companyId,s.accountId,name,key,'application/msword',bytes.byteLength,'report-export',new Date().toISOString()).run();return redirect(toastUrl('reports-admin','Report export saved to Documents.'));}
-  if(path==='/company-admin/documents/upload'){const f=await request.formData();const file=f.get('file');if(!(file instanceof File)||!env.BUCKET)return redirect(toastUrl('documents','Choose a file and confirm R2 storage is available.','err'));const key=`company/${s.companyId}/documents/${uid()}-${file.name.replace(/[^a-zA-Z0-9._-]/g,'-')}`;await env.BUCKET.put(key,await file.arrayBuffer(),{httpMetadata:{contentType:file.type||'application/octet-stream'}});await env.DB.prepare("INSERT INTO contractor_documents(company_id,uploaded_by,file_name,object_key,content_type,size_bytes,category,created_at) VALUES(?,?,?,?,?,?,?,?)").bind(s.companyId,s.accountId,file.name,key,file.type||'application/octet-stream',file.size,txt(f.get('category'),50)||'general',new Date().toISOString()).run();return redirect(toastUrl('documents','Document uploaded successfully.'));}
+  const wb = XLSX.read(bytes, { type: "array", cellDates: false });
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  return XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+    defval: "",
+  });
+}
+function parseCsvLine(line: string) {
+  const out: string[] = [];
+  let cur = "",
+    q = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') {
+      if (q && line[i + 1] === '"') {
+        cur += '"';
+        i++;
+      } else q = !q;
+    } else if (c === "," && !q) {
+      out.push(cur.trim());
+      cur = "";
+    } else cur += c;
+  }
+  out.push(cur.trim());
+  return out;
+}
+
+async function exportSummary(
+  env: CompanyAdminEnv,
+  s: AdminSession,
+  format: string,
+  period: string,
+) {
+  const today = isoDate();
+  const start =
+    period === "month"
+      ? today.slice(0, 7) + "-01"
+      : (() => {
+          const d = new Date(today + "T00:00:00Z");
+          const day = d.getUTCDay() || 7;
+          d.setUTCDate(d.getUTCDate() - day + 1);
+          return d.toISOString().slice(0, 10);
+        })();
+  const rows = (
+    await env.DB.prepare(
+      "SELECT report_date AS date,fleet_number AS fleet,SUM(operating_hours) AS operating,SUM(unplanned_downtime) AS downtime,SUM(tonnes) AS tonnes FROM production_records WHERE company_id=? AND report_date>=? GROUP BY report_date,fleet_number ORDER BY report_date,fleet_number",
+    )
+      .bind(s.companyId, start)
+      .all<Record<string, unknown>>()
+  ).results;
+  const data = [
+    ["Date", "Fleet", "Operating h", "Downtime h", "Tonnes"],
+    ...rows.map((r) => [
+      String(r.date),
+      String(r.fleet),
+      num(r.operating),
+      num(r.downtime),
+      num(r.tonnes),
+    ]),
+  ];
+  const base = `${s.companyName.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-${period}-report`;
+  if (format === "xlsx") {
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Report");
+    const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    return new Response(buf, {
+      headers: {
+        "content-type":
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "content-disposition": `attachment; filename="${base}.xlsx"`,
+        "cache-control": "private, no-store",
+      },
+    });
+  }
+  const table = `<html><head><meta charset="utf-8"></head><body><h1>${esc(s.companyName)} ${esc(period)} report</h1><table border="1" cellspacing="0" cellpadding="6">${data.map((r, i) => `<tr>${r.map((c) => (i === 0 ? `<th>${esc(c)}</th>` : `<td>${esc(c)}</td>`)).join("")}</tr>`).join("")}</table></body></html>`;
+  return new Response(table, {
+    headers: {
+      "content-type": "application/msword; charset=utf-8",
+      "content-disposition": `attachment; filename="${base}.doc"`,
+      "cache-control": "private, no-store",
+    },
+  });
+}
+
+async function handlePost(
+  request: Request,
+  env: CompanyAdminEnv,
+  s: AdminSession,
+  path: string,
+): Promise<Response | null> {
+  if (s.role !== "company_admin" && s.role !== "admin")
+    return responseHtml(
+      shell(
+        s,
+        "dashboard",
+        "Access denied",
+        `<div class="notice err">Company Administrator authority is required for this change.</div>`,
+      ),
+      403,
+    );
+  if (path === "/company-admin/users/add") {
+    const f = await request.formData();
+    const fullName = txt(f.get("fullName"), 120),
+      email = lower(f.get("email")),
+      roles = validRoles(f.getAll("role")),
+      password = String(f.get("password") || "");
+    if (!fullName || !email.includes("@") || !roles.length)
+      return redirect(
+        toastUrl(
+          "users",
+          "Enter a valid name and email, then select at least one role.",
+          "err",
+        ),
+      );
+    const existing = await env.DB.prepare(
+      "SELECT id,company_id AS companyId FROM contractor_accounts WHERE lower(email)=? LIMIT 1",
+    )
+      .bind(email)
+      .first<Record<string, unknown>>();
+    if (existing) {
+      if (num(existing.companyId) !== s.companyId)
+        return redirect(
+          toastUrl(
+            "users",
+            "That email belongs to another company account.",
+            "err",
+          ),
+        );
+      const id = num(existing.id);
+      const current = await rolesForAccount(env, id, s.companyId);
+      await replaceAccountRoles(
+        env,
+        id,
+        s.companyId,
+        validRoles([...current, ...roles]),
+      );
+      return redirect(toastUrl("users", `Roles added to ${email}.`));
+    }
+    if (password.length < 10)
+      return redirect(
+        toastUrl(
+          "users",
+          "A new user requires a temporary password of at least 10 characters.",
+          "err",
+        ),
+      );
+    const salt = bytesToHex(crypto.getRandomValues(new Uint8Array(16))),
+      hash = await passwordHash(password, salt),
+      now = new Date().toISOString();
+    const inserted = await env.DB.prepare(
+      "INSERT INTO contractor_accounts(company_id,email,full_name,role,status,password_hash,password_salt,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
+    )
+      .bind(
+        s.companyId,
+        email,
+        fullName,
+        roles[0],
+        "active",
+        hash,
+        salt,
+        now,
+        now,
+      )
+      .run();
+    const id = num(inserted.meta?.last_row_id);
+    await replaceAccountRoles(env, id, s.companyId, roles);
+    return redirect(
+      toastUrl(
+        "users",
+        `User ${fullName} created with ${roles.length} role${roles.length === 1 ? "" : "s"}.`,
+      ),
+    );
+  }
+  if (path === "/company-admin/users/email") {
+    const f = await request.formData();
+    const id = num(f.get("id")),
+      email = lower(f.get("email"));
+    if (!id || !email.includes("@"))
+      return redirect(toastUrl("users", "Enter a valid email address.", "err"));
+    const exists = await env.DB.prepare(
+      "SELECT id FROM contractor_accounts WHERE lower(email)=? AND id<>? LIMIT 1",
+    )
+      .bind(email, id)
+      .first();
+    if (exists)
+      return redirect(
+        toastUrl(
+          "users",
+          "That email is already used by another account.",
+          "err",
+        ),
+      );
+    const result = await env.DB.prepare(
+      "UPDATE contractor_accounts SET email=?,updated_at=? WHERE id=? AND company_id=?",
+    )
+      .bind(email, new Date().toISOString(), id, s.companyId)
+      .run();
+    if (!num(result.meta?.changes))
+      return redirect(toastUrl("users", "User not found.", "err"));
+    return redirect(toastUrl("users", `User email changed to ${email}.`));
+  }
+  if (path === "/company-admin/users/roles") {
+    const f = await request.formData();
+    const id = num(f.get("id")),
+      roles = validRoles(f.getAll("role"));
+    if (!id || !roles.length)
+      return redirect(toastUrl("users", "Select at least one role.", "err"));
+    if (id === s.accountId && !roles.includes("company_admin"))
+      return redirect(
+        toastUrl(
+          "users",
+          "Keep Company Administrator on your own signed-in account. Another administrator can change it later.",
+          "err",
+        ),
+      );
+    const account = await env.DB.prepare(
+      "SELECT id FROM contractor_accounts WHERE id=? AND company_id=?",
+    )
+      .bind(id, s.companyId)
+      .first();
+    if (!account) return redirect(toastUrl("users", "User not found.", "err"));
+    await replaceAccountRoles(env, id, s.companyId, roles);
+    return redirect(toastUrl("users", "User roles updated."));
+  }
+  if (path === "/company-admin/users/toggle") {
+    const f = await request.formData();
+    const id = num(f.get("id")),
+      next = lower(f.get("next")) === "active" ? "active" : "inactive";
+    if (id === s.accountId && next === "inactive")
+      return redirect(
+        toastUrl(
+          "users",
+          "You cannot deactivate your own signed-in administrator account.",
+          "err",
+        ),
+      );
+    await env.DB.prepare(
+      "UPDATE contractor_accounts SET status=?,updated_at=? WHERE id=? AND company_id=?",
+    )
+      .bind(next, new Date().toISOString(), id, s.companyId)
+      .run();
+    return redirect(toastUrl("users", `User access changed to ${next}.`));
+  }
+  if (path === "/company-admin/fleet/add") {
+    const f = await request.formData();
+    const fleet = txt(f.get("fleetNumber"), 120),
+      category = txt(f.get("category"), 120),
+      site = txt(f.get("site"), 120);
+    if (!fleet || !category || !site)
+      return redirect(
+        toastUrl("fleet", "Machine ID, type and site are required.", "err"),
+      );
+    await env.DB.prepare(
+      "INSERT INTO machines(company_id,fleet_number,category,site,status,operating_hours,availability_target,next_service_hours,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
+    )
+      .bind(
+        s.companyId,
+        fleet,
+        category,
+        site,
+        lower(f.get("status")) || "operating",
+        num(f.get("operatingHours")),
+        0.9,
+        String(f.get("nextServiceHours") || "").trim() === ""
+          ? null
+          : num(f.get("nextServiceHours")),
+        new Date().toISOString(),
+      )
+      .run();
+    return redirect(toastUrl("fleet", `${fleet} registered successfully.`));
+  }
+  if (path === "/company-admin/fleet/import") {
+    const f = await request.formData();
+    const file = f.get("file");
+    if (!(file instanceof File))
+      return redirect(toastUrl("fleet", "Choose an Excel or CSV file.", "err"));
+    try {
+      const rows = await importWorkbook(file);
+      let count = 0;
+      for (const raw of rows) {
+        const n: Record<string, unknown> = {};
+        Object.entries(raw).forEach(
+          ([k, v]) => (n[k.toLowerCase().replace(/[^a-z0-9]/g, "")] = v),
+        );
+        const fleet = txt(
+          n.machineid || n.fleetnumber || n.machine || n.fleet,
+          120,
+        );
+        if (!fleet) continue;
+        await env.DB.prepare(
+          "INSERT INTO machines(company_id,fleet_number,category,site,status,operating_hours,availability_target,next_service_hours,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
+        )
+          .bind(
+            s.companyId,
+            fleet,
+            txt(n.type || n.category || "Machine", 120),
+            txt(n.site || "Main Site", 120),
+            lower(n.status || "operating"),
+            num(n.hourmeter || n.operatinghours),
+            0.9,
+            String(n.nextservicehour || n.nextservicehours || "").trim() === ""
+              ? null
+              : num(n.nextservicehour || n.nextservicehours),
+            new Date().toISOString(),
+          )
+          .run();
+        count++;
+      }
+      return redirect(
+        toastUrl("fleet", `${count} machine record(s) imported.`),
+      );
+    } catch (e) {
+      return redirect(
+        toastUrl(
+          "fleet",
+          `Import failed: ${e instanceof Error ? e.message : String(e)}`,
+          "err",
+        ),
+      );
+    }
+  }
+  if (path === "/company-admin/daily/manual") {
+    const f = await request.formData();
+    try {
+      const tonnesRaw = String(f.get("tonnes") || "").trim();
+      await saveDaily(env, s, {
+        reportDate: txt(f.get("reportDate"), 10) || isoDate(),
+        site: txt(f.get("site"), 120),
+        fleetNumber: txt(f.get("fleetNumber"), 120),
+        activity:
+          lower(f.get("activity")) === "downtime" ? "downtime" : "operating",
+        captureBasis:
+          lower(f.get("captureBasis")) === "hour_meter" ? "hour_meter" : "time",
+        timeValue: num(f.get("timeValue")),
+        timeUnit: ["hours", "minutes", "seconds"].includes(
+          lower(f.get("timeUnit")),
+        )
+          ? lower(f.get("timeUnit"))
+          : "hours",
+        hourMeterStart:
+          String(f.get("hourMeterStart") || "").trim() === ""
+            ? null
+            : num(f.get("hourMeterStart")),
+        hourMeterEnd:
+          String(f.get("hourMeterEnd") || "").trim() === ""
+            ? null
+            : num(f.get("hourMeterEnd")),
+        tonnes: tonnesRaw === "" ? null : num(tonnesRaw),
+        faultReason: txt(f.get("faultReason"), 500),
+        breakdownStart: txt(f.get("breakdownStart"), 40),
+        breakdownEnd: txt(f.get("breakdownEnd"), 40),
+        severity: ["low", "medium", "high", "critical"].includes(
+          lower(f.get("severity")),
+        )
+          ? lower(f.get("severity"))
+          : "medium",
+        sourceKind: "manual",
+        sourceFile: "",
+      });
+      return redirect(
+        toastUrl(
+          "daily",
+          "Daily report saved and production/breakdown data updated.",
+        ),
+      );
+    } catch (e) {
+      return redirect(
+        toastUrl("daily", e instanceof Error ? e.message : String(e), "err"),
+      );
+    }
+  }
+  if (path === "/company-admin/daily/import") {
+    const f = await request.formData();
+    const file = f.get("file");
+    if (!(file instanceof File))
+      return redirect(toastUrl("daily", "Choose an Excel or CSV file.", "err"));
+    try {
+      let objectKey = "";
+      if (env.BUCKET) {
+        objectKey = `company/${s.companyId}/daily-imports/${isoDate()}/${uid()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "-")}`;
+        await env.BUCKET.put(objectKey, await file.arrayBuffer(), {
+          httpMetadata: {
+            contentType: file.type || "application/octet-stream",
+          },
+        });
+        await env.DB.prepare(
+          "INSERT INTO contractor_documents(company_id,uploaded_by,file_name,object_key,content_type,size_bytes,category,created_at) VALUES(?,?,?,?,?,?,?,?)",
+        )
+          .bind(
+            s.companyId,
+            s.accountId,
+            file.name,
+            objectKey,
+            file.type || "application/octet-stream",
+            file.size,
+            "daily-report",
+            new Date().toISOString(),
+          )
+          .run();
+      }
+      const rows = await importWorkbook(file);
+      let count = 0;
+      for (const raw of rows) {
+        const input = parseDailyRow(raw, file.name);
+        if (!input.fleetNumber) continue;
+        await saveDaily(env, s, input);
+        count++;
+      }
+      return redirect(
+        toastUrl(
+          "daily",
+          `${count} daily report row(s) imported. Original file saved to Documents.`,
+        ),
+      );
+    } catch (e) {
+      return redirect(
+        toastUrl(
+          "daily",
+          `Daily report import failed: ${e instanceof Error ? e.message : String(e)}`,
+          "err",
+        ),
+      );
+    }
+  }
+  if (path === "/company-admin/alerts/contact") {
+    const f = await request.formData();
+    const name = txt(f.get("name"), 120);
+    if (!name)
+      return redirect(toastUrl("alerts", "Contact name is required.", "err"));
+    await env.DB.prepare(
+      "INSERT INTO alert_contacts_v3(company_id,name,email,phone,breakdown,service_due,missing_report,po,critical,active,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+    )
+      .bind(
+        s.companyId,
+        name,
+        lower(f.get("email")),
+        txt(f.get("phone"), 80),
+        f.has("breakdown") ? 1 : 0,
+        f.has("serviceDue") ? 1 : 0,
+        f.has("missingReport") ? 1 : 0,
+        f.has("po") ? 1 : 0,
+        f.has("critical") ? 1 : 0,
+        1,
+        new Date().toISOString(),
+      )
+      .run();
+    return redirect(toastUrl("alerts", "Alert contact saved."));
+  }
+  if (path === "/company-admin/approvals/review") {
+    const f = await request.formData();
+    const status =
+      lower(f.get("status")) === "approved" ? "approved" : "rejected";
+    await env.DB.prepare(
+      "UPDATE approvals_v3 SET status=?,reviewed_at=? WHERE id=? AND company_id=? AND status='pending'",
+    )
+      .bind(status, new Date().toISOString(), num(f.get("id")), s.companyId)
+      .run();
+    return redirect(toastUrl("approvals", `Approval marked ${status}.`));
+  }
+  if (path === "/company-admin/setup/save") {
+    const f = await request.formData();
+    await env.DB.prepare(
+      `INSERT INTO company_settings_v3(company_id,contact_email,contact_phone,operating_hours,daily_production_target,availability_target,default_site,updated_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(company_id) DO UPDATE SET contact_email=excluded.contact_email,contact_phone=excluded.contact_phone,operating_hours=excluded.operating_hours,daily_production_target=excluded.daily_production_target,availability_target=excluded.availability_target,default_site=excluded.default_site,updated_at=excluded.updated_at`,
+    )
+      .bind(
+        s.companyId,
+        lower(f.get("contactEmail")),
+        txt(f.get("contactPhone"), 80),
+        Math.max(0, Math.min(24, num(f.get("operatingHours"), 24))),
+        Math.max(0, num(f.get("dailyTarget"))),
+        Math.max(0, Math.min(100, num(f.get("availabilityTarget"), 90))),
+        txt(f.get("defaultSite"), 120),
+        new Date().toISOString(),
+      )
+      .run();
+    return redirect(
+      toastUrl("setup", "Company setup and KPI targets updated."),
+    );
+  }
+  if (path === "/company-admin/sites/add") {
+    const f = await request.formData();
+    const name = txt(f.get("name"), 120);
+    if (!name)
+      return redirect(toastUrl("setup", "Site name is required.", "err"));
+    await env.DB.prepare(
+      "INSERT INTO company_sites(company_id,name,code,active,created_at) VALUES(?,?,?,?,?)",
+    )
+      .bind(
+        s.companyId,
+        name,
+        txt(f.get("code"), 50),
+        1,
+        new Date().toISOString(),
+      )
+      .run();
+    return redirect(toastUrl("setup", `Site ${name} added.`));
+  }
+  if (path === "/company-admin/reports/publish") {
+    const f = await request.formData();
+    const type =
+        lower(f.get("reportType")) === "monthly" ? "monthly" : "weekly",
+      period = txt(f.get("periodKey"), 20),
+      title = `${type === "monthly" ? "Monthly Summary" : "Weekly Fleet Summary"} — ${period}`;
+    await env.DB.prepare(
+      `INSERT INTO report_history_v3(company_id,report_type,period_key,title,status,published_by,published_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(company_id,report_type,period_key) DO UPDATE SET title=excluded.title,status='published',published_by=excluded.published_by,published_at=excluded.published_at`,
+    )
+      .bind(
+        s.companyId,
+        type,
+        period,
+        title,
+        "published",
+        s.accountId,
+        new Date().toISOString(),
+      )
+      .run();
+    return redirect(
+      toastUrl("reports-admin", `${title} updated and published.`),
+    );
+  }
+  if (path === "/company-admin/reports/save") {
+    const f = await request.formData();
+    const type =
+        lower(f.get("reportType")) === "monthly" ? "monthly" : "weekly",
+      period = txt(f.get("periodKey"), 20);
+    if (!env.BUCKET)
+      return redirect(
+        toastUrl("reports-admin", "R2 storage is not available.", "err"),
+      );
+    const exportRes = await exportSummary(
+      env,
+      s,
+      "word",
+      type === "monthly" ? "month" : "week",
+    );
+    const bytes = await exportRes.arrayBuffer();
+    const name = `${s.companyName.replace(/[^a-z0-9]+/gi, "-")}-${type}-${period}.doc`;
+    const key = `company/${s.companyId}/report-exports/${period}/${uid()}-${name}`;
+    await env.BUCKET.put(key, bytes, {
+      httpMetadata: { contentType: "application/msword" },
+    });
+    await env.DB.prepare(
+      "INSERT INTO contractor_documents(company_id,uploaded_by,file_name,object_key,content_type,size_bytes,category,created_at) VALUES(?,?,?,?,?,?,?,?)",
+    )
+      .bind(
+        s.companyId,
+        s.accountId,
+        name,
+        key,
+        "application/msword",
+        bytes.byteLength,
+        "report-export",
+        new Date().toISOString(),
+      )
+      .run();
+    return redirect(
+      toastUrl("reports-admin", "Report export saved to Documents."),
+    );
+  }
+  if (path === "/company-admin/documents/upload") {
+    const f = await request.formData();
+    const file = f.get("file");
+    if (!(file instanceof File) || !env.BUCKET)
+      return redirect(
+        toastUrl(
+          "documents",
+          "Choose a file and confirm R2 storage is available.",
+          "err",
+        ),
+      );
+    const key = `company/${s.companyId}/documents/${uid()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "-")}`;
+    await env.BUCKET.put(key, await file.arrayBuffer(), {
+      httpMetadata: { contentType: file.type || "application/octet-stream" },
+    });
+    await env.DB.prepare(
+      "INSERT INTO contractor_documents(company_id,uploaded_by,file_name,object_key,content_type,size_bytes,category,created_at) VALUES(?,?,?,?,?,?,?,?)",
+    )
+      .bind(
+        s.companyId,
+        s.accountId,
+        file.name,
+        key,
+        file.type || "application/octet-stream",
+        file.size,
+        txt(f.get("category"), 50) || "general",
+        new Date().toISOString(),
+      )
+      .run();
+    return redirect(toastUrl("documents", "Document uploaded successfully."));
+  }
   return null;
 }
 
-export async function handleCompanyAdminV3(request:Request,env:CompanyAdminEnv):Promise<Response|null>{
-  const url=new URL(request.url),path=url.pathname;
-  const managed=path==='/contractor'||path.startsWith('/company-admin/');
-  if(!managed)return null;
+export async function handleCompanyAdminV3(
+  request: Request,
+  env: CompanyAdminEnv,
+): Promise<Response | null> {
+  const url = new URL(request.url),
+    path = url.pathname;
+  const managed = path === "/contractor" || path.startsWith("/company-admin/");
+  if (!managed) return null;
   await ensureSchema(env);
-  const s=await session(request,env); if(!s)return redirect('/contractor-login');
-  if(path.startsWith('/company-admin/')&&request.method==='POST'){try{return await handlePost(request,env,s,path)??null;}catch(e){console.error('COMPANY_ADMIN_V3_POST_ERROR',e);return redirect(toastUrl('dashboard',`Operation failed: ${e instanceof Error?e.message:String(e)}`,'err'));}}
-  if(path==='/company-admin/export'&&request.method==='GET'){if(s.role!=='company_admin'&&s.role!=='admin')return new Response('Forbidden',{status:403});return exportSummary(env,s,lower(url.searchParams.get('format'))==='xlsx'?'xlsx':'word',url.searchParams.get('period')==='month'?'month':'week');}
-  if(path!=='/contractor'||request.method!=='GET')return null;
-  const view=url.searchParams.get('view')||'dashboard';
-  if(!['company_admin','admin'].includes(s.role))return roleDashboard(s);
-  if(view==='users')return usersPage(env,s,url);if(view==='fleet')return fleetPage(env,s,url);if(view==='daily')return dailyPage(env,s,url);if(view==='alerts')return alertsPage(env,s,url);if(view==='approvals')return approvalsPage(env,s,url);if(view==='setup')return setupPage(env,s,url,'setup');if(view==='settings')return setupPage(env,s,url,'settings');if(view==='documents')return documentsPage(env,s,url);if(view==='reports-admin')return reportsAdminPage(env,s,url);
-  return dashboardPage(env,s,url);
+  const s = await session(request, env);
+  if (!s) return redirect("/contractor-login");
+  if (path.startsWith("/company-admin/") && request.method === "POST") {
+    try {
+      return (await handlePost(request, env, s, path)) ?? null;
+    } catch (e) {
+      console.error("COMPANY_ADMIN_V3_POST_ERROR", e);
+      return redirect(
+        toastUrl(
+          "dashboard",
+          `Operation failed: ${e instanceof Error ? e.message : String(e)}`,
+          "err",
+        ),
+      );
+    }
+  }
+  if (path === "/company-admin/export" && request.method === "GET") {
+    if (s.role !== "company_admin" && s.role !== "admin")
+      return new Response("Forbidden", { status: 403 });
+    return exportSummary(
+      env,
+      s,
+      lower(url.searchParams.get("format")) === "xlsx" ? "xlsx" : "word",
+      url.searchParams.get("period") === "month" ? "month" : "week",
+    );
+  }
+  if (path !== "/contractor" || request.method !== "GET") return null;
+  const view = url.searchParams.get("view") || "dashboard";
+  if (!["company_admin", "admin"].includes(s.role)) return roleDashboard(s);
+  if (view === "users") return usersPage(env, s, url);
+  if (view === "fleet") return fleetPage(env, s, url);
+  if (view === "daily") return dailyPage(env, s, url);
+  if (view === "alerts") return alertsPage(env, s, url);
+  if (view === "approvals") return approvalsPage(env, s, url);
+  if (view === "setup") return setupPage(env, s, url, "setup");
+  if (view === "settings") return setupPage(env, s, url, "settings");
+  if (view === "documents") return documentsPage(env, s, url);
+  if (view === "reports-admin") return reportsAdminPage(env, s, url);
+  return dashboardPage(env, s, url);
 }
