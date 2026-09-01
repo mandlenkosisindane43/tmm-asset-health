@@ -236,7 +236,7 @@ function shell(
   body: string,
   alertCount = 0,
 ) {
-  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} · TMM Asset Health</title>${baseCss()}</head><body><div class="app">${sidebar(s, active)}<main class="main"><header class="topbar"><div>☰</div><div class="right"><span class="bell">♟</span>${alertCount ? `<span class="badge">${alertCount}</span>` : ""}<span>▦</span><span class="company">${esc(s.companyName)}</span><form method="post" action="/api/contractor/logout"><button class="btn gray" type="submit">Sign out</button></form></div></header><div class="content">${body}</div><footer class="foot"><span>◈ Secure. Reliable. Insightful. &nbsp; | &nbsp; TMM Asset Health v3.0.0 &nbsp; | &nbsp; © 2026 Sindane Asset Solutions.</span><span class="brandline">TRACK. PREVENT. PERFORM.</span></footer></main></div></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} · TMM Asset Health</title>${baseCss()}</head><body><div class="app">${sidebar(s, active)}<main class="main"><header class="topbar"><div>☰</div><div class="right"><button class="btn gray" type="button" onclick="window.print()">🖨 Print Dashboard</button><span class="bell">♟</span>${alertCount ? `<span class="badge">${alertCount}</span>` : ""}<span>▦</span><span class="company">${esc(s.companyName)}</span><form method="post" action="/api/contractor/logout"><button class="btn gray" type="submit">Sign out</button></form></div></header><div class="content">${body}</div><footer class="foot"><span>◈ Secure. Reliable. Insightful. &nbsp; | &nbsp; TMM Asset Health v3.0.0 &nbsp; | &nbsp; © 2026 Sindane Asset Solutions.</span><span class="brandline">TRACK. PREVENT. PERFORM.</span></footer></main></div></body></html>`;
 }
 
 async function getSettings(env: CompanyAdminEnv, cid: number) {
@@ -287,10 +287,13 @@ async function dashboardMetrics(env: CompanyAdminEnv, s: AdminSession) {
   )
     .bind(cid)
     .first<Record<string, unknown>>();
+  const demoPeriod = await env.DB.prepare(
+    "SELECT period_start AS start,period_end AS end FROM demo_import_batches_v1 WHERE company_id=? ORDER BY id DESC LIMIT 1",
+  ).bind(cid).first<Record<string, unknown>>().catch(() => null);
   const monthly = await env.DB.prepare(
     "SELECT SUM(shift_hours-planned_downtime) AS scheduled,SUM(operating_hours) AS operating FROM production_records WHERE company_id=? AND report_date>=?",
   )
-    .bind(cid, monthStart())
+    .bind(cid, demoPeriod?.start ? String(demoPeriod.start) : monthStart())
     .first<Record<string, unknown>>();
   const scheduled = num(monthly?.scheduled),
     operating = num(monthly?.operating),
