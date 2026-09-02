@@ -343,6 +343,13 @@ async function dashboardPage(env: CompanyAdminEnv, s: AdminSession, url: URL) {
       .all<Record<string, unknown>>()
   ).results;
   const settings = await getSettings(env, cid);
+  const fleetOptions = (
+    await env.DB.prepare(
+      "SELECT fleet_number AS fleet,site FROM machines WHERE company_id=? AND lower(status) NOT IN ('retired','inactive') ORDER BY fleet_number",
+    )
+      .bind(cid)
+      .all<Record<string, unknown>>()
+  ).results;
   const msg = url.searchParams.get("msg");
   const tone = url.searchParams.get("tone") === "err" ? "err" : "";
   const quick = [
@@ -371,12 +378,15 @@ async function dashboardPage(env: CompanyAdminEnv, s: AdminSession, url: URL) {
     <section class="panel"><h2>Critical Alerts <span class="badge" style="background:#df1616;color:#fff;float:right">${m.critical}</span></h2>${alerts.length ? `<table class="mini-table"><thead><tr><th>Machine</th><th>Alert</th><th>Severity</th></tr></thead><tbody>${alerts.map((r) => `<tr><td>${esc(r.fleet)}</td><td class="critical">${esc(r.description)}</td><td>${esc(r.severity)}</td></tr>`).join("")}</tbody></table>` : `<div class="empty">No critical breakdown events.</div>`}<a class="link redtxt" href="/contractor?view=alerts">View all alerts →</a></section>
     <section class="panel"><h2>Pending Approvals <span class="badge" style="float:right">${m.approvals}</span></h2>${approvals.length ? `<table class="mini-table"><thead><tr><th>Request</th><th>Submitted By</th><th>Date</th></tr></thead><tbody>${approvals.map((r) => `<tr><td>${esc(r.title)}</td><td>${esc(r.submittedBy)}</td><td>${esc(String(r.createdAt).slice(0, 10))}</td></tr>`).join("")}</tbody></table>` : `<div class="empty">No pending approvals.</div>`}<a class="link ambertxt" href="/contractor?view=approvals">Review approvals →</a></section>
     <section class="panel"><h2>Company Setup</h2><div class="setup-list"><a href="/contractor?view=setup"><b>♙ Company Details</b><small>View and update company information</small></a><a href="/contractor?view=setup#sites"><b>⌖ Sites Management</b><small>Add and manage company sites</small></a><a href="/contractor?view=users"><b>♙ Users & Roles</b><small>Manage users and permissions</small></a><a href="/contractor?view=alerts"><b>♧ Alert Rules</b><small>Configure notification contacts</small></a><a href="/contractor?view=settings"><b>⚙ Targets & Preferences</b><small>Operating hours and KPI targets</small></a></div><a class="link" href="/contractor?view=setup">Go to Company Setup →</a></section>
-  </div></div>${dailyCapturePanel(settings)}</div>`;
+  </div></div>${dailyCapturePanel(settings, fleetOptions)}</div>`;
   return responseHtml(shell(s, "dashboard", "Dashboard", body, m.critical));
 }
 
-function dailyCapturePanel(settings: Awaited<ReturnType<typeof getSettings>>) {
-  return `<aside class="sideform"><h2>Add / Import Daily Report</h2><form method="post" action="/company-admin/daily/manual"><div class="steps">1. Basic details</div><label class="field">Report date<input name="reportDate" type="date" value="${isoDate()}" required></label><div class="twocol"><label class="field">Site<input name="site" value="${esc(settings.defaultSite)}" required></label><label class="field">Machine ID<input name="fleetNumber" required></label></div><label class="field">Activity<select name="activity"><option value="operating">Operating / Working</option><option value="downtime">Downtime / Breakdown</option></select></label><div class="steps">2. Capture basis</div><div class="choice"><label><input type="radio" name="captureBasis" value="time" checked>◷ Time</label><label><input type="radio" name="captureBasis" value="hour_meter">◉ Hour Meter</label></div><label class="field">Time value<input name="timeValue" type="number" min="0" step="0.001" value="0"></label><div class="units"><label><input type="radio" name="timeUnit" value="hours" checked> Hours</label><label><input type="radio" name="timeUnit" value="minutes"> Minutes</label><label><input type="radio" name="timeUnit" value="seconds"> Seconds</label></div><div class="twocol"><label class="field">Hour meter start<input name="hourMeterStart" type="number" min="0" step="0.01"></label><label class="field">Hour meter end<input name="hourMeterEnd" type="number" min="0" step="0.01"></label></div><div class="steps">3. Tonnes (Optional)</div><label class="field">Tonnes<input name="tonnes" type="number" min="0" step="0.01" placeholder="Optional"></label><div class="steps">4. Breakdown details (optional)</div><label class="field">Fault / reason<textarea name="faultReason" placeholder="Leave blank if normal operation"></textarea></label><div class="twocol"><label class="field">Breakdown start<input name="breakdownStart" type="datetime-local"></label><label class="field">Breakdown end<input name="breakdownEnd" type="datetime-local"></label></div><label class="field">Severity<select name="severity"><option>medium</option><option>high</option><option>critical</option><option>low</option></select></label><button class="btn" type="submit">Save Daily Report</button></form><div class="steps">Or import report</div><form method="post" action="/company-admin/daily/import" enctype="multipart/form-data"><div class="filebox"><label class="field">Excel / CSV<input name="file" type="file" accept=".xlsx,.xls,.csv,text/csv" required></label><button class="btn blue" type="submit">Open / Import</button></div></form></aside>`;
+function dailyCapturePanel(settings: Awaited<ReturnType<typeof getSettings>>, machines: Record<string, unknown>[] = []) {
+  const machineField = machines.length
+    ? `<select name="fleetNumber" required><option value="">Choose registered machine</option>${machines.map((m) => `<option value="${esc(m.fleet)}">${esc(m.fleet)} · ${esc(m.site)}</option>`).join("")}</select>`
+    : `<select name="fleetNumber" required disabled><option value="">Import or register fleet first</option></select>`;
+  return `<aside class="sideform"><h2>Add / Import Daily Report</h2><form method="post" action="/company-admin/daily/manual"><div class="steps">1. Basic details</div><label class="field">Report date<input name="reportDate" type="date" value="${isoDate()}" required></label><div class="twocol"><label class="field">Site<input name="site" value="${esc(settings.defaultSite)}" required></label><label class="field">Machine ID${machineField}</label></div><label class="field">Activity<select name="activity"><option value="operating">Operating / Working</option><option value="downtime">Downtime / Breakdown</option></select></label><div class="steps">2. Capture basis</div><div class="choice"><label><input type="radio" name="captureBasis" value="time" checked>◷ Time</label><label><input type="radio" name="captureBasis" value="hour_meter">◉ Hour Meter</label></div><label class="field">Time value<input name="timeValue" type="number" min="0" step="0.001" value="0"></label><div class="units"><label><input type="radio" name="timeUnit" value="hours" checked> Hours</label><label><input type="radio" name="timeUnit" value="minutes"> Minutes</label><label><input type="radio" name="timeUnit" value="seconds"> Seconds</label></div><div class="twocol"><label class="field">Hour meter start<input name="hourMeterStart" type="number" min="0" step="0.01"></label><label class="field">Hour meter end<input name="hourMeterEnd" type="number" min="0" step="0.01"></label></div><div class="steps">3. Tonnes (Optional)</div><label class="field">Tonnes<input name="tonnes" type="number" min="0" step="0.01" placeholder="Optional"></label><div class="steps">4. Breakdown details (optional)</div><label class="field">Fault / reason<textarea name="faultReason" placeholder="Leave blank if normal operation"></textarea></label><div class="twocol"><label class="field">Breakdown start<input name="breakdownStart" type="datetime-local"></label><label class="field">Breakdown end<input name="breakdownEnd" type="datetime-local"></label></div><label class="field">Severity<select name="severity"><option>medium</option><option>high</option><option>critical</option><option>low</option></select></label><button class="btn" type="submit" ${machines.length ? "" : "disabled"}>Save Daily Report</button></form><div class="steps">Or import report</div><form method="post" action="/company-admin/daily/import" enctype="multipart/form-data"><div class="filebox"><label class="field">Excel / CSV<input name="file" type="file" accept=".xlsx,.xls,.csv,text/csv" required></label><button class="btn blue" type="submit">Open / Import</button></div></form></aside>`;
 }
 
 async function usersPage(env: CompanyAdminEnv, s: AdminSession, url: URL) {
@@ -396,7 +406,7 @@ async function usersPage(env: CompanyAdminEnv, s: AdminSession, url: URL) {
       (role) =>
         `<label style="display:inline-block;margin:4px 9px 4px 0;font-size:10px"><input type="checkbox" name="role" value="${role}" ${selected.includes(role) ? "checked" : ""}> ${esc(roleName(role))}</label>`,
     ).join("");
-  const body = `${msg ? `<div class="notice ${tone}">${esc(msg)}</div>` : ""}<div class="pagehead"><div><h1>Users & Roles</h1><p>One email can hold several roles in this company. Users choose a workspace role after signing in.</p></div></div><div class="split"><section class="panel"><h2>Create user or add roles</h2><form method="post" action="/company-admin/users/add"><label class="field">Full name<input name="fullName" required></label><label class="field">Email<input name="email" type="email" required></label><div class="field">Roles<div>${roleChecks(["mechanic"])}</div></div><label class="field">Temporary password<input name="password" type="password" minlength="10"><small>Required for a new email. Leave blank when adding roles to an existing user.</small></label><button class="btn" type="submit">Save User & Roles</button></form></section><section class="panel"><h2>Company users</h2><table class="bigtable"><thead><tr><th>Name</th><th>Email</th><th>Roles</th><th>Status</th><th>Access</th></tr></thead><tbody>${rows
+  const body = `${msg ? `<div class="notice ${tone}">${esc(msg)}</div>` : ""}<div class="pagehead"><div><h1>Users & Roles</h1><p>Invite employees securely, then manage additional roles after they activate their account.</p></div></div><div class="split"><section class="panel"><h2>Invite a user</h2><p style="font-size:12px;color:#5f6d76;line-height:1.5;margin-top:-4px">The user receives a secure email link, creates their own password, and activates the assigned workspace role. The link expires after 48 hours.</p><form method="post" action="/company-admin/users/invite"><label class="field">Full name<input name="fullName" required></label><label class="field">Email<input name="email" type="email" required></label><label class="field">Initial role<select name="role" required><option value="company_admin">Company Administrator</option><option value="manager">Mine Manager</option><option value="engineer">Engineer</option><option value="supervisor">Supervisor</option><option value="mechanic" selected>Mechanic</option></select></label><button class="btn" type="submit">Send Invitation Email</button><a href="/invite-delivery" style="display:block;text-align:center;margin-top:10px;padding:11px 14px;border:1px solid #b9d9c7;border-radius:8px;color:#087548;text-decoration:none;font-size:12px;font-weight:800;background:#f4fbf7">Check Invitation Delivery</a><small style="display:block;color:#6b7780;margin-top:9px;line-height:1.4">No temporary password is created. Add more roles after the user accepts the invitation.</small></form></section><section class="panel"><h2>Company users</h2><table class="bigtable"><thead><tr><th>Name</th><th>Email</th><th>Roles</th><th>Status</th><th>Access</th></tr></thead><tbody>${rows
     .map((r) => {
       const selected = String(r.roles || r.role)
         .split(",")
@@ -437,9 +447,16 @@ async function dailyPage(env: CompanyAdminEnv, s: AdminSession, url: URL) {
       .bind(s.companyId, isoDate())
       .all<Record<string, unknown>>()
   ).results;
+  const fleetOptions = (
+    await env.DB.prepare(
+      "SELECT fleet_number AS fleet,site FROM machines WHERE company_id=? AND lower(status) NOT IN ('retired','inactive') ORDER BY fleet_number",
+    )
+      .bind(s.companyId)
+      .all<Record<string, unknown>>()
+  ).results;
   const msg = url.searchParams.get("msg"),
     tone = url.searchParams.get("tone") === "err" ? "err" : "";
-  const body = `${msg ? `<div class="notice ${tone}">${esc(msg)}</div>` : ""}<div class="pagehead"><div><h1>Daily Reports</h1><p>Manual capture or automatic Excel/CSV import. Time or hour-meter based.</p></div></div><div class="dashboard-grid"><div><section class="panel"><h2>Missing reports today (${missing.length})</h2>${missing.length ? `<table class="bigtable"><thead><tr><th>Date</th><th>Site</th><th>Machine</th></tr></thead><tbody>${missing.map((r) => `<tr><td>${isoDate()}</td><td>${esc(r.site)}</td><td>${esc(r.fleet)}</td></tr>`).join("")}</tbody></table>` : `<div class="empty">No missing reports for registered machines.</div>`}</section><section class="panel section"><h2>Daily report history</h2><table class="bigtable"><thead><tr><th>Date</th><th>Site</th><th>Machine</th><th>Activity</th><th>Capture</th><th>Duration h</th><th>Tonnes</th><th>Fault / reason</th><th>Source</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${esc(r.reportDate)}</td><td>${esc(r.site)}</td><td>${esc(r.fleet)}</td><td>${esc(r.activity)}</td><td>${esc(r.basis)}${r.basis === "time" ? ` (${esc(r.timeUnit)})` : ""}</td><td>${num(r.duration).toFixed(3)}</td><td>${r.tonnes == null ? "—" : num(r.tonnes).toFixed(2)}</td><td>${esc(r.fault || "—")}</td><td>${esc(r.sourceKind)}</td></tr>`).join("")}</tbody></table></section></div>${dailyCapturePanel(settings)}</div>`;
+  const body = `${msg ? `<div class="notice ${tone}">${esc(msg)}</div>` : ""}<div class="pagehead"><div><h1>Daily Reports</h1><p>Manual capture or automatic Excel/CSV import. Time or hour-meter based.</p></div></div><div class="dashboard-grid"><div><section class="panel"><h2>Missing reports today (${missing.length})</h2>${missing.length ? `<table class="bigtable"><thead><tr><th>Date</th><th>Site</th><th>Machine</th></tr></thead><tbody>${missing.map((r) => `<tr><td>${isoDate()}</td><td>${esc(r.site)}</td><td>${esc(r.fleet)}</td></tr>`).join("")}</tbody></table>` : `<div class="empty">No missing reports for registered machines.</div>`}</section><section class="panel section"><h2>Daily report history</h2><table class="bigtable"><thead><tr><th>Date</th><th>Site</th><th>Machine</th><th>Activity</th><th>Capture</th><th>Duration h</th><th>Tonnes</th><th>Fault / reason</th><th>Source</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${esc(r.reportDate)}</td><td>${esc(r.site)}</td><td>${esc(r.fleet)}</td><td>${esc(r.activity)}</td><td>${esc(r.basis)}${r.basis === "time" ? ` (${esc(r.timeUnit)})` : ""}</td><td>${num(r.duration).toFixed(3)}</td><td>${r.tonnes == null ? "—" : num(r.tonnes).toFixed(2)}</td><td>${esc(r.fault || "—")}</td><td>${esc(r.sourceKind)}</td></tr>`).join("")}</tbody></table></section></div>${dailyCapturePanel(settings, fleetOptions)}</div>`;
   return responseHtml(shell(s, "daily", "Daily Reports", body));
 }
 
@@ -1062,8 +1079,12 @@ async function handlePost(
     if (!(file instanceof File))
       return redirect(toastUrl("fleet", "Choose an Excel or CSV file.", "err"));
     try {
+      if (!/\.(csv|xlsx|xls)$/i.test(file.name) || file.size === 0)
+        return redirect(toastUrl("fleet", "Choose a non-empty Excel or CSV fleet file.", "err"));
       const rows = await importWorkbook(file);
-      let count = 0;
+      let created = 0,
+        updated = 0,
+        skipped = 0;
       for (const raw of rows) {
         const n: Record<string, unknown> = {};
         Object.entries(raw).forEach(
@@ -1073,28 +1094,36 @@ async function handlePost(
           n.machineid || n.fleetnumber || n.machine || n.fleet,
           120,
         );
-        if (!fleet) continue;
-        await env.DB.prepare(
-          "INSERT INTO machines(company_id,fleet_number,category,site,status,operating_hours,availability_target,next_service_hours,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
-        )
-          .bind(
-            s.companyId,
-            fleet,
-            txt(n.type || n.category || "Machine", 120),
-            txt(n.site || "Main Site", 120),
-            lower(n.status || "operating"),
-            num(n.hourmeter || n.operatinghours),
-            0.9,
-            String(n.nextservicehour || n.nextservicehours || "").trim() === ""
-              ? null
-              : num(n.nextservicehour || n.nextservicehours),
-            new Date().toISOString(),
-          )
-          .run();
-        count++;
+        if (!fleet) {
+          skipped++;
+          continue;
+        }
+        const category = txt(n.type || n.category || "Machine", 120);
+        const site = txt(n.site || "Main Site", 120);
+        const status = lower(n.status || "operating");
+        const operatingHours = num(n.hourmeter || n.operatinghours);
+        const nextService = String(n.nextservicehour || n.nextservicehours || "").trim() === ""
+          ? null
+          : num(n.nextservicehour || n.nextservicehours);
+        const existing = await env.DB.prepare(
+          "SELECT id FROM machines WHERE company_id=? AND lower(fleet_number)=lower(?) ORDER BY id LIMIT 1",
+        ).bind(s.companyId, fleet).first<Record<string, unknown>>();
+        if (existing) {
+          await env.DB.prepare(
+            "UPDATE machines SET fleet_number=?,category=?,site=?,status=?,operating_hours=?,next_service_hours=? WHERE id=? AND company_id=?",
+          ).bind(fleet, category, site, status, operatingHours, nextService, num(existing.id), s.companyId).run();
+          updated++;
+        } else {
+          await env.DB.prepare(
+            "INSERT INTO machines(company_id,fleet_number,category,site,status,operating_hours,availability_target,next_service_hours,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
+          ).bind(s.companyId, fleet, category, site, status, operatingHours, 0.9, nextService, new Date().toISOString()).run();
+          created++;
+        }
       }
+      if (!created && !updated)
+        return redirect(toastUrl("fleet", "No machine rows were found. Include a Machine ID or Fleet Number column.", "err"));
       return redirect(
-        toastUrl("fleet", `${count} machine record(s) imported.`),
+        toastUrl("fleet", `${created} machine(s) registered, ${updated} updated${skipped ? `, ${skipped} skipped` : ""}. They are now available in Daily Reports.`),
       );
     } catch (e) {
       return redirect(
