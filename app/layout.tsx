@@ -32,7 +32,31 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="antialiased">{children}<InstallRegister/></body>
+      <body className="antialiased">
+        {children}
+        <a
+          href="/subscription"
+          aria-label="Open payments and subscription"
+          style={{
+            position: "fixed",
+            right: 18,
+            bottom: 18,
+            zIndex: 9999,
+            background: "#172033",
+            color: "#fff",
+            textDecoration: "none",
+            fontWeight: 800,
+            fontFamily: "Arial, sans-serif",
+            fontSize: 13,
+            padding: "11px 15px",
+            borderRadius: 10,
+            boxShadow: "0 8px 24px rgba(0,0,0,.18)",
+          }}
+        >
+          Payments / Subscription
+        </a>
+        <InstallRegister/>
+      </body>
     </html>
   );
 }
