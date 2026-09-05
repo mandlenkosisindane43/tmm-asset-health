@@ -2,195 +2,109 @@
 
 import { useMemo, useState } from "react";
 
-const sections = [
-  "Dashboard",
-  "Fleet",
-  "Breakdowns",
-  "Maintenance",
-  "Work orders",
-  "Production",
-  "Documents",
-  "Reports",
-];
+const sections = ["Dashboard","Fleet","Breakdowns","Maintenance","Production","Reports","Users & roles"] as const;
+type Section = (typeof sections)[number];
 
 const fleet = [
-  { unit: "ADT-01", type: "Articulated Dump Truck", site: "North Pit", status: "Operating", hours: 6842, service: 72 },
-  { unit: "ADT-02", type: "Articulated Dump Truck", site: "North Pit", status: "Operating", hours: 6179, service: 118 },
-  { unit: "EXC-01", type: "Excavator", site: "Box Cut", status: "Attention", hours: 9251, service: 18 },
-  { unit: "EXC-02", type: "Excavator", site: "South Pit", status: "Operating", hours: 7714, service: 146 },
-  { unit: "LDV-04", type: "Light Delivery Vehicle", site: "Workshop", status: "Operating", hours: 3120, service: 210 },
-  { unit: "DOZ-01", type: "Dozer", site: "Discard", status: "Down", hours: 11032, service: 0 },
-];
+  ["EXC-01","Excavator","North Pit","Operating",9251,18],["EXC-02","Excavator","North Pit","Operating",7714,146],["EXC-03","Excavator","South Pit","Operating",8044,92],
+  ["ADT-01","ADT","North Pit","Operating",6842,72],["ADT-02","ADT","North Pit","Operating",6179,118],["ADT-03","ADT","North Pit","Operating",7104,204],["ADT-04","ADT","South Pit","Attention",5901,38],["ADT-05","ADT","South Pit","Operating",6420,181],["ADT-06","ADT","South Pit","Operating",7011,96],
+  ["DOZ-01","Dozer","Discard","Down",11032,0],["DOZ-02","Dozer","North Pit","Operating",9820,126],["DOZ-03","Dozer","South Pit","Operating",8764,164],
+  ["GRD-01","Grader","Haul Roads","Operating",5442,112],["GRD-02","Grader","Haul Roads","Operating",5038,224],
+  ["FEL-01","Front End Loader","ROM","Operating",6889,58],["FEL-02","Front End Loader","ROM","Operating",7345,136],
+  ["WT-01","Water Bowser","Haul Roads","Operating",4302,194],["WT-02","Water Bowser","Haul Roads","Operating",4615,88],
+  ["TLB-01","TLB","Workshop","Operating",2980,167],["LDV-01","LDV","Workshop","Operating",3180,210],["LDV-02","LDV","North Pit","Operating",3428,104],["LDV-03","LDV","South Pit","Operating",2877,186],["LDV-04","LDV","Workshop","Operating",3120,234],
+] as const;
 
 const breakdowns = [
-  { unit: "DOZ-01", fault: "Hydraulic hose failure", opened: "29 Aug · 08:15", downtime: "2.8 h", priority: "Critical" },
-  { unit: "EXC-01", fault: "Boom cylinder oil leak", opened: "29 Aug · 06:40", downtime: "1.2 h", priority: "High" },
-  { unit: "ADT-02", fault: "Intermittent brake warning", opened: "28 Aug · 15:30", downtime: "0.7 h", priority: "Medium" },
-];
+  {unit:"DOZ-01",system:"Hydraulics",fault:"Main lift hose burst",opened:"05 Sep · 07:10",downtime:4.2,priority:"Critical",status:"Repair in progress"},
+  {unit:"ADT-04",system:"Brakes",fault:"Intermittent brake pressure warning",opened:"05 Sep · 09:25",downtime:1.1,priority:"High",status:"Diagnostic test"},
+  {unit:"EXC-01",system:"Hydraulics",fault:"Boom cylinder oil seepage",opened:"04 Sep · 15:40",downtime:0.8,priority:"Medium",status:"Monitor / planned repair"},
+  {unit:"FEL-01",system:"Cooling",fault:"High coolant temperature alarm",opened:"03 Sep · 11:05",downtime:1.6,priority:"Medium",status:"Closed"},
+] as const;
 
 const maintenance = [
-  { unit: "EXC-01", task: "250 h service", due: "18 h", owner: "Workshop Team" },
-  { unit: "ADT-01", task: "500 h service", due: "72 h", owner: "Mechanic A" },
-  { unit: "ADT-02", task: "250 h service", due: "118 h", owner: "Mechanic B" },
-  { unit: "EXC-02", task: "500 h service", due: "146 h", owner: "Workshop Team" },
-];
+  {unit:"EXC-01",task:"250 h service",due:18,risk:"Due soon",owner:"Workshop Team"},
+  {unit:"ADT-04",task:"250 h service",due:38,risk:"Due soon",owner:"Mechanic B"},
+  {unit:"FEL-01",task:"500 h service",due:58,risk:"Plan",owner:"Planner"},
+  {unit:"ADT-01",task:"500 h service",due:72,risk:"Plan",owner:"Mechanic A"},
+  {unit:"WT-02",task:"250 h service",due:88,risk:"Plan",owner:"Workshop Team"},
+] as const;
 
-const workOrders = [
-  { no: "WO-1042", unit: "DOZ-01", job: "Replace failed hydraulic hose", status: "In progress" },
-  { no: "WO-1041", unit: "EXC-01", job: "Inspect boom cylinder leak", status: "Assigned" },
-  { no: "WO-1038", unit: "ADT-02", job: "Brake warning diagnosis", status: "Waiting test" },
-];
+const users = [
+  ["Thabo Mokoena","Company Administrator","Active"],["Naledi Dlamini","Engineering Manager","Active"],["Sipho Nkosi","Engineer","Active"],["Kabelo Maseko","Supervisor","Active"],["Lerato Mthembu","Planner","Active"],["Workshop Team","Mechanic / Technician","Active"],
+] as const;
 
-function Pill({ children, tone = "neutral" }: { children: React.ReactNode; tone?: "good" | "warn" | "bad" | "neutral" }) {
-  return <span className={`pill ${tone}`}>{children}</span>;
-}
+const daily = [
+  {day:"Mon",availability:94.2,utilisation:86.1,actual:18240,target:19000},
+  {day:"Tue",availability:92.8,utilisation:84.4,actual:17680,target:19000},
+  {day:"Wed",availability:91.6,utilisation:82.9,actual:17120,target:19000},
+  {day:"Thu",availability:93.4,utilisation:85.2,actual:18360,target:19000},
+  {day:"Fri",availability:89.8,utilisation:79.6,actual:16440,target:19000},
+  {day:"Sat",availability:91.3,utilisation:81.7,actual:16980,target:19000},
+] as const;
 
-function Metric({ label, value, note }: { label: string; value: string; note: string }) {
-  return (
-    <article className="metric">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      <small>{note}</small>
-    </article>
-  );
-}
+const money = (n:number) => n.toLocaleString("en-ZA");
 
-export default function ContractorDemo() {
-  const [active, setActive] = useState("Dashboard");
-  const [notice, setNotice] = useState("");
+function Pill({children,tone="neutral"}:{children:React.ReactNode;tone?:"good"|"warn"|"bad"|"neutral"}){return <span className={`pill ${tone}`}>{children}</span>}
+function Metric({label,value,note}:{label:string;value:string;note:string}){return <article className="metric"><span>{label}</span><strong>{value}</strong><small>{note}</small></article>}
 
-  const operating = useMemo(() => fleet.filter((m) => m.status === "Operating").length, []);
-  const availability = ((operating + 0.5) / fleet.length) * 100;
+export default function PresentationDemo(){
+  const [active,setActive]=useState<Section>("Dashboard");
+  const [notice,setNotice]=useState("");
+  const operating=useMemo(()=>fleet.filter(x=>x[3]==="Operating").length,[]);
+  const availability=91.3;
+  const utilisation=81.7;
+  const production=16980;
+  const target=19000;
+  const flash=(text:string)=>{setNotice(text);window.setTimeout(()=>setNotice(""),2500)};
 
-  const flash = (message: string) => {
-    setNotice(message);
-    window.setTimeout(() => setNotice(""), 2600);
-  };
+  return <main className="demo-shell">
+    <aside className="sidebar">
+      <div className="brand"><img src="/sindane-logo.png" alt="Sindane Asset Solutions"/><div><strong>TMM Asset Health</strong><small>Client Workspace</small></div></div>
+      <div className="company"><span>DEMO</span><div><strong>Ubuntu Coal Demo Mine</strong><small>Mpumalanga · Open-cast operation</small></div></div>
+      <nav>{sections.map(name=><button key={name} className={active===name?"active":""} onClick={()=>setActive(name)}><i>{name==="Dashboard"?"⌂":name==="Fleet"?"▦":name==="Breakdowns"?"⚙":name==="Maintenance"?"◷":name==="Production"?"P":name==="Reports"?"▥":"♙"}</i>{name}</button>)}</nav>
+      <div className="lic"><small>SOFTWARE LICENCE</small><b>● Active</b><span>Mine Standard · Monthly</span><em>23 / 25 machines registered</em></div>
+      <a className="owner-link" href="/">← Return to SAS Owner</a>
+      <div className="powered">Powered by <b>Sindane Asset Solutions</b></div>
+    </aside>
 
-  return (
-    <main className="contractor-shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <img src="/sindane-logo.png" alt="Sindane Asset Solutions" />
-          <div><strong>TMM Asset Health</strong><small>Contractor Workspace</small></div>
-        </div>
-        <div className="company-card">
-          <span className="dot" />
-          <div><strong>Mining Contractor Demo</strong><small>North Pit Operations</small></div>
-        </div>
-        <nav>
-          {sections.map((name) => (
-            <button key={name} className={active === name ? "active" : ""} onClick={() => setActive(name)}>
-              <span>{name === "Dashboard" ? "⌂" : name === "Fleet" ? "▦" : name === "Breakdowns" ? "⚙" : name === "Maintenance" ? "◷" : name === "Work orders" ? "☑" : name === "Production" ? "P" : name === "Documents" ? "▣" : "▥"}</span>
-              {name}
-            </button>
-          ))}
-        </nav>
-        <div className="licence">
-          <span>● Licence active</span>
-          <strong>Contractor Professional</strong>
-          <small>Secure company workspace</small>
-        </div>
-        <div className="powered">Powered by <b>Sindane Asset Solutions</b></div>
-      </aside>
+    <section className="workspace">
+      <header><div><small>UBUNTU COAL DEMO MINE / {active.toUpperCase()}</small><h1>{active==="Dashboard"?"Company Operations Dashboard":active}</h1></div><div className="actions"><span>SAFE DEMO DATA</span><button onClick={()=>window.print()}>Print</button><button className="primary" onClick={()=>flash("Quick capture ready: choose production, breakdown, inspection or work order.")}>＋ Quick capture</button></div></header>
+      {notice&&<div className="toast">{notice}</div>}
+      <div className="content">
+        {active==="Dashboard"&&<>
+          <section className="hero"><div><small>05 SEPTEMBER 2026 · DAY SHIFT</small><h2>Mine performance at a glance</h2><p>Fleet health, production, breakdowns and maintenance are linked in one workspace so the team can act before downtime grows.</p></div><div className="hero-actions"><button onClick={()=>setActive("Breakdowns")}>View active breakdowns</button><button onClick={()=>setActive("Reports")}>Open management report</button></div></section>
 
-      <section className="workspace">
-        <header>
-          <div>
-            <small>CONTRACTOR PORTAL / {active.toUpperCase()}</small>
-            <h1>{active === "Dashboard" ? "Operations Dashboard" : active}</h1>
+          <div className="metrics"><Metric label="Fleet availability" value={`${availability}%`} note="Target ≥ 90% · on target"/><Metric label="Utilisation" value={`${utilisation}%`} note="Productive hours ÷ available hours"/><Metric label="Machines operating" value={`${operating} / 23`} note="1 down · 1 attention"/><Metric label="Production today" value={`${money(production)} t`} note={`${(production/target*100).toFixed(1)}% of ${money(target)} t target`}/><Metric label="Open breakdowns" value="3" note="1 critical · 1 high · 1 medium"/></div>
+
+          <div className="grid-two">
+            <section className="panel"><div className="panel-head"><div><small>FLEET HEALTH</small><h3>Current machine status</h3></div><button onClick={()=>setActive("Fleet")}>View all 23</button></div><div className="status-block"><div><b>{operating}</b><span>Operating</span></div><div><b>1</b><span>Attention</span></div><div><b>1</b><span>Down</span></div></div>{fleet.filter(x=>x[3]!=="Operating").map(x=><div className="row" key={x[0]}><b>{x[0]}</b><span>{x[1]} · {x[2]}</span><Pill tone={x[3]==="Down"?"bad":"warn"}>{x[3]}</Pill></div>)}</section>
+            <section className="panel"><div className="panel-head"><div><small>ACTIVE EVENTS</small><h3>Breakdown priorities</h3></div><button onClick={()=>setActive("Breakdowns")}>Breakdown register</button></div>{breakdowns.slice(0,3).map(b=><div className="break" key={b.unit+b.fault}><div><b>{b.unit}</b><span>{b.fault}</span><small>{b.system} · {b.opened}</small></div><div><strong>{b.downtime} h</strong><Pill tone={b.priority==="Critical"?"bad":b.priority==="High"?"warn":"neutral"}>{b.priority}</Pill></div></div>)}</section>
           </div>
-          <div className="header-actions">
-            <span className="demo-badge">LIVE DEMO</span>
-            <button onClick={() => window.print()}>Print</button>
-            <button className="primary" onClick={() => flash("Quick capture opened for this demo workspace.")}>＋ Quick capture</button>
+
+          <div className="grid-two">
+            <section className="panel"><div className="panel-head"><div><small>MAINTENANCE RISK</small><h3>Services approaching due</h3></div><button onClick={()=>setActive("Maintenance")}>Open maintenance</button></div>{maintenance.slice(0,4).map(m=><div className="maint" key={m.unit}><b>{m.unit}</b><span>{m.task}</span><strong>{m.due} h</strong><Pill tone={m.due<50?"warn":"good"}>{m.risk}</Pill></div>)}</section>
+            <section className="panel"><div className="panel-head"><div><small>SHIFT PERFORMANCE</small><h3>Production vs target</h3></div><b className="percent">{(production/target*100).toFixed(1)}%</b></div><div className="progress"><span style={{width:`${production/target*100}%`}}/></div><div className="prod"><div><small>Actual</small><b>{money(production)} t</b></div><div><small>Target</small><b>{money(target)} t</b></div><div><small>Variance</small><b>-{money(target-production)} t</b></div></div><p className="insight"><b>SAS insight:</b> Production is below target while availability remains above target. Review utilisation and delays before treating this as a reliability problem.</p></section>
           </div>
-        </header>
 
-        {notice && <div className="toast">{notice}</div>}
+          <section className="panel"><div className="panel-head"><div><small>6-DAY TREND</small><h3>Availability, utilisation and production</h3></div><button onClick={()=>setActive("Reports")}>Generate report</button></div><div className="trend">{daily.map(d=><div key={d.day}><span>{d.day}</span><div className="bars"><i style={{height:`${d.availability}%`}} title={`Availability ${d.availability}%`}/><em style={{height:`${d.utilisation}%`}} title={`Utilisation ${d.utilisation}%`}/></div><small>{d.actual.toLocaleString()}</small></div>)}</div><div className="legend"><span>■ Availability</span><span>■ Utilisation</span><span>Production shown below each day (t)</span></div></section>
+        </>}
 
-        <div className="content">
-          {active === "Dashboard" && (
-            <>
-              <div className="welcome">
-                <div><small>Saturday, 29 August 2026</small><h2>Good morning, Contractor Team</h2><p>One view of fleet health, downtime, maintenance and production performance.</p></div>
-                <button onClick={() => setActive("Breakdowns")}>View active breakdowns →</button>
-              </div>
-              <div className="metrics">
-                <Metric label="Fleet availability" value={`${availability.toFixed(1)}%`} note="Target ≥ 90%" />
-                <Metric label="Units operating" value={`${operating} / ${fleet.length}`} note="1 attention · 1 down" />
-                <Metric label="Open breakdowns" value="3" note="2 require workshop action" />
-                <Metric label="Production today" value="8 460 t" note="84.6% of 10 000 t target" />
-              </div>
+        {active==="Fleet"&&<Table title="Fleet register" subtitle="23 registered machines across operating areas" headers={["Fleet","Machine type","Site / area","Status","Hour meter","Service due"]} rows={fleet.map(x=>[x[0],x[1],x[2],x[3],Number(x[4]).toLocaleString(),`${x[5]} h`])}/>} 
+        {active==="Breakdowns"&&<><div className="metrics"><Metric label="Open events" value="3" note="1 critical priority"/><Metric label="Current downtime" value="6.1 h" note="Open events only"/><Metric label="MTTR this month" value="2.4 h" note="Average repair duration"/><Metric label="Repeat failures" value="1" note="Hydraulic system watch"/></div><Table title="Breakdown register" subtitle="Fault, system, downtime, priority and recovery status" headers={["Fleet","System","Fault / reason","Opened","Downtime","Priority","Status"]} rows={breakdowns.map(b=>[b.unit,b.system,b.fault,b.opened,`${b.downtime} h`,b.priority,b.status])}/></>}
+        {active==="Maintenance"&&<><div className="metrics"><Metric label="Service compliance" value="96.2%" note="Completed within interval"/><Metric label="Due < 50 h" value="2" note="Schedule before threshold"/><Metric label="Overdue services" value="0" note="No current overdue assets"/><Metric label="Open work orders" value="4" note="Workshop + field work"/></div><Table title="Maintenance planner" subtitle="Hour-meter based service forecasting" headers={["Fleet","Task","Due in","Risk","Responsible"]} rows={maintenance.map(m=>[m.unit,m.task,`${m.due} h`,m.risk,m.owner])}/></>}
+        {active==="Production"&&<><div className="metrics"><Metric label="Today actual" value={`${money(production)} t`} note={`${money(target)} t target`}/><Metric label="Achievement" value={`${(production/target*100).toFixed(1)}%`} note="Daily production performance"/><Metric label="Availability" value={`${availability}%`} note="Above 90% target"/><Metric label="Utilisation" value={`${utilisation}%`} note="Main performance opportunity"/></div><Table title="Daily production history" subtitle="Production, availability and utilisation in the same record" headers={["Day","Target","Actual","Achievement","Availability","Utilisation"]} rows={daily.map(d=>[d.day,`${money(d.target)} t`,`${money(d.actual)} t`,`${(d.actual/d.target*100).toFixed(1)}%`,`${d.availability}%`,`${d.utilisation}%`])}/></>}
+        {active==="Reports"&&<Reports flash={flash}/>} 
+        {active==="Users & roles"&&<><div className="metrics"><Metric label="Active users" value="6" note="Role-based access"/><Metric label="Pending invites" value="1" note="Expires after 7 days"/><Metric label="Company admins" value="1" note="Workspace administration"/><Metric label="SAS owner access" value="Separate" note="Platform governance only"/></div><Table title="Company users & permissions" subtitle="Each person sees only the tools required by their job" headers={["User","Role","Status"]} rows={users.map(x=>[x[0],x[1],x[2]])}/></>}
+      </div>
+    </section>
 
-              <div className="grid-two">
-                <section className="panel">
-                  <div className="panel-title"><div><small>ASSET HEALTH</small><h3>Fleet status</h3></div><button onClick={() => setActive("Fleet")}>View fleet</button></div>
-                  <div className="fleet-mini">
-                    {fleet.slice(0, 5).map((m) => (
-                      <div key={m.unit} className="mini-row"><b>{m.unit}</b><span>{m.type}</span><Pill tone={m.status === "Operating" ? "good" : m.status === "Down" ? "bad" : "warn"}>{m.status}</Pill></div>
-                    ))}
-                  </div>
-                </section>
-                <section className="panel">
-                  <div className="panel-title"><div><small>DOWNTIME</small><h3>Latest breakdowns</h3></div><button onClick={() => setActive("Breakdowns")}>Open register</button></div>
-                  {breakdowns.map((b) => (
-                    <div key={b.unit + b.fault} className="break-row"><div><b>{b.unit}</b><span>{b.fault}</span><small>{b.opened}</small></div><div><strong>{b.downtime}</strong><Pill tone={b.priority === "Critical" ? "bad" : b.priority === "High" ? "warn" : "neutral"}>{b.priority}</Pill></div></div>
-                  ))}
-                </section>
-              </div>
-
-              <div className="grid-two lower">
-                <section className="panel">
-                  <div className="panel-title"><div><small>PLANNED WORK</small><h3>Maintenance due</h3></div><button onClick={() => setActive("Maintenance")}>Maintenance</button></div>
-                  {maintenance.slice(0, 3).map((m) => <div key={m.unit} className="simple-row"><b>{m.unit}</b><span>{m.task}</span><strong>{m.due}</strong></div>)}
-                </section>
-                <section className="panel production-card">
-                  <div className="panel-title"><div><small>SHIFT PERFORMANCE</small><h3>Production vs target</h3></div><b>84.6%</b></div>
-                  <div className="bar"><span style={{ width: "84.6%" }} /></div>
-                  <div className="prod-numbers"><div><small>Actual</small><strong>8 460 t</strong></div><div><small>Target</small><strong>10 000 t</strong></div><div><small>Variance</small><strong>-1 540 t</strong></div></div>
-                </section>
-              </div>
-            </>
-          )}
-
-          {active === "Fleet" && (
-            <Table title="Contractor fleet register" subtitle="Current machine status, site and service position" headers={["Fleet no.", "Machine", "Site", "Status", "Hours", "Service due"]} rows={fleet.map((m) => [m.unit, m.type, m.site, m.status, m.hours.toLocaleString(), `${m.service} h`])} />
-          )}
-          {active === "Breakdowns" && (
-            <Table title="Breakdown register" subtitle="Open equipment faults and current downtime" headers={["Fleet no.", "Fault / reason", "Opened", "Downtime", "Priority"]} rows={breakdowns.map((b) => [b.unit, b.fault, b.opened, b.downtime, b.priority])} />
-          )}
-          {active === "Maintenance" && (
-            <Table title="Planned maintenance" subtitle="Services and inspections approaching due hours" headers={["Fleet no.", "Task", "Due in", "Responsible"]} rows={maintenance.map((m) => [m.unit, m.task, m.due, m.owner])} />
-          )}
-          {active === "Work orders" && (
-            <Table title="Work orders" subtitle="Track assigned maintenance actions to completion" headers={["Work order", "Fleet no.", "Job", "Status"]} rows={workOrders.map((w) => [w.no, w.unit, w.job, w.status])} />
-          )}
-          {active === "Production" && (
-            <Table title="Daily production" subtitle="Contractor shift performance linked to equipment availability" headers={["Date", "Shift", "Target", "Actual", "Availability", "Utilisation"]} rows={[["29 Aug 2026", "Day", "10 000 t", "8 460 t", `${availability.toFixed(1)}%`, "79.4%"], ["28 Aug 2026", "Day", "10 000 t", "9 180 t", "91.7%", "84.2%"], ["27 Aug 2026", "Day", "10 000 t", "9 640 t", "94.1%", "87.0%"]]} />
-          )}
-          {active === "Documents" && (
-            <Cards title="Contractor documents" items={["Purchase orders & quotations", "OEM manuals and service sheets", "Inspection documents", "Job card attachments", "Breakdown photos and evidence", "Maintenance certificates"]} onOpen={flash} />
-          )}
-          {active === "Reports" && (
-            <Cards title="Reports available to contractor" items={["Daily operations report", "Weekly fleet summary", "Monthly availability report", "Downtime Pareto report", "Maintenance compliance report", "Production vs target report"]} onOpen={(name) => flash(`${name} selected. Export options are available in the full licensed workspace.`)} />
-          )}
-        </div>
-      </section>
-
-      <style>{`
-        *{box-sizing:border-box}.contractor-shell{min-height:100vh;background:#f4f7fb;color:#14213d;font-family:Inter,Arial,sans-serif;display:grid;grid-template-columns:264px 1fr}.sidebar{background:#0c1b33;color:#fff;padding:22px 16px;display:flex;flex-direction:column;min-height:100vh;position:sticky;top:0;height:100vh}.brand{display:flex;align-items:center;gap:11px;padding:4px 6px 22px;border-bottom:1px solid #223552}.brand img{width:42px;height:42px;object-fit:contain;background:#fff;border-radius:9px;padding:4px}.brand strong,.brand small{display:block}.brand strong{font-size:15px}.brand small{font-size:11px;color:#8da4c6;margin-top:3px}.company-card{display:flex;gap:10px;align-items:center;margin:18px 4px 12px;padding:12px;border:1px solid #29405f;border-radius:12px;background:#112642}.company-card .dot{width:9px;height:9px;border-radius:50%;background:#33c27f}.company-card strong,.company-card small{display:block}.company-card strong{font-size:12px}.company-card small{font-size:10px;color:#91a8c8;margin-top:3px}.sidebar nav{display:flex;flex-direction:column;gap:4px}.sidebar nav button{border:0;background:transparent;color:#b6c6db;padding:10px 11px;border-radius:9px;text-align:left;display:flex;gap:11px;align-items:center;cursor:pointer;font-weight:650}.sidebar nav button span{width:20px;text-align:center;color:#7992b3}.sidebar nav button:hover,.sidebar nav button.active{background:#19385e;color:#fff}.sidebar nav button.active span{color:#5bb7ff}.licence{margin-top:auto;border:1px solid #25415e;background:#102846;border-radius:12px;padding:13px}.licence span,.licence strong,.licence small{display:block}.licence span{font-size:10px;color:#4dde93}.licence strong{font-size:12px;margin:5px 0}.licence small{font-size:10px;color:#8da4c6}.powered{font-size:9px;color:#7088a7;text-align:center;margin-top:15px}.workspace{min-width:0}.workspace header{height:86px;background:#fff;border-bottom:1px solid #dce4ef;padding:17px 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}.workspace header small{font-size:10px;color:#7c8aa2;font-weight:750;letter-spacing:.08em}.workspace header h1{font-size:23px;margin:4px 0 0}.header-actions{display:flex;gap:9px;align-items:center}.header-actions button,.panel-title button,.welcome button{border:1px solid #d5dfeb;background:#fff;border-radius:8px;padding:9px 12px;cursor:pointer;font-weight:700;color:#28405e}.header-actions .primary{background:#1267b3;color:#fff;border-color:#1267b3}.demo-badge{font-size:10px;font-weight:800;color:#7a4a00;background:#fff2c9;border:1px solid #f0d98d;padding:6px 8px;border-radius:999px}.content{padding:24px 28px 42px;max-width:1500px;margin:0 auto}.welcome{background:linear-gradient(125deg,#102b4d,#174f80);color:#fff;border-radius:16px;padding:25px 28px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 10px 28px rgba(18,52,90,.13)}.welcome small{color:#9fc4e8}.welcome h2{margin:4px 0 5px;font-size:25px}.welcome p{margin:0;color:#c4d8eb;font-size:13px}.welcome button{border-color:#5f83a6;background:#fff;color:#173c62}.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin:16px 0}.metric{background:#fff;border:1px solid #dde5ef;border-radius:13px;padding:17px;box-shadow:0 4px 12px rgba(31,55,82,.04)}.metric span,.metric small{display:block;color:#718198}.metric span{font-size:11px;font-weight:750}.metric strong{display:block;font-size:27px;margin:8px 0 5px;color:#102943}.metric small{font-size:10px}.grid-two{display:grid;grid-template-columns:1.1fr .9fr;gap:14px}.grid-two.lower{margin-top:14px}.panel,.table-panel{background:#fff;border:1px solid #dde5ef;border-radius:13px;padding:18px;box-shadow:0 4px 12px rgba(31,55,82,.04)}.panel-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}.panel-title small{font-size:9px;color:#8190a5;font-weight:800;letter-spacing:.1em}.panel-title h3{margin:3px 0 0;font-size:16px}.panel-title button{padding:6px 8px;font-size:10px}.fleet-mini,.break-row{border-top:1px solid #edf1f6}.mini-row{display:grid;grid-template-columns:70px 1fr auto;gap:9px;align-items:center;padding:11px 2px;border-bottom:1px solid #edf1f6;font-size:12px}.mini-row span:nth-child(2){color:#62738b}.pill{display:inline-block;padding:4px 7px;border-radius:999px;font-size:9px;font-weight:800;background:#edf2f7;color:#51627a}.pill.good{background:#e2f6eb;color:#177245}.pill.warn{background:#fff0d7;color:#9a5a00}.pill.bad{background:#ffe4e4;color:#a82828}.break-row{display:flex;justify-content:space-between;padding:11px 2px}.break-row>div:first-child b,.break-row span,.break-row small{display:block}.break-row>div:first-child b{font-size:12px}.break-row span{font-size:11px;margin:2px 0;color:#4e6079}.break-row small{font-size:9px;color:#8a97aa}.break-row>div:last-child{text-align:right}.break-row>div:last-child strong{display:block;font-size:12px;margin-bottom:4px}.simple-row{display:grid;grid-template-columns:80px 1fr auto;gap:8px;padding:12px 2px;border-top:1px solid #edf1f6;font-size:12px}.simple-row span{color:#5f7187}.simple-row strong{color:#9a5a00}.production-card .bar{height:10px;background:#e8eef5;border-radius:999px;overflow:hidden}.production-card .bar span{display:block;height:100%;background:#1d75bd;border-radius:999px}.prod-numbers{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:18px}.prod-numbers div{background:#f7f9fc;border-radius:9px;padding:10px}.prod-numbers small,.prod-numbers strong{display:block}.prod-numbers small{font-size:9px;color:#8190a5}.prod-numbers strong{margin-top:4px;font-size:13px}.table-panel{padding:0;overflow:hidden}.table-heading{padding:20px 22px;border-bottom:1px solid #e3e9f1}.table-heading h2{margin:0 0 5px;font-size:20px}.table-heading p{margin:0;color:#718198;font-size:12px}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:12px}th{background:#f7f9fc;color:#65758b;text-transform:uppercase;font-size:9px;letter-spacing:.05em;text-align:left;padding:11px 14px;border-bottom:1px solid #e2e8f0}td{padding:13px 14px;border-bottom:1px solid #edf1f5;color:#2d405a}tbody tr:hover{background:#fbfcfe}.card-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}.action-card{background:#fff;border:1px solid #dde5ef;border-radius:13px;padding:20px;cursor:pointer;text-align:left;min-height:118px}.action-card:hover{border-color:#95bfe4;box-shadow:0 7px 18px rgba(31,74,114,.09)}.action-card small{display:block;color:#7e8da3;font-size:9px;font-weight:800}.action-card strong{display:block;margin:8px 0;color:#17324f;font-size:15px}.action-card span{font-size:11px;color:#1267b3;font-weight:750}.toast{position:fixed;right:28px;top:98px;background:#133c61;color:#fff;padding:12px 16px;border-radius:10px;font-size:12px;z-index:30;box-shadow:0 8px 30px rgba(0,0,0,.16)}
-        @media(max-width:1000px){.contractor-shell{grid-template-columns:82px 1fr}.sidebar{padding:18px 10px}.brand div,.company-card div,.sidebar nav button:not(.active){font-size:0}.brand img{width:40px}.sidebar nav button{justify-content:center}.sidebar nav button span{font-size:15px}.licence,.powered{display:none}.metrics{grid-template-columns:repeat(2,1fr)}.grid-two{grid-template-columns:1fr}.card-grid{grid-template-columns:repeat(2,1fr)}}
-        @media(max-width:680px){.contractor-shell{display:block}.sidebar{position:relative;height:auto;min-height:0;display:block}.brand{border:0;padding-bottom:10px}.brand div{display:block}.company-card,.licence,.powered{display:none}.sidebar nav{flex-direction:row;overflow:auto}.sidebar nav button,.sidebar nav button:not(.active){font-size:0;min-width:44px;padding:9px}.sidebar nav button span{font-size:15px}.workspace header{height:auto;padding:14px 16px;align-items:flex-start}.workspace header h1{font-size:18px}.demo-badge,.header-actions button:not(.primary){display:none}.header-actions .primary{font-size:0;padding:9px}.header-actions .primary:after{content:'＋';font-size:16px}.content{padding:14px}.welcome{display:block;padding:20px}.welcome button{margin-top:14px}.metrics{grid-template-columns:1fr 1fr}.metric strong{font-size:21px}.card-grid{grid-template-columns:1fr}.prod-numbers{grid-template-columns:1fr}.toast{right:14px;left:14px;top:90px}}
-      `}</style>
-    </main>
-  );
+    <style>{`
+      *{box-sizing:border-box}.demo-shell{min-height:100vh;background:#f4f7fb;color:#172033;font-family:Arial,sans-serif;display:grid;grid-template-columns:270px minmax(0,1fr)}.sidebar{background:#101a2c;color:white;padding:21px 16px;display:flex;flex-direction:column;min-height:100vh;position:sticky;top:0;height:100vh}.brand{display:flex;align-items:center;gap:11px;padding:4px 6px 20px;border-bottom:1px solid #26354c}.brand img{width:42px;height:42px;object-fit:contain;background:white;border-radius:9px;padding:4px}.brand strong,.brand small{display:block}.brand strong{font-size:15px}.brand small{font-size:11px;color:#8fa0b8;margin-top:3px}.company{display:flex;gap:10px;align-items:center;margin:17px 3px 13px;padding:12px;border:1px solid #2a3c56;border-radius:11px;background:#17263d}.company>span{font-size:9px;font-weight:900;padding:5px 6px;border-radius:6px;background:#f7d36b;color:#493700}.company strong,.company small{display:block}.company strong{font-size:12px}.company small{font-size:10px;color:#91a3bd;margin-top:3px}.sidebar nav{display:grid;gap:3px}.sidebar nav button{border:0;background:transparent;color:#bdc8d8;padding:10px 11px;border-radius:8px;text-align:left;display:flex;gap:11px;align-items:center;cursor:pointer;font-weight:700}.sidebar nav button i{font-style:normal;width:20px;text-align:center;color:#8196b4}.sidebar nav button.active,.sidebar nav button:hover{background:#243650;color:white}.lic{margin-top:auto;border:1px solid #30445e;background:#17283e;border-radius:11px;padding:13px}.lic small,.lic b,.lic span,.lic em{display:block}.lic small{font-size:9px;color:#8ea1ba;font-weight:800}.lic b{color:#4fda97;font-size:12px;margin:6px 0}.lic span{font-size:11px}.lic em{font-size:10px;color:#94a5bb;margin-top:5px;font-style:normal}.owner-link{color:#b8c5d8;font-size:11px;margin:13px 4px 0;text-decoration:none}.powered{font-size:9px;color:#72869f;text-align:center;margin-top:13px}.workspace{min-width:0}.workspace header{height:82px;background:white;border-bottom:1px solid #dfe5ed;padding:16px 28px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:5}.workspace header small{font-size:10px;color:#78869b;font-weight:800;letter-spacing:.07em}.workspace header h1{font-size:22px;margin:4px 0 0}.actions{display:flex;gap:8px;align-items:center}.actions>span{font-size:9px;font-weight:900;color:#7c5600;background:#fff2c8;border:1px solid #ecd990;padding:6px 8px;border-radius:999px}.actions button,.panel-head button,.hero button{border:1px solid #d2dae5;background:white;border-radius:8px;padding:9px 12px;font-weight:800;cursor:pointer;color:#253a55}.actions .primary{background:#172033;color:white;border-color:#172033}.content{padding:24px 28px 42px;max-width:1500px;margin:0 auto}.hero{background:linear-gradient(120deg,#172033,#2c4266);color:white;border-radius:16px;padding:25px 27px;display:flex;justify-content:space-between;gap:20px;align-items:center;box-shadow:0 10px 28px rgba(23,32,51,.12)}.hero small{font-size:10px;opacity:.7;font-weight:800}.hero h2{font-size:27px;margin:6px 0}.hero p{font-size:13px;opacity:.82;max-width:720px;line-height:1.5;margin:0}.hero-actions{display:flex;gap:8px;flex-wrap:wrap}.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:13px;margin-top:16px}.metric{background:white;border:1px solid #e0e6ed;border-radius:13px;padding:17px;box-shadow:0 5px 14px rgba(20,33,61,.035)}.metric span{font-size:10px;font-weight:900;color:#78869a;letter-spacing:.04em}.metric strong{display:block;font-size:28px;margin:7px 0 4px}.metric small{font-size:11px;color:#6d7a8d}.grid-two{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}.panel{background:white;border:1px solid #e0e6ed;border-radius:13px;padding:19px}.panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:13px}.panel-head small{font-size:9px;font-weight:900;color:#7b8799}.panel-head h3{font-size:18px;margin:4px 0 0}.panel-head button{padding:7px 10px;font-size:11px}.percent{font-size:23px}.status-block{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}.status-block>div{background:#f7f9fc;border-radius:9px;padding:12px}.status-block b{display:block;font-size:22px}.status-block span{font-size:10px;color:#748094}.row,.maint{display:grid;grid-template-columns:80px 1fr auto;align-items:center;gap:10px;padding:10px 0;border-top:1px solid #edf1f5;font-size:12px}.maint{grid-template-columns:70px 1fr 60px auto}.break{display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-top:1px solid #edf1f5}.break:first-of-type{border-top:0}.break b,.break span,.break small{display:block}.break b{font-size:12px}.break span{font-size:12px;margin:3px 0}.break small{font-size:10px;color:#7d8998}.break>div:last-child{text-align:right}.break strong{display:block;font-size:12px;margin-bottom:5px}.pill{font-size:9px;font-weight:900;padding:5px 7px;border-radius:999px;background:#edf1f5;color:#596677}.pill.good{background:#e6f7ef;color:#087553}.pill.warn{background:#fff3d5;color:#946600}.pill.bad{background:#fde9e7;color:#b02b20}.progress{height:13px;background:#e9eef4;border-radius:999px;overflow:hidden}.progress span{display:block;height:100%;background:#1f6f59}.prod{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:13px}.prod>div{background:#f7f9fb;border-radius:8px;padding:11px}.prod small,.prod b{display:block}.prod small{font-size:9px;color:#7b8798}.prod b{font-size:14px;margin-top:4px}.insight{font-size:11px;color:#526175;line-height:1.5;background:#eef5fb;padding:11px;border-radius:8px;margin:12px 0 0}.trend{height:230px;display:flex;align-items:flex-end;gap:12px;padding:12px 6px 0;border-bottom:1px solid #dfe5ed}.trend>div{flex:1;text-align:center;height:100%;display:grid;grid-template-rows:20px 1fr 22px}.trend>div>span{font-size:10px;color:#687588}.bars{display:flex;align-items:flex-end;justify-content:center;gap:5px}.bars i,.bars em{width:18%;min-width:12px;max-width:24px;border-radius:5px 5px 0 0;display:block}.bars i{background:#273b5b}.bars em{background:#8da3bf}.trend small{font-size:9px;color:#718095;margin-top:5px}.legend{display:flex;gap:18px;flex-wrap:wrap;font-size:10px;color:#687588;margin-top:10px}.toast{position:fixed;right:24px;top:94px;z-index:20;background:#172033;color:white;padding:12px 15px;border-radius:9px;font-size:12px;font-weight:700;box-shadow:0 8px 24px rgba(0,0,0,.16)}.table-card{background:white;border:1px solid #e0e6ed;border-radius:13px;overflow:hidden}.table-top{padding:20px;border-bottom:1px solid #e6ebf1}.table-top h2{font-size:20px;margin:0 0 4px}.table-top p{font-size:12px;color:#728094;margin:0}.table-scroll{overflow:auto}.table-card table{width:100%;border-collapse:collapse;font-size:12px}.table-card th{text-align:left;background:#f7f9fb;color:#687588;font-size:10px;padding:11px;border-bottom:1px solid #e3e8ef}.table-card td{padding:12px 11px;border-bottom:1px solid #edf1f5}.reports{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:13px}.report-card{background:white;border:1px solid #e0e6ed;border-radius:12px;padding:18px}.report-card b{display:block;font-size:15px;margin:8px 0}.report-card p{font-size:11px;color:#6d798a;line-height:1.45;min-height:47px}.report-card button{width:100%;border:1px solid #ced7e2;background:#f8fafc;border-radius:8px;padding:9px;font-weight:800;cursor:pointer;color:#22364f}@media(max-width:1050px){.demo-shell{grid-template-columns:220px 1fr}.grid-two{grid-template-columns:1fr}.workspace header{padding:14px 18px}.content{padding:18px}.actions>span{display:none}}@media(max-width:760px){.demo-shell{display:block}.sidebar{position:relative;height:auto;min-height:auto}.sidebar nav{grid-template-columns:repeat(2,1fr)}.lic{margin-top:14px}.workspace header{position:relative;height:auto;align-items:flex-start;gap:12px}.actions{flex-wrap:wrap}.metrics{grid-template-columns:repeat(2,1fr)}.hero{align-items:flex-start}.hero-actions{width:100%}}
+    `}</style>
+  </main>
 }
 
-function Table({ title, subtitle, headers, rows }: { title: string; subtitle: string; headers: string[]; rows: string[][] }) {
-  return <section className="table-panel"><div className="table-heading"><h2>{title}</h2><p>{subtitle}</p></div><div className="table-wrap"><table><thead><tr>{headers.map((h) => <th key={h}>{h}</th>)}</tr></thead><tbody>{rows.map((row, i) => <tr key={i}>{row.map((cell, j) => <td key={j}>{cell}</td>)}</tr>)}</tbody></table></div></section>;
-}
+function Table({title,subtitle,headers,rows}:{title:string;subtitle:string;headers:string[];rows:(string|number)[][]}){return <section className="table-card"><div className="table-top"><h2>{title}</h2><p>{subtitle}</p></div><div className="table-scroll"><table><thead><tr>{headers.map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{rows.map((r,i)=><tr key={i}>{r.map((c,j)=><td key={j}>{String(c)}</td>)}</tr>)}</tbody></table></div></section>}
 
-function Cards({ title, items, onOpen }: { title: string; items: string[]; onOpen: (name: string) => void }) {
-  return <><div className="table-heading" style={{ padding: "0 0 18px", border: 0 }}><h2>{title}</h2><p>Role-based access keeps each contractor company inside its own workspace.</p></div><div className="card-grid">{items.map((item) => <button key={item} className="action-card" onClick={() => onOpen(item)}><small>TMM ASSET HEALTH</small><strong>{item}</strong><span>Open module →</span></button>)}</div></>;
-}
+function Reports({flash}:{flash:(x:string)=>void}){const reports=[["Daily Operations Report","Production, availability, utilisation and shift exceptions."],["Weekly Fleet Summary","Fleet status, downtime, services and work orders for the week."],["Monthly Management Report","Management KPIs, production trend, downtime and engineering actions."],["Downtime Pareto","Ranks systems and failure reasons by downtime contribution."],["Maintenance Compliance","Services due, completed, overdue and hour-meter compliance."],["Machine History","Full machine record from production to breakdown and maintenance events."]];return <><div className="metrics"><Metric label="Report completeness" value="100%" note="Demo daily records available"/><Metric label="Weekly summary" value="Ready" note="Automatic roll-up"/><Metric label="Monthly summary" value="Ready" note="Automatic roll-up"/><Metric label="Export formats" value="PDF / Excel" note="Plus print workflow"/></div><div className="reports" style={{marginTop:16}}>{reports.map(r=><article className="report-card" key={r[0]}><span>▥</span><b>{r[0]}</b><p>{r[1]}</p><button onClick={()=>flash(`${r[0]} generated for the presentation demo.`)}>Generate report</button></article>)}</div></>}
