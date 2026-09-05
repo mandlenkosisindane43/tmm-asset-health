@@ -15,6 +15,25 @@ export function ensureCoreSchema(): Promise<void> {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS subscriptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_name TEXT NOT NULL UNIQUE,
+      contact_email TEXT,
+      customer_type TEXT NOT NULL,
+      plan_name TEXT NOT NULL,
+      billing_cycle TEXT NOT NULL,
+      subscription_amount REAL NOT NULL DEFAULT 0,
+      implementation_fee REAL NOT NULL DEFAULT 0,
+      max_machines INTEGER NOT NULL DEFAULT 0,
+      max_sites INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'pending_approval',
+      licence_key TEXT NOT NULL UNIQUE,
+      licence_status TEXT NOT NULL DEFAULT 'pending_payment',
+      created_by TEXT NOT NULL,
+      updated_by TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS machines (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       company_id INTEGER NOT NULL,
