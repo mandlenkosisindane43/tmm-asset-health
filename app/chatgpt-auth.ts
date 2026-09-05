@@ -1,4 +1,4 @@
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import { env } from "cloudflare:workers";
 import { redirect } from "next/navigation";
 
@@ -9,8 +9,8 @@ export type ChatGPTUser = {
 };
 
 export const ADMIN_COOKIE = "sas_admin_session";
-const SIGN_IN_PATH = "/signin-with-chatgpt";
-const SIGN_OUT_PATH = "/signout-with-chatgpt";
+const SIGN_IN_PATH = "/login";
+const SIGN_OUT_PATH = "/logout";
 const CALLBACK_PATH = "/callback";
 
 function configuredPassword(): string {
@@ -52,21 +52,13 @@ async function sessionUser(): Promise<ChatGPTUser | null> {
   try {
     const decoded = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
     if (!decoded.email || Number(decoded.exp) < Date.now()) return null;
-    return { displayName: "Company Administrator", email: decoded.email, fullName: "Company Administrator" };
+    return { displayName: "Software Owner", email: decoded.email, fullName: "Mandlenkosi Sindane" };
   } catch { return null; }
 }
 
+// Independent Sindane Asset Solutions authentication.
+// This intentionally does not trust ChatGPT/OAI headers or Cloudflare Access identity headers.
 export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
-  const requestHeaders = await headers();
-  const email =
-    requestHeaders.get("cf-access-authenticated-user-email") ||
-    requestHeaders.get("oai-authenticated-user-email");
-  if (email) {
-    const encoded = requestHeaders.get("oai-authenticated-user-full-name");
-    let fullName: string | null = null;
-    if (encoded) try { fullName = decodeURIComponent(encoded); } catch { fullName = null; }
-    return { displayName: fullName ?? email, email, fullName };
-  }
   return sessionUser();
 }
 
