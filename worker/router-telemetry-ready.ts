@@ -1,4 +1,4 @@
-import currentApp from "./router-trial-zip-package";
+import currentApp from "./router-month-end";
 
 interface ExecutionContext { waitUntil(promise: Promise<unknown>): void; passThroughOnException(): void; }
 interface ScheduledController { scheduledTime:number; cron:string; noRetry():void; }
