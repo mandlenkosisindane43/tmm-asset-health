@@ -1,4 +1,4 @@
-import currentApp from "./router-licence-signature";
+import currentApp from "./router-company-licence-clean";
 import { sindaneLogoDataUri } from "./sindane-logo-data";
 
 interface ExecutionContext { waitUntil(promise: Promise<unknown>): void; passThroughOnException(): void; }
