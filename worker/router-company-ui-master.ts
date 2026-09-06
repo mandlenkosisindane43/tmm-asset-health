@@ -1,0 +1,89 @@
+import currentApp from "./router-recycle-bin";
+
+interface ExecutionContext { waitUntil(promise: Promise<unknown>): void; passThroughOnException(): void; }
+interface ScheduledController { scheduledTime:number; cron:string; noRetry():void; }
+interface Env { DB:D1Database; [key:string]:unknown; }
+type Row=Record<string,unknown>;
+
+const COOKIE="sas_contractor_v2";
+const enc=new TextEncoder();
+const txt=(v:unknown,n=240)=>String(v??"").trim().slice(0,n);
+const num=(v:unknown,f=0)=>{const n=Number(v);return Number.isFinite(n)?n:f};
+const esc=(v:unknown)=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]||c));
+async function sha256(v:string){const b=new Uint8Array(await crypto.subtle.digest("SHA-256",enc.encode(v)));return Array.from(b,x=>x.toString(16).padStart(2,"0")).join("")}
+function cookie(req:Request){const raw=req.headers.get("cookie")||"";for(const p of raw.split(";")){const i=p.indexOf("=");if(i>0&&p.slice(0,i).trim()===COOKIE)return p.slice(i+1).trim()}return ""}
+async function first(env:Env,sql:string,b:unknown[]=[]){try{return await env.DB.prepare(sql).bind(...b).first<Row>()}catch{return null}}
+
+async function session(req:Request,env:Env){const token=cookie(req);if(!token)return null;const h=await sha256(token);return first(env,`SELECT s.company_id,s.account_id,s.expires_at,a.email,a.full_name,a.role,a.status account_status,c.name company_name,c.licence_status,c.expires_at licence_expires,c.grace_days FROM contractor_sessions s JOIN contractor_accounts a ON a.id=s.account_id AND a.company_id=s.company_id JOIN companies c ON c.id=s.company_id WHERE s.token_hash=? LIMIT 1`,[h])}
+
+const COMPANY_PATHS=new Set([
+  "/contractor","/contractor-reports","/trial-demo","/condition-monitoring","/reliability-workflow",
+  "/automatic-alert-email","/security-recovery","/recycle-bin","/month-end","/history-library"
+]);
+
+function activeKey(url:URL){
+  if(url.pathname==="/recycle-bin")return "recycle";
+  if(url.pathname==="/security-recovery")return "security";
+  if(url.pathname==="/trial-demo")return "trial";
+  if(url.pathname==="/contractor-reports")return "reports";
+  if(url.pathname==="/condition-monitoring"||url.pathname==="/reliability-workflow")return "telemetry";
+  if(url.pathname==="/automatic-alert-email")return "alerts";
+  if(url.pathname==="/month-end"||url.pathname==="/history-library")return "reports";
+  const v=url.searchParams.get("view")||"dashboard";
+  if(v==="users")return "users";
+  if(v==="fleet")return "fleet";
+  if(v==="daily")return "daily";
+  if(v==="alerts")return "alerts";
+  if(v==="setup")return "setup";
+  if(v==="documents")return "documents";
+  if(v==="settings")return "settings";
+  if(v==="breakdowns")return "breakdowns";
+  if(v==="maintenance")return "maintenance";
+  if(v==="production")return "production";
+  if(v==="telemetry")return "telemetry";
+  if(v.startsWith("report"))return "reports";
+  return "dashboard";
+}
+
+function nav(active:string){const items=[
+ ["dashboard","⌂","Dashboard","/contractor?view=dashboard"],
+ ["breakdowns","⚙","Breakdowns","/contractor?view=breakdowns"],
+ ["maintenance","▦","Maintenance","/contractor?view=maintenance"],
+ ["telemetry","⌁","Telemetry","/contractor?view=telemetry"],
+ ["production","▥","Production","/contractor?view=production"],
+ ["reports","▤","Reports","/contractor-reports"],
+ ["fleet","▣","Fleet","/contractor?view=fleet"],
+ ["daily","⇧","Daily Reports","/contractor?view=daily"],
+ ["users","♟","Users & Roles","/contractor?view=users"],
+ ["trial","◇","Previous Month Trial","/trial-demo"],
+ ["alerts","♧","Alerts","/contractor?view=alerts"],
+ ["setup","▦","Company Setup","/contractor?view=setup"],
+ ["documents","▱","Documents","/contractor?view=documents"],
+ ["settings","⚙","Settings","/contractor?view=settings"],
+ ["recycle","♲","Recycle Bin","/recycle-bin"],
+ ["security","◈","Security & Recovery","/security-recovery"]
+ ];return items.map(([id,ic,label,href])=>`<a class="${active===id?"active":""}" href="${href}"><span>${ic}</span><b>${label}</b></a>`).join("")}
+
+const css=`<style id="sas-master-company-ui">
+:root{--sas-navy:#081b31;--sas-navy2:#0d2748;--sas-bg:#f3f6fb;--sas-line:#d9e1eb;--sas-text:#071a35;--sas-muted:#5d6d84;--sas-card:#fff;--sas-green:#0b8b55;--sas-gold:#dca900}
+html{background:var(--sas-bg)!important}body{margin:0!important;padding:64px 0 0 230px!important;background:var(--sas-bg)!important;color:var(--sas-text)!important;font-family:Arial,Helvetica,sans-serif!important;min-height:100vh!important}
+#sas-master-sidebar{position:fixed;z-index:9998;left:0;top:0;bottom:0;width:230px;background:linear-gradient(180deg,#07192e,#081a2f);color:#fff;display:flex;flex-direction:column;box-shadow:5px 0 18px rgba(7,26,53,.08)}
+#sas-master-brand{padding:18px 18px 15px;border-bottom:1px solid rgba(255,255,255,.12)}#sas-master-brand img{width:48px;height:48px;object-fit:contain;float:left;margin-right:10px}#sas-master-brand strong{display:block;font-size:16px;margin-top:5px}#sas-master-brand small{display:block;font-size:10px;color:#bed0e5;margin-top:3px;line-height:1.35}.sas-clear{clear:both}
+#sas-master-nav{padding:14px 10px;display:grid;gap:4px;overflow:auto;flex:1}#sas-master-nav a{display:flex;align-items:center;gap:10px;color:#fff;text-decoration:none;padding:10px 11px;border-radius:7px;font-size:12px;font-weight:700}#sas-master-nav a span{width:20px;text-align:center;font-size:16px}#sas-master-nav a.active,#sas-master-nav a:hover{background:#29496f}
+#sas-master-account{margin:10px;border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:10px 11px;background:rgba(255,255,255,.04)}#sas-master-account b,#sas-master-account small{display:block}#sas-master-account b{font-size:12px}#sas-master-account small{font-size:9px;color:#c7d7e9;margin-top:3px}#sas-master-account a{font-size:9px;color:#fff;margin-top:7px;display:inline-block}
+#sas-master-topbar{position:fixed;z-index:9997;left:230px;right:0;top:0;height:64px;background:#fff;border-bottom:1px solid var(--sas-line);display:flex;align-items:center;justify-content:space-between;padding:0 22px;box-shadow:0 1px 4px rgba(7,26,53,.03)}#sas-master-topbar .product b{display:block;font-size:18px}#sas-master-topbar .product small{color:var(--sas-muted);font-size:10px}#sas-master-topbar .company{font-size:13px;font-weight:900;color:var(--sas-text);display:flex;align-items:center;gap:10px}#sas-master-topbar .avatar{width:34px;height:34px;border-radius:50%;background:#142d50;color:#fff;display:grid;place-items:center;font-size:11px}
+/* Hide all previous Company Admin shell chrome so only one shell remains */
+body>.side,body>.sidebar,body>aside.side,.app>.side,.app>.sidebar,.app>aside.side,.topbar:not(#sas-master-topbar),header.topbar,.legacy-sidebar,.company-sidebar{display:none!important}
+.app{display:block!important;grid-template-columns:1fr!important;min-height:0!important;background:transparent!important}.main{margin:0!important;min-width:0!important;background:transparent!important}.content{max-width:1650px!important;margin:0 auto!important;padding:22px 24px 40px!important}
+/* Master visual language */
+.panel,.card,.sideform,.kpi,.tile,.metric,.box,section.panel{background:var(--sas-card)!important;border:1px solid var(--sas-line)!important;border-radius:12px!important;box-shadow:0 3px 12px rgba(7,26,53,.035)!important}.pagehead h1,h1,h2,h3{color:var(--sas-text)!important}.pagehead p,p.help,.muted{color:var(--sas-muted)!important}table{background:#fff!important;border-collapse:collapse!important}th{background:#f5f8fc!important;color:#52647c!important}td,th{border-color:#e6ebf1!important}.btn,button,input[type=submit]{border-radius:8px!important}.btn:not(.red):not(.amber):not(.gray),button.primary,input[type=submit]{background:#132b4d!important;color:#fff!important;border-color:#132b4d!important}input,select,textarea{border:1px solid #cbd6e2!important;border-radius:8px!important;background:#fff!important;color:var(--sas-text)!important}
+.sas-old-workspace-strip,.sas-workspace-strip{display:none!important}
+@media(max-width:900px){body{padding:58px 0 0!important}#sas-master-sidebar{position:relative;width:auto;height:auto;bottom:auto;display:block}#sas-master-brand{display:none}#sas-master-nav{display:flex;overflow:auto;padding:8px}#sas-master-nav a{white-space:nowrap}#sas-master-account{display:none}#sas-master-topbar{left:0;height:58px;padding:0 12px}#sas-master-topbar .product small{display:none}.content{padding:14px!important}}
+@media print{#sas-master-sidebar,#sas-master-topbar{display:none!important}body{padding:0!important}}
+</style>`;
+
+function shell(s:Row|null,active:string){const company=txt(s?.company_name||"Company Workspace",100);const name=txt(s?.full_name||"Company User",100);const email=txt(s?.email||"",140);const initials=name.split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0]).join("").toUpperCase()||"CU";return `${css}<aside id="sas-master-sidebar"><div id="sas-master-brand"><img src="/sindane-logo.png" alt="Sindane Asset Solutions"><strong>TMM Asset Health</strong><small>Mine. Contractor. Workshop. One Solution.</small><div class="sas-clear"></div></div><nav id="sas-master-nav">${nav(active)}</nav><div id="sas-master-account"><b>${esc(name)}</b><small>${esc(email)}</small><a href="/contractor/logout">Log out</a></div></aside><header id="sas-master-topbar"><div class="product"><b>TMM Asset Health</b><small>Company Operations Workspace</small></div><div class="company"><span>${esc(company)}</span><span class="avatar">${esc(initials)}</span></div></header>`}
+
+async function unify(req:Request,res:Response,env:Env){const url=new URL(req.url);if(req.method!=="GET"||!COMPANY_PATHS.has(url.pathname))return res;const type=res.headers.get("content-type")||"";if(!type.includes("text/html"))return res;let body=await res.text();if(body.includes("id=\"sas-master-sidebar\""))return new Response(body,{status:res.status,headers:res.headers});const s=await session(req,env);const inject=shell(s,activeKey(url));if(body.includes("<body")){body=body.replace(/<body([^>]*)>/i,m=>m+inject)}else body=inject+body;const headers=new Headers(res.headers);headers.delete("content-length");headers.set("cache-control","private, no-store");return new Response(body,{status:res.status,statusText:res.statusText,headers})}
+
+export default {async fetch(req:Request,env:Env,ctx:ExecutionContext){const res=await currentApp.fetch(req,env as never,ctx as never);try{return await unify(req,res,env)}catch(e){console.error("MASTER_COMPANY_UI_ERROR",e);return res}},async scheduled(c:ScheduledController,env:Env,ctx:ExecutionContext){const app=currentApp as unknown as {scheduled?:(c:ScheduledController,e:Env,x:ExecutionContext)=>Promise<void>|void};if(app.scheduled)return app.scheduled(c,env,ctx)}};
