@@ -2,7 +2,7 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "tmm-asset-health",
   "account_id": "ba53c9a85c6f300723d5d58f899722f9",
-  "main": "./worker/router-company-licence.ts",
+  "main": "./worker/router-licence-signature.ts",
   "compatibility_date": "2026-08-28",
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
@@ -10,26 +10,13 @@
     "binding": "ASSETS",
     "not_found_handling": "none"
   },
-  "images": {
-    "binding": "IMAGES"
-  },
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "tmm-asset-health-db",
-      "database_id": "93fdd54e-404e-4fe0-ab59-dde7425575e6"
-    }
-  ],
-  "r2_buckets": [
-    {
-      "binding": "BUCKET",
-      "bucket_name": "tmm-asset-health-files"
-    }
-  ],
-  "triggers": {
-    "crons": ["0 * * * *"]
-  },
-  "observability": {
-    "enabled": true
-  }
+  "images": { "binding": "IMAGES" },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "tmm-asset-health-db",
+    "database_id": "93fdd54e-404e-4fe0-ab59-dde7425575e6"
+  }],
+  "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "tmm-asset-health-files" }],
+  "triggers": { "crons": ["0 * * * *"] },
+  "observability": { "enabled": true }
 }
