@@ -1,0 +1,56 @@
+import currentApp from "./router-automatic-alert-email";
+
+interface ExecutionContext { waitUntil(promise: Promise<unknown>): void; passThroughOnException(): void; }
+interface ScheduledController { scheduledTime:number; cron:string; noRetry():void; }
+interface Env { DB:D1Database; BUCKET?:R2Bucket; [key:string]:unknown; }
+type Row=Record<string,unknown>;
+
+const COOKIE="sas_contractor_v2";
+const enc=new TextEncoder();
+const txt=(v:unknown,n=500)=>String(v??"").trim().slice(0,n);
+const num=(v:unknown,f=0)=>{const n=Number(v);return Number.isFinite(n)?n:f};
+const esc=(v:unknown)=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]||c));
+async function sha256(v:string){const b=new Uint8Array(await crypto.subtle.digest("SHA-256",enc.encode(v)));return Array.from(b,x=>x.toString(16).padStart(2,"0")).join("")}
+function cookie(req:Request){const raw=req.headers.get("cookie")||"";for(const p of raw.split(";")){const i=p.indexOf("=");if(i>0&&p.slice(0,i).trim()===COOKIE)return p.slice(i+1).trim()}return ""}
+async function first(env:Env,sql:string,b:unknown[]=[]){try{return await env.DB.prepare(sql).bind(...b).first<Row>()}catch{return null}}
+async function all(env:Env,sql:string,b:unknown[]=[]){try{return (await env.DB.prepare(sql).bind(...b).all<Row>()).results||[]}catch{return []}}
+
+async function ensure(env:Env){for(const q of [
+`CREATE TABLE IF NOT EXISTS security_audit_v1(id INTEGER PRIMARY KEY AUTOINCREMENT,company_id INTEGER,account_id INTEGER,actor_email TEXT,method TEXT NOT NULL,path TEXT NOT NULL,response_status INTEGER NOT NULL,request_id TEXT NOT NULL,ip_hash TEXT,user_agent TEXT,created_at TEXT NOT NULL)`,
+`CREATE INDEX IF NOT EXISTS idx_security_audit_company_time ON security_audit_v1(company_id,created_at)`,
+`CREATE TABLE IF NOT EXISTS security_backup_manifest_v1(id INTEGER PRIMARY KEY AUTOINCREMENT,backup_date TEXT NOT NULL,object_key TEXT NOT NULL UNIQUE,status TEXT NOT NULL,row_count INTEGER NOT NULL DEFAULT 0,truncated_tables TEXT,error_text TEXT,created_at TEXT NOT NULL)`
+])await env.DB.prepare(q).run()}
+
+async function session(req:Request,env:Env){const token=cookie(req);if(!token)return null;const h=await sha256(token);const r=await first(env,`SELECT s.company_id,s.account_id,s.expires_at,a.email,a.role,a.status account_status,c.name company_name,c.licence_status,c.expires_at licence_expires,c.grace_days FROM contractor_sessions s JOIN contractor_accounts a ON a.id=s.account_id AND a.company_id=s.company_id JOIN companies c ON c.id=s.company_id WHERE s.token_hash=? LIMIT 1`,[h]);if(!r)return null;if(txt(r.account_status)!=="active")return null;if(new Date(txt(r.expires_at,60)).getTime()<Date.now())return null;const ls=txt(r.licence_status).toLowerCase();const end=new Date(txt(r.licence_expires,60)).getTime()+num(r.grace_days)*86400000;if(!["active","trial"].includes(ls)||Date.now()>end)return null;return r}
+
+function secureHeaders(res:Response){const h=new Headers(res.headers);h.set("x-content-type-options","nosniff");h.set("x-frame-options","DENY");h.set("referrer-policy","same-origin");h.set("permissions-policy","camera=(), microphone=(), geolocation=(self)");h.set("cross-origin-opener-policy","same-origin");h.set("cross-origin-resource-policy","same-origin");if(!h.has("cache-control")&&String(h.get("content-type")||"").includes("text/html"))h.set("cache-control","private, no-store");if(!h.has("content-security-policy")&&String(h.get("content-type")||"").includes("text/html"))h.set("content-security-policy","default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");return new Response(res.body,{status:res.status,statusText:res.statusText,headers:h})}
+
+function mutation(req:Request){return !["GET","HEAD","OPTIONS"].includes(req.method.toUpperCase())}
+function csrfOkay(req:Request){if(!mutation(req))return true;const u=new URL(req.url);const origin=req.headers.get("origin");if(origin){try{return new URL(origin).host===u.host}catch{return false}}// non-browser integrations may omit Origin; authentication is still required by their own routes
+return true}
+function sizeOkay(req:Request){const n=Number(req.headers.get("content-length")||0);return !Number.isFinite(n)||n<=25*1024*1024}
+
+async function audit(req:Request,env:Env,status:number,s:Row|null){try{await ensure(env);const ip=txt(req.headers.get("cf-connecting-ip"),100);const ipHash=ip?await sha256(ip):"";await env.DB.prepare(`INSERT INTO security_audit_v1(company_id,account_id,actor_email,method,path,response_status,request_id,ip_hash,user_agent,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)`).bind(s?num(s.company_id):null,s?num(s.account_id):null,s?txt(s.email,200):null,req.method,new URL(req.url).pathname,status,txt(req.headers.get("cf-ray")||crypto.randomUUID(),100),ipHash,txt(req.headers.get("user-agent"),300),new Date().toISOString()).run()}catch{}}
+
+const BACKUP_TABLES=["companies","contractor_accounts","company_sites","company_settings_v3","alert_contacts_v3","machines","daily_reports_v3","production_records","events","machine_telemetry_v1","telemetry_alerts_v1","telemetry_actions_v1","telemetry_email_log_v1"];
+async function dailyBackup(env:Env){await ensure(env);if(!env.BUCKET)return;const day=new Date().toISOString().slice(0,10);const existing=await first(env,"SELECT id FROM security_backup_manifest_v1 WHERE backup_date=? AND status='complete' LIMIT 1",[day]);if(existing)return;const key=`security-backups/${day}/tmm-asset-health-${day}.json`;const pack:Record<string,unknown>={version:1,created_at:new Date().toISOString(),tables:{}};let total=0;const truncated:string[]=[];try{for(const table of BACKUP_TABLES){const exists=await first(env,"SELECT name FROM sqlite_master WHERE type='table' AND name=?",[table]);if(!exists)continue;const rows=await all(env,`SELECT * FROM ${table} LIMIT 50001`);if(rows.length>50000){truncated.push(table);rows.length=50000}total+=rows.length;(pack.tables as Record<string,unknown>)[table]=rows}await env.BUCKET.put(key,JSON.stringify(pack),{httpMetadata:{contentType:"application/json"},customMetadata:{backup_date:day,row_count:String(total),truncated:truncated.join(",")}});await env.DB.prepare(`INSERT INTO security_backup_manifest_v1(backup_date,object_key,status,row_count,truncated_tables,created_at) VALUES(?,?,?,?,?,?) ON CONFLICT(object_key) DO UPDATE SET status=excluded.status,row_count=excluded.row_count,truncated_tables=excluded.truncated_tables,error_text=NULL`).bind(day,key,"complete",total,truncated.join(","),new Date().toISOString()).run()}catch(e){await env.DB.prepare(`INSERT INTO security_backup_manifest_v1(backup_date,object_key,status,row_count,truncated_tables,error_text,created_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(object_key) DO UPDATE SET status=excluded.status,error_text=excluded.error_text`).bind(day,key,"failed",total,truncated.join(","),e instanceof Error?e.message:String(e),new Date().toISOString()).run()}}
+
+async function securityPage(req:Request,env:Env){await ensure(env);const s=await session(req,env);if(!s)return new Response(null,{status:303,headers:{location:"/contractor","cache-control":"no-store"}});if(!["company_admin","admin","engineer"].includes(txt(s.role).toLowerCase()))return new Response("Forbidden",{status:403});const audits=await all(env,`SELECT actor_email,method,path,response_status,created_at FROM security_audit_v1 WHERE company_id=? ORDER BY id DESC LIMIT 100`,[num(s.company_id)]);const backup=await first(env,"SELECT * FROM security_backup_manifest_v1 WHERE status='complete' ORDER BY id DESC LIMIT 1");const bad=audits.filter(x=>num(x.response_status)>=400).length;const rows=audits.map(x=>`<tr><td>${esc(x.created_at)}</td><td>${esc(x.actor_email||"System")}</td><td>${esc(x.method)}</td><td>${esc(x.path)}</td><td>${esc(x.response_status)}</td></tr>`).join("");return new Response(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Security & Recovery</title><style>body{font-family:Arial;background:#f4f7fb;color:#10203a;margin:0}.w{max-width:1250px;margin:auto;padding:24px}.g{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.c,.p{background:#fff;border:1px solid #dce4ef;border-radius:12px;padding:16px;margin-bottom:12px}.c b{display:block;font-size:24px;margin-top:6px}table{width:100%;border-collapse:collapse;font-size:12px}th,td{padding:9px;border-top:1px solid #e7edf4;text-align:left}</style></head><body><main class="w"><p><a href="/contractor">← Company Admin</a></p><h1>Security & Recovery</h1><p>Application security controls, company audit activity and recovery snapshot status.</p><div class="g"><div class="c"><small>ACCESS</small><b>Tenant scoped</b><span>Company sessions remain separated by company ID.</span></div><div class="c"><small>RECOVERY SNAPSHOT</small><b>${backup?esc(backup.backup_date):"Pending"}</b><span>${backup?`${esc(backup.row_count)} rows saved to protected object storage`:"Runs from the scheduled worker"}</span></div><div class="c"><small>RECENT ERRORS</small><b>${bad}</b><span>HTTP errors in the latest 100 audited company actions.</span></div></div><section class="p"><h2>Recent audit activity</h2><table><tr><th>Time</th><th>User</th><th>Method</th><th>Path</th><th>Status</th></tr>${rows||`<tr><td colspan="5">No audited activity yet.</td></tr>`}</table></section><section class="p"><b>Recovery note:</b> Application snapshots are an additional recovery layer. They do not replace Cloudflare account security, provider-level backups or tested disaster-recovery procedures.</section></main></body></html>`,{headers:{"content-type":"text/html; charset=utf-8","cache-control":"private, no-store"}})}
+
+async function protectedEmailPage(req:Request,env:Env,ctx:ExecutionContext){const s=await session(req,env);if(!s)return new Response(null,{status:303,headers:{location:"/contractor","cache-control":"no-store"}});if(!["company_admin","admin","engineer"].includes(txt(s.role).toLowerCase()))return new Response("Forbidden",{status:403});return currentApp.fetch(req,env as never,ctx as never)}
+
+export default {
+ async fetch(req:Request,env:Env,ctx:ExecutionContext){
+  const url=new URL(req.url);await ensure(env);
+  if(!sizeOkay(req))return secureHeaders(new Response("Request too large",{status:413}));
+  if(!csrfOkay(req))return secureHeaders(new Response("Cross-site request blocked",{status:403}));
+  if(url.pathname==="/security-recovery"&&req.method==="GET")return secureHeaders(await securityPage(req,env));
+  let s:Row|null=null;try{s=await session(req,env)}catch{}
+  let res:Response;
+  if(url.pathname==="/automatic-alert-email"&&req.method==="GET")res=await protectedEmailPage(req,env,ctx);
+  else res=await currentApp.fetch(req,env as never,ctx as never);
+  if(mutation(req)||res.status>=400)ctx.waitUntil(audit(req,env,res.status,s));
+  return secureHeaders(res)
+ },
+ async scheduled(c:ScheduledController,env:Env,ctx:ExecutionContext){ctx.waitUntil(dailyBackup(env));const app=currentApp as unknown as {scheduled?:(c:ScheduledController,e:Env,x:ExecutionContext)=>Promise<void>|void};if(app.scheduled)return app.scheduled(c,env,ctx)}
+};
