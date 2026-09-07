@@ -9,16 +9,19 @@ interface ExecutionContext { waitUntil(promise: Promise<unknown>): void; passThr
 interface ScheduledController { scheduledTime:number; cron:string; noRetry():void; }
 interface Env { DB:D1Database; BUCKET?:R2Bucket; [key:string]:unknown; }
 
+function hasCompanySession(req:Request){
+  return /(?:^|;\s*)sas_contractor_v2=/.test(req.headers.get("cookie")||"");
+}
+
 export default {
   async fetch(req:Request,env:Env,ctx:ExecutionContext):Promise<Response>{
     const url=new URL(req.url), path=url.pathname;
 
-    // Presentation-safe alias for the full navy/white Company Admin workspace.
+    // Always enter the full navy/white Company Admin workspace through the
+    // normal company login so presentation users never fall into a legacy
+    // unauthenticated router chain.
     if(path==="/presentation-full"){
-      const target=new URL(req.url);
-      target.pathname="/contractor";
-      target.search="";
-      return classicCompanyAdminApp.fetch(new Request(target.toString(),req),env as never,ctx as never);
+      return new Response(null,{status:302,headers:{location:"/contractor-login","cache-control":"no-store"}});
     }
 
     if(path==="/owner-login" || path==="/owner" || path.startsWith("/owner/")){
@@ -33,9 +36,13 @@ export default {
       return telemetryApp.fetch(req,env as never,ctx as never);
     }
 
-    // Restore the full navy/white Company Admin workspace with all admin modules
-    // visible in the left sidebar, as used in the earlier presentation version.
+    // The full navy/white Company Admin workspace is only rendered when a
+    // contractor session cookie is present. Missing sessions go directly to
+    // login instead of the historical heavy fallback chain that caused 1101.
     if(path==="/contractor" && req.method==="GET"){
+      if(!hasCompanySession(req)){
+        return new Response(null,{status:303,headers:{location:"/contractor-login","cache-control":"no-store"}});
+      }
       return classicCompanyAdminApp.fetch(req,env as never,ctx as never);
     }
 
