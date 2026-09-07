@@ -3,6 +3,7 @@ import ownerApp from "./router-owner-platform";
 import licenceApp from "./router-company-licence-clean";
 import telemetryApp from "./router-telemetry-ready";
 import { handleCompanyAdminV3 } from "./company-admin-v3";
+import { navyCompanyTheme } from "./navy-company-theme";
 
 interface ExecutionContext { waitUntil(promise: Promise<unknown>): void; passThroughOnException(): void; }
 interface ScheduledController { scheduledTime:number; cron:string; noRetry():void; }
@@ -25,7 +26,7 @@ const mainNav = `<nav>
 </nav>`;
 
 function settingsHub(){
-  return `<section class="panel" style="margin-bottom:14px"><div class="head"><div><small>ADMIN TOOLS</small><h2 style="margin:4px 0">More controls</h2></div></div><p style="color:#667085;font-size:12px">Less-used administration tools are grouped here to keep the main sidebar fast and simple.</p><div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px">
+  return `<section class="panel settings-hub" style="margin-bottom:14px"><div class="head"><div><small>ADMIN TOOLS</small><h2 style="margin:4px 0">More controls</h2></div></div><p style="color:#667085;font-size:12px">Less-used administration tools are grouped here to keep the main sidebar fast and simple.</p><div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px">
   <a class="btn alt" href="/contractor?view=users">Users & Roles</a>
   <a class="btn alt" href="/contractor?view=alerts">Alerts & Contacts</a>
   <a class="btn alt" href="/contractor?view=setup">Company Setup</a>
@@ -43,6 +44,7 @@ async function polishAdminNavigation(req:Request,res:Response){
   if(url.pathname!=="/contractor") return res;
   let body=await res.text();
   body=body.replace(/<nav>[\s\S]*?<\/nav>/,mainNav);
+  if(!body.includes('id="tmm-navy-company-theme"') && body.includes("</head>")) body=body.replace("</head>",navyCompanyTheme+"</head>");
   const view=url.searchParams.get("view")||"dashboard";
   const active=view==="reports-admin"?"reports":view;
   body=body.replace(`data-nav="${active}"`,`data-nav="${active}" class="active"`);
@@ -57,23 +59,18 @@ export default {
   async fetch(req:Request,env:Env,ctx:ExecutionContext):Promise<Response>{
     const url=new URL(req.url), path=url.pathname;
 
-    // Owner authentication and the exact owner dashboard route are handled
-    // directly here instead of traversing the company/router stack.
     if(path==="/owner-login" || path==="/owner" || path.startsWith("/owner/")){
       return ownerApp.fetch(req,env as never,ctx as never);
     }
 
-    // Licence pages use their dedicated handler directly.
     if(path==="/company-licence" || path.startsWith("/company-licence/")){
       return licenceApp.fetch(req,env as never,ctx as never);
     }
 
-    // Telematics/telemetry pages and ingestion use the dedicated telemetry handler directly.
     if(path==="/telemetry" || path.startsWith("/telemetry/") || path.startsWith("/api/telemetry")){
       return telemetryApp.fetch(req,env as never,ctx as never);
     }
 
-    // Core company-admin pages call one handler only; no historical wrapper cascade.
     if(path==="/contractor" && req.method==="GET"){
       const view=url.searchParams.get("view")||"dashboard";
       if(DIRECT_ADMIN_VIEWS.has(view)){
@@ -86,7 +83,6 @@ export default {
       if(direct) return direct;
     }
 
-    // Remaining legacy operational modules stay available while they are migrated one by one.
     const res=await coreApp.fetch(req,env as never,ctx as never);
     return polishAdminNavigation(req,res);
   },
