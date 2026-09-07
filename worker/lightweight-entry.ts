@@ -2,7 +2,7 @@ import coreApp from "./router-core-bypass";
 import ownerApp from "./router-owner-platform";
 import licenceApp from "./router-company-licence-clean";
 import telemetryApp from "./router-telemetry-ready";
-import classicCompanyAdminApp from "./router-company-admin-demo-ui-v2";
+import classicCompanyAdminApp from "./router-company-admin-safe";
 import { handleCompanyAdminV3 } from "./company-admin-v3";
 
 interface ExecutionContext { waitUntil(promise: Promise<unknown>): void; passThroughOnException(): void; }
