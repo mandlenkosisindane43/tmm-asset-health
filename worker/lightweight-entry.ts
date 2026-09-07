@@ -7,56 +7,52 @@ import { handleCompanyAdminV3 } from "./company-admin-v3";
 
 interface ExecutionContext { waitUntil(promise: Promise<unknown>): void; passThroughOnException(): void; }
 interface ScheduledController { scheduledTime:number; cron:string; noRetry():void; }
-interface Env { DB:D1Database; BUCKET?:R2Bucket; [key:string]:unknown; }
+interface Env { DB:D1Database; BUCKET?:R2Bucket; RESEND_API_KEY?:string; [key:string]:unknown; }
+type Row=Record<string,unknown>;
 
-function hasCompanySession(req:Request){
-  return /(?:^|;\s*)sas_contractor_v2=/.test(req.headers.get("cookie")||"");
-}
+const enc=new TextEncoder();
+const OWNER_COOKIE="sas_owner_v1";
+function hasCompanySession(req:Request){return /(?:^|;\s*)sas_contractor_v2=/.test(req.headers.get("cookie")||"");}
+function esc(v:unknown){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]||c));}
+function getCookie(req:Request,name:string){for(const p of (req.headers.get("cookie")||"").split(";")){const i=p.indexOf("=");if(i>-1&&p.slice(0,i).trim()===name)return p.slice(i+1).trim()}return "";}
+function bytesToHex(bytes:Uint8Array){return Array.from(bytes,b=>b.toString(16).padStart(2,"0")).join("");}
+function hexToBytes(value:string){const out=new Uint8Array(value.length/2);for(let i=0;i<out.length;i++)out[i]=parseInt(value.slice(i*2,i*2+2),16);return out;}
+function token(){const b=crypto.getRandomValues(new Uint8Array(32));let s="";for(const x of b)s+=String.fromCharCode(x);return btoa(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"");}
+async function sha256(v:string){return bytesToHex(new Uint8Array(await crypto.subtle.digest("SHA-256",enc.encode(v))));}
+async function passwordHash(password:string,saltHex:string){const key=await crypto.subtle.importKey("raw",enc.encode(password),"PBKDF2",false,["deriveBits"]);const bits=await crypto.subtle.deriveBits({name:"PBKDF2",hash:"SHA-256",salt:hexToBytes(saltHex),iterations:100000},key,256);return bytesToHex(new Uint8Array(bits));}
+async function first(env:Env,sql:string,binds:unknown[]=[]){try{return await env.DB.prepare(sql).bind(...binds).first<Row>()}catch{return null}}
+function redirect(location:string){return new Response(null,{status:303,headers:{location,"cache-control":"no-store"}});}
+function html(body:string,status=200){return new Response(body,{status,headers:{"content-type":"text/html; charset=utf-8","cache-control":"private, no-store"}});}
+
+async function ensureAdminInvites(env:Env){await env.DB.prepare(`CREATE TABLE IF NOT EXISTS company_admin_invites_v1(id INTEGER PRIMARY KEY AUTOINCREMENT,company_id INTEGER NOT NULL,email TEXT NOT NULL,full_name TEXT NOT NULL,token_hash TEXT NOT NULL UNIQUE,status TEXT NOT NULL DEFAULT 'pending',expires_at TEXT NOT NULL,created_at TEXT NOT NULL,accepted_at TEXT)`).run();}
+async function ownerCsrfOk(req:Request,env:Env,csrf:string){const raw=getCookie(req,OWNER_COOKIE);if(!raw)return false;const row=await first(env,"SELECT csrf_token AS csrf,expires_at AS expiresAt FROM owner_sessions_v1 WHERE token_hash=? LIMIT 1",[await sha256(raw)]);return !!row&&String(row.csrf||"")===csrf&&new Date(String(row.expiresAt)).getTime()>Date.now();}
+
+async function sendAdminInvite(env:Env,to:string,company:string,link:string){const key=String(env.RESEND_API_KEY||"");if(!key)return false;try{const r=await fetch("https://api.resend.com/emails",{method:"POST",headers:{Authorization:`Bearer ${key}`,"content-type":"application/json"},body:JSON.stringify({from:"Sindane Asset Solutions <admin@sindaneassetsolutions.co.za>",to:[to],subject:`Accept your ${company} TMM Asset Health invitation`,html:`<div style="font-family:Arial,sans-serif;color:#10203a"><h2>TMM Asset Health</h2><p>You have been invited as the Company Administrator for <b>${esc(company)}</b>.</p><p>Accept the invitation and create your own password. Sindane Asset Solutions does not create or know your password.</p><p><a href="${link}" style="display:inline-block;background:#14223a;color:white;padding:12px 18px;border-radius:8px;text-decoration:none;font-weight:bold">Accept invitation & create password</a></p><p>This invitation expires in 7 days.</p></div>`})});return r.ok}catch{return false}}
+
+function polishOwnerCompanies(res:Response){const ct=res.headers.get("content-type")||"";if(!ct.includes("text/html"))return res;return res.text().then(body=>{body=body.replace(/<label class="field">Temporary administrator password[\s\S]*?<\/label>/,`<div class="notice" style="margin:8px 0">The Company Administrator will receive an invitation and create their own password. You do not set or see their password.</div>`).replace(/>Create Contractor<\/button>/,">Create Contractor & Send Invitation</button>").replace("Creating a contractor here creates the first Company Administrator only; that administrator then invites Engineer, Supervisor, Mechanic and Manager users.","Creating a contractor sends the first Company Administrator an invitation. They accept it and create their own password before their account becomes active. They can then invite Engineer, Supervisor, Mechanic and Manager users.");const h=new Headers(res.headers);h.delete("content-length");return new Response(body,{status:res.status,statusText:res.statusText,headers:h});});}
+
+async function createCompanyByInvite(req:Request,env:Env){const f=await req.formData();const csrf=String(f.get("csrf")||"");if(!(await ownerCsrfOk(req,env,csrf)))return new Response("Invalid request token",{status:403});const companyName=String(f.get("companyName")||"").trim().slice(0,120),fullName=String(f.get("fullName")||"").trim().slice(0,120),email=String(f.get("email")||"").trim().toLowerCase().slice(0,200),days=Math.max(1,Math.min(3650,Number(f.get("licenceDays")||180))),maxUsers=Math.max(1,Math.min(10000,Number(f.get("maxUsers")||10))),status=["active","trial"].includes(String(f.get("status")||"").toLowerCase())?String(f.get("status")).toLowerCase():"active";if(!companyName||!fullName||!email.includes("@"))return redirect("/owner?view=companies&tone=err&msg=Check+the+company+name+and+administrator+email.");const exists=await first(env,"SELECT id FROM contractor_accounts WHERE lower(email)=? LIMIT 1",[email]);if(exists)return redirect("/owner?view=companies&tone=err&msg=That+administrator+email+is+already+registered.");await ensureAdminInvites(env);const inviteToken=token(),inviteHash=await sha256(inviteToken),licenceKey="SAS-"+token().slice(0,16).toUpperCase(),now=new Date(),expiresAt=new Date(Date.now()+days*86400000).toISOString(),inviteExpires=new Date(Date.now()+7*86400000).toISOString();await env.DB.prepare("INSERT INTO companies(name,licence_key,licence_status,expires_at,grace_days,max_users,created_at) VALUES(?,?,?,?,?,?,?)").bind(companyName,licenceKey,status,expiresAt,0,maxUsers,now.toISOString()).run();const company=await first(env,"SELECT id FROM companies WHERE licence_key=? LIMIT 1",[licenceKey]);if(!company)return redirect("/owner?view=companies&tone=err&msg=Company+creation+failed.");const salt=bytesToHex(crypto.getRandomValues(new Uint8Array(16))),placeholder=await passwordHash(token(),salt);await env.DB.prepare("INSERT INTO contractor_accounts(company_id,email,full_name,role,status,password_hash,password_salt,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)").bind(Number(company.id),email,fullName,"company_admin","pending",placeholder,salt,now.toISOString(),now.toISOString()).run();await env.DB.prepare("INSERT INTO company_admin_invites_v1(company_id,email,full_name,token_hash,status,expires_at,created_at) VALUES(?,?,?,?,?,?,?)").bind(Number(company.id),email,fullName,inviteHash,"pending",inviteExpires,now.toISOString()).run();const link=`${new URL(req.url).origin}/accept-company-admin?token=${encodeURIComponent(inviteToken)}`;const sent=await sendAdminInvite(env,email,companyName,link);const msg=sent?`${companyName} created. Invitation sent to ${email}.`:`${companyName} created. Email could not be sent; copy this invitation link: ${link}`;return redirect(`/owner?view=companies&msg=${encodeURIComponent(msg)}`);}
+
+function acceptPage(tokenValue:string,company:string,name:string,error=""){return html(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Accept Company Admin Invitation</title><style>*{box-sizing:border-box}body{margin:0;background:#f4f7fb;color:#172033;font-family:Arial,sans-serif;min-height:100vh;display:grid;place-items:center;padding:20px}.card{width:min(520px,100%);background:#fff;border:1px solid #dfe6ef;border-radius:16px;padding:28px;box-shadow:0 18px 50px rgba(20,34,58,.12)}h1{margin:0 0 8px}.sub{color:#68778e;font-size:13px;margin-bottom:20px}.notice{background:#fff0f0;color:#a11b1b;padding:10px;border-radius:8px;margin:10px 0}.field{display:grid;gap:6px;font-weight:800;font-size:12px;margin:12px 0}.field input{padding:12px;border:1px solid #ccd6e2;border-radius:8px;font-size:14px}.btn{width:100%;border:0;border-radius:8px;background:#14223a;color:#fff;padding:12px;font-weight:900;cursor:pointer}</style></head><body><section class="card"><h1>Accept Company Admin Invitation</h1><div class="sub">${esc(name)}, create your own password for <b>${esc(company)}</b>. Sindane Asset Solutions cannot see your password.</div>${error?`<div class="notice">${esc(error)}</div>`:""}<form method="post" action="/accept-company-admin"><input type="hidden" name="token" value="${esc(tokenValue)}"><label class="field">Create password<input type="password" name="password" minlength="10" required autocomplete="new-password"></label><label class="field">Confirm password<input type="password" name="confirm" minlength="10" required autocomplete="new-password"></label><button class="btn" type="submit">Accept Invitation & Create Password</button></form></section></body></html>`);}
+
+async function acceptCompanyAdmin(req:Request,env:Env){await ensureAdminInvites(env);if(req.method==="GET"){const t=new URL(req.url).searchParams.get("token")||"";if(!t)return html("Invitation token missing.",400);const row=await first(env,"SELECT i.company_id AS companyId,i.email,i.full_name AS fullName,i.status,i.expires_at AS expiresAt,c.name AS companyName FROM company_admin_invites_v1 i JOIN companies c ON c.id=i.company_id WHERE i.token_hash=? LIMIT 1",[await sha256(t)]);if(!row||String(row.status)!=="pending"||new Date(String(row.expiresAt)).getTime()<Date.now())return html("This invitation is invalid, expired or already used.",400);return acceptPage(t,String(row.companyName),String(row.fullName));}if(req.method!=="POST")return new Response("Method not allowed",{status:405});const f=await req.formData(),t=String(f.get("token")||""),password=String(f.get("password")||""),confirm=String(f.get("confirm")||"");const row=await first(env,"SELECT i.company_id AS companyId,i.email,i.full_name AS fullName,i.status,i.expires_at AS expiresAt,c.name AS companyName FROM company_admin_invites_v1 i JOIN companies c ON c.id=i.company_id WHERE i.token_hash=? LIMIT 1",[await sha256(t)]);if(!row||String(row.status)!=="pending"||new Date(String(row.expiresAt)).getTime()<Date.now())return html("This invitation is invalid, expired or already used.",400);if(password.length<10||password!==confirm)return acceptPage(t,String(row.companyName),String(row.fullName),password.length<10?"Password must be at least 10 characters.":"Passwords do not match.");const salt=bytesToHex(crypto.getRandomValues(new Uint8Array(16))),hash=await passwordHash(password,salt),now=new Date().toISOString();await env.DB.prepare("UPDATE contractor_accounts SET password_hash=?,password_salt=?,status='active',updated_at=? WHERE company_id=? AND lower(email)=?").bind(hash,salt,now,Number(row.companyId),String(row.email).toLowerCase()).run();await env.DB.prepare("UPDATE company_admin_invites_v1 SET status='accepted',accepted_at=? WHERE token_hash=?").bind(now,await sha256(t)).run();return redirect("/contractor-login?msg=Invitation+accepted.+You+can+now+sign+in.");}
 
 export default {
   async fetch(req:Request,env:Env,ctx:ExecutionContext):Promise<Response>{
-    const url=new URL(req.url), path=url.pathname;
+    const url=new URL(req.url),path=url.pathname;
+    if(path==="/presentation-full")return redirect("/contractor-login");
+    if(path==="/accept-company-admin")return acceptCompanyAdmin(req,env);
 
-    // Always enter the full navy/white Company Admin workspace through the
-    // normal company login so presentation users never fall into a legacy
-    // unauthenticated router chain.
-    if(path==="/presentation-full"){
-      return new Response(null,{status:302,headers:{location:"/contractor-login","cache-control":"no-store"}});
+    if(path==="/owner/action"&&req.method==="POST"){
+      const clone=req.clone();const f=await clone.formData();if(String(f.get("action")||"").toLowerCase()==="create-company")return createCompanyByInvite(req,env);
     }
-
-    if(path==="/owner-login" || path==="/owner" || path.startsWith("/owner/")){
-      return ownerApp.fetch(req,env as never,ctx as never);
-    }
-
-    if(path==="/company-licence" || path.startsWith("/company-licence/")){
-      return licenceApp.fetch(req,env as never,ctx as never);
-    }
-
-    if(path==="/telemetry" || path.startsWith("/telemetry/") || path.startsWith("/api/telemetry")){
-      return telemetryApp.fetch(req,env as never,ctx as never);
-    }
-
-    // The full navy/white Company Admin workspace is only rendered when a
-    // contractor session cookie is present. Missing sessions go directly to
-    // login instead of the historical heavy fallback chain that caused 1101.
-    if(path==="/contractor" && req.method==="GET"){
-      if(!hasCompanySession(req)){
-        return new Response(null,{status:303,headers:{location:"/contractor-login","cache-control":"no-store"}});
-      }
-      return classicCompanyAdminApp.fetch(req,env as never,ctx as never);
-    }
-
-    // Keep working Company Admin POST/action handlers on the direct lightweight path.
-    if(path.startsWith("/company-admin/")){
-      const direct=await handleCompanyAdminV3(req,env as never);
-      if(direct) return direct;
-    }
-
-    const res=await coreApp.fetch(req,env as never,ctx as never);
-    return res;
+    if(path==="/owner"&&req.method==="GET"&&url.searchParams.get("view")==="companies")return polishOwnerCompanies(await ownerApp.fetch(req,env as never,ctx as never));
+    if(path==="/owner-login"||path==="/owner"||path.startsWith("/owner/"))return ownerApp.fetch(req,env as never,ctx as never);
+    if(path==="/company-licence"||path.startsWith("/company-licence/"))return licenceApp.fetch(req,env as never,ctx as never);
+    if(path==="/telemetry"||path.startsWith("/telemetry/")||path.startsWith("/api/telemetry"))return telemetryApp.fetch(req,env as never,ctx as never);
+    if(path==="/contractor"&&req.method==="GET"){if(!hasCompanySession(req))return redirect("/contractor-login");return classicCompanyAdminApp.fetch(req,env as never,ctx as never);}
+    if(path.startsWith("/company-admin/")){const direct=await handleCompanyAdminV3(req,env as never);if(direct)return direct;}
+    return coreApp.fetch(req,env as never,ctx as never);
   },
-  async scheduled(c:ScheduledController,env:Env,ctx:ExecutionContext){
-    const app=coreApp as unknown as {scheduled?:(c:ScheduledController,e:Env,x:ExecutionContext)=>Promise<void>|void};
-    if(app.scheduled) return app.scheduled(c,env,ctx);
-  }
+  async scheduled(c:ScheduledController,env:Env,ctx:ExecutionContext){const app=coreApp as unknown as {scheduled?:(c:ScheduledController,e:Env,x:ExecutionContext)=>Promise<void>|void};if(app.scheduled)return app.scheduled(c,env,ctx);}
 };
