@@ -1,3 +1,4 @@
+import "./navy.css";
 import NcaConsole from "../nca-console";
 import { requireChatGPTUser } from "../chatgpt-auth";
 import { getDb } from "../../db";
