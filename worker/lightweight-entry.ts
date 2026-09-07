@@ -13,6 +13,7 @@ const DIRECT_ADMIN_VIEWS = new Set(["dashboard","fleet","daily","users","alerts"
 const mainNav = `<nav>
 <a data-nav="dashboard" href="/contractor"><span>⌂</span>Dashboard</a>
 <a data-nav="fleet" href="/contractor?view=fleet"><span>▣</span>Fleet</a>
+<a data-nav="daily" href="/contractor?view=daily"><span>▤</span>Daily Reports</a>
 <a data-nav="breakdowns" href="/contractor?view=breakdowns"><span>⚙</span>Breakdowns</a>
 <a data-nav="maintenance" href="/contractor?view=maintenance"><span>◷</span>Maintenance</a>
 <a data-nav="production" href="/contractor?view=production"><span>▤</span>Production</a>
