@@ -13,22 +13,23 @@ const SERVICE_INTERVAL_HOURS=250;
 
 const fullNav = `<nav>
 <a data-nav="dashboard" href="/contractor"><span>⌂</span>Dashboard</a>
+<a data-nav="fleet" href="/contractor?view=fleet"><span>▣</span>Fleet</a>
+<a data-nav="daily" href="/contractor?view=daily"><span>⇧</span>Daily Reports</a>
+<a data-nav="previous" href="/trial-demo"><span>◈</span>Previous Month</a>
 <a data-nav="breakdowns" href="/contractor?view=breakdowns"><span>⚙</span>Breakdowns</a>
 <a data-nav="maintenance" href="/contractor?view=maintenance"><span>▦</span>Maintenance</a>
 <a data-nav="production" href="/contractor?view=production"><span>▥</span>Production</a>
 <a data-nav="reports-live" href="/contractor?view=reports-live"><span>▤</span>Reports</a>
-<a data-nav="fleet" href="/contractor?view=fleet"><span>▣</span>Fleet</a>
-<a data-nav="daily" href="/contractor?view=daily"><span>⇧</span>Daily Reports</a>
 <a data-nav="users" href="/contractor?view=users"><span>♙</span>Users & Roles</a>
 <a data-nav="alerts" href="/contractor?view=alerts"><span>!</span>Alerts</a>
 <a data-nav="approvals" href="/contractor?view=approvals"><span>✓</span>Approvals</a>
 <a data-nav="reports-admin" href="/contractor?view=reports-admin"><span>▤</span>Reports Centre</a>
-<a data-nav="previous" href="/trial-demo"><span>◈</span>Previous Month</a>
 <a data-nav="documents" href="/contractor?view=documents"><span>▱</span>Documents</a>
 <a data-nav="setup" href="/contractor?view=setup"><span>⚙</span>Company Setup</a>
 <a data-nav="licence" href="/company-licence"><span>▧</span>Licence</a>
 <a data-nav="telematics" href="/telemetry"><span>⌁</span>Telematics</a>
 <a data-nav="settings" href="/contractor?view=settings"><span>⚙</span>Settings</a>
+<a data-nav="install" href="/install-app"><span>⬇</span>Install App</a>
 </nav>`;
 
 const viewLabels:Record<string,string>={
@@ -37,7 +38,7 @@ const viewLabels:Record<string,string>={
  daily:"Daily Reports Dashboard",users:"Users & Roles Dashboard",alerts:"Alerts Dashboard",
  approvals:"Approvals Dashboard","reports-admin":"Reports Centre",previous:"Previous Month Dashboard",
  documents:"Documents Dashboard",setup:"Company Setup",licence:"Licence Dashboard",telematics:"Telematics Dashboard",
- settings:"Settings Dashboard"
+ settings:"Settings Dashboard",install:"Install TMM Asset Health"
 };
 
 function esc(v:unknown){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]||c));}
