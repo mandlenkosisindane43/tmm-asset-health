@@ -59,6 +59,11 @@ export default {
   async fetch(req:Request,env:Env,ctx:ExecutionContext):Promise<Response>{
     const url=new URL(req.url), path=url.pathname;
 
+    // Stable presentation alias for the approved navy/white demo dashboard.
+    if(path==="/presentation"){
+      return new Response(null,{status:302,headers:{location:"/contractor-demo","cache-control":"no-store"}});
+    }
+
     if(path==="/owner-login" || path==="/owner" || path.startsWith("/owner/")){
       return ownerApp.fetch(req,env as never,ctx as never);
     }
