@@ -57,8 +57,9 @@ export default {
   async fetch(req:Request,env:Env,ctx:ExecutionContext):Promise<Response>{
     const url=new URL(req.url), path=url.pathname;
 
-    // Owner authentication is handled directly here instead of traversing the company/router stack.
-    if(path==="/owner-login" || path.startsWith("/owner/")){
+    // Owner authentication and the exact owner dashboard route are handled
+    // directly here instead of traversing the company/router stack.
+    if(path==="/owner-login" || path==="/owner" || path.startsWith("/owner/")){
       return ownerApp.fetch(req,env as never,ctx as never);
     }
 
