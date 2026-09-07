@@ -1,4 +1,4 @@
-import app from "./lightweight-entry";
+import app from "./mobile-install-email";
 import pwaApp from "./router-pwa";
 
 interface ExecutionContext { waitUntil(promise: Promise<unknown>): void; passThroughOnException(): void; }
