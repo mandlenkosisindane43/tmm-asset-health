@@ -454,9 +454,19 @@ async function dailyPage(env: CompanyAdminEnv, s: AdminSession, url: URL) {
       .bind(s.companyId)
       .all<Record<string, unknown>>()
   ).results;
+  const reportDates = (
+    await env.DB.prepare(
+      "SELECT report_date AS reportDate,COUNT(*) AS rowCount FROM daily_reports_v3 WHERE company_id=? GROUP BY report_date ORDER BY report_date DESC LIMIT 366",
+    )
+      .bind(s.companyId)
+      .all<Record<string, unknown>>()
+  ).results;
   const msg = url.searchParams.get("msg"),
     tone = url.searchParams.get("tone") === "err" ? "err" : "";
-  const body = `${msg ? `<div class="notice ${tone}">${esc(msg)}</div>` : ""}<div class="pagehead"><div><h1>Daily Reports</h1><p>Manual capture or automatic Excel/CSV import. Time or hour-meter based.</p></div></div><div class="dashboard-grid"><div><section class="panel"><h2>Missing reports today (${missing.length})</h2>${missing.length ? `<table class="bigtable"><thead><tr><th>Date</th><th>Site</th><th>Machine</th></tr></thead><tbody>${missing.map((r) => `<tr><td>${isoDate()}</td><td>${esc(r.site)}</td><td>${esc(r.fleet)}</td></tr>`).join("")}</tbody></table>` : `<div class="empty">No missing reports for registered machines.</div>`}</section><section class="panel section"><h2>Daily report history</h2><table class="bigtable"><thead><tr><th>Date</th><th>Site</th><th>Machine</th><th>Activity</th><th>Capture</th><th>Duration h</th><th>Tonnes</th><th>Fault / reason</th><th>Source</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${esc(r.reportDate)}</td><td>${esc(r.site)}</td><td>${esc(r.fleet)}</td><td>${esc(r.activity)}</td><td>${esc(r.basis)}${r.basis === "time" ? ` (${esc(r.timeUnit)})` : ""}</td><td>${num(r.duration).toFixed(3)}</td><td>${r.tonnes == null ? "—" : num(r.tonnes).toFixed(2)}</td><td>${esc(r.fault || "—")}</td><td>${esc(r.sourceKind)}</td></tr>`).join("")}</tbody></table></section></div>${dailyCapturePanel(settings, fleetOptions)}</div>`;
+  const deleteControl = reportDates.length
+    ? `<form method="post" action="/company-admin/daily/delete-date" class="btnrow" style="align-items:end;margin:12px 0" onsubmit="const selected=this.reportDate.options[this.reportDate.selectedIndex];return confirm('Delete the entire daily report for '+this.reportDate.value+' ('+selected.dataset.rows+' rows)? You can upload the corrected report immediately afterwards.');"><label class="field" style="margin:0;min-width:210px">Choose report date<select name="reportDate" required><option value="">Select a date</option>${reportDates.map((r) => `<option value="${esc(r.reportDate)}" data-rows="${num(r.rowCount)}">${esc(r.reportDate)} · ${num(r.rowCount)} row${num(r.rowCount) === 1 ? "" : "s"}</option>`).join("")}</select></label><button class="btn red" type="submit">Delete Whole Day</button></form><p style="font-size:10px;color:#687589;margin:0 0 12px">This removes all daily-report and calculated production rows for the selected date in this company only. You can then upload the corrected report.</p>`
+    : `<div class="empty">No daily-report dates are available to delete.</div>`;
+  const body = `${msg ? `<div class="notice ${tone}">${esc(msg)}</div>` : ""}<div class="pagehead"><div><h1>Daily Reports</h1><p>Manual capture or automatic Excel/CSV import. Time or hour-meter based.</p></div></div><div class="dashboard-grid"><div><section class="panel"><h2>Missing reports today (${missing.length})</h2>${missing.length ? `<table class="bigtable"><thead><tr><th>Date</th><th>Site</th><th>Machine</th></tr></thead><tbody>${missing.map((r) => `<tr><td>${isoDate()}</td><td>${esc(r.site)}</td><td>${esc(r.fleet)}</td></tr>`).join("")}</tbody></table>` : `<div class="empty">No missing reports for registered machines.</div>`}</section><section class="panel section"><h2>Daily report history</h2>${deleteControl}<table class="bigtable"><thead><tr><th>Date</th><th>Site</th><th>Machine</th><th>Activity</th><th>Capture</th><th>Duration h</th><th>Tonnes</th><th>Fault / reason</th><th>Source</th></tr></thead><tbody>${rows.map((r) => `<tr><td>${esc(r.reportDate)}</td><td>${esc(r.site)}</td><td>${esc(r.fleet)}</td><td>${esc(r.activity)}</td><td>${esc(r.basis)}${r.basis === "time" ? ` (${esc(r.timeUnit)})` : ""}</td><td>${num(r.duration).toFixed(3)}</td><td>${r.tonnes == null ? "—" : num(r.tonnes).toFixed(2)}</td><td>${esc(r.fault || "—")}</td><td>${esc(r.sourceKind)}</td></tr>`).join("")}</tbody></table></section></div>${dailyCapturePanel(settings, fleetOptions)}</div>`;
   return responseHtml(shell(s, "daily", "Daily Reports", body));
 }
 
@@ -1184,6 +1194,45 @@ async function handlePost(
         toastUrl("daily", e instanceof Error ? e.message : String(e), "err"),
       );
     }
+  }
+  if (path === "/company-admin/daily/delete-date") {
+    const f = await request.formData();
+    const reportDate = txt(f.get("reportDate"), 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(reportDate))
+      return redirect(toastUrl("daily", "Choose a valid report date to delete.", "err"));
+    const found = await env.DB.prepare(
+      "SELECT COUNT(*) AS rowCount FROM daily_reports_v3 WHERE company_id=? AND report_date=?",
+    )
+      .bind(s.companyId, reportDate)
+      .first<Record<string, unknown>>();
+    const rowCount = num(found?.rowCount);
+    if (!rowCount)
+      return redirect(toastUrl("daily", `No daily report was found for ${reportDate}.`, "err"));
+    await env.DB.batch([
+      env.DB.prepare(
+        `DELETE FROM events WHERE company_id=? AND EXISTS (
+          SELECT 1 FROM daily_reports_v3 d
+          WHERE d.company_id=events.company_id AND d.report_date=?
+            AND d.fleet_number=events.fleet_number
+            AND (d.fault_reason IS NOT NULL OR d.activity='downtime')
+            AND date(events.opened_at)=d.report_date
+            AND events.description=COALESCE(NULLIF(d.fault_reason,''),'Recorded downtime')
+            AND abs(events.downtime_hours-d.duration_hours)<0.000001
+        )`,
+      ).bind(s.companyId, reportDate),
+      env.DB.prepare(
+        "DELETE FROM production_records WHERE company_id=? AND report_date=?",
+      ).bind(s.companyId, reportDate),
+      env.DB.prepare(
+        "DELETE FROM daily_reports_v3 WHERE company_id=? AND report_date=?",
+      ).bind(s.companyId, reportDate),
+    ]);
+    return redirect(
+      toastUrl(
+        "daily",
+        `${rowCount} row${rowCount === 1 ? "" : "s"} for ${reportDate} deleted. You can now upload the corrected daily report.`,
+      ),
+    );
   }
   if (path === "/company-admin/daily/import") {
     const f = await request.formData();
