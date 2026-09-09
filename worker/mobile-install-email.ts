@@ -53,6 +53,22 @@ async function sendOwnerInstallEmail(req:Request,env:Env){const owner=await owne
 
 async function injectOwnerInstallSender(req:Request,env:Env,res:Response){if(req.method!=="GET")return res;const u=new URL(req.url);if(u.pathname!=="/owner"||u.searchParams.get("view"))return res;const ct=res.headers.get("content-type")||"";if(!ct.includes("text/html"))return res;const owner=await ownerSession(req,env);if(!owner)return res;const users=await all(env,"SELECT a.id,a.full_name fullName,a.email,c.name companyName FROM contractor_accounts a JOIN companies c ON c.id=a.company_id WHERE a.status='active' AND trim(a.email)<>'' ORDER BY c.name,a.full_name");const options=users.map(r=>`<option value="${Number(r.id)}">${esc(r.companyName)} · ${esc(r.fullName||r.email)} · ${esc(r.email)}</option>`).join("");const panel=`<section class="panel section-gap" style="border:2px solid #11975c"><h2>Send Mobile Installation Link</h2><p class="muted">Select any active company user and send the official Android/iPhone installation page from the owner dashboard.</p><form method="post" action="/owner/mobile-install/send" style="display:grid;grid-template-columns:minmax(260px,1fr) auto;gap:10px;align-items:end"><input type="hidden" name="csrf" value="${esc(owner.csrf)}"><label class="field" style="margin:0">Company user<select name="accountId" required><option value="">Choose company user</option>${options}</select></label><button class="btn" type="submit">Send Mobile Installation Link</button></form></section>`;let body=await res.text();body=body.replace('<div class="grid g2 section-gap"><section class="panel"><h2>LATEST INVITATIONS</h2>',panel+'<div class="grid g2 section-gap"><section class="panel"><h2>LATEST INVITATIONS</h2>');const h=new Headers(res.headers);h.delete("content-length");h.set("cache-control","private, no-store");return new Response(body,{status:res.status,statusText:res.statusText,headers:h});}
 
+async function injectOwnerAppInstaller(req:Request,env:Env,res:Response){
+  if(req.method!=="GET")return res;
+  const u=new URL(req.url);
+  if(u.pathname!=="/owner"||u.searchParams.get("view"))return res;
+  const ct=res.headers.get("content-type")||"";
+  if(!ct.includes("text/html"))return res;
+  const owner=await ownerSession(req,env);
+  if(!owner)return res;
+  const panel=`<section class="panel section-gap" style="border:2px solid #e3a500"><h2>Install Owner Mobile App</h2><p class="muted">Install the private Sindane Platform Owner app on your phone. This owner app opens the Owner login and remains separate from every company workspace.</p><div class="actions"><a class="btn amber" href="/install-owner-app">Open Owner App Installation</a></div><p class="muted" style="margin-top:10px">Owner installation: <b>/install-owner-app</b></p></section>`;
+  let body=await res.text();
+  const marker='<div class="grid g2 section-gap"><section class="panel"><h2>LATEST INVITATIONS</h2>';
+  body=body.includes(marker)?body.replace(marker,panel+marker):body.replace('</main>',panel+'</main>');
+  const h=new Headers(res.headers);h.delete("content-length");h.set("cache-control","private, no-store");
+  return new Response(body,{status:res.status,statusText:res.statusText,headers:h});
+}
+
 async function injectInstallSender(req:Request,env:Env,res:Response){
   if(req.method!=="GET")return res;
   const u=new URL(req.url);
@@ -75,7 +91,7 @@ export default {
     if(req.method==="POST"&&u.pathname==="/mobile-install/send")return sendInstallEmail(req,env);
     if(req.method==="POST"&&u.pathname==="/owner/mobile-install/send")return sendOwnerInstallEmail(req,env);
     const res=await currentApp.fetch(req,env as never,ctx as never);
-    return injectOwnerInstallSender(req,env,await injectInstallSender(req,env,res));
+    return injectOwnerAppInstaller(req,env,await injectInstallSender(req,env,res));
   },
   async scheduled(c:ScheduledController,env:Env,ctx:ExecutionContext){
     const app=currentApp as unknown as {scheduled?:(c:ScheduledController,e:Env,x:ExecutionContext)=>Promise<void>|void};
