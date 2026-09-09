@@ -129,6 +129,9 @@ export async function handleUserInvitations(request: Request, env: InvitationEnv
     if (!env.RESEND_API_KEY) return redirect(`/contractor?view=users&tone=err&msg=${encodeURIComponent("Invitation email is not configured yet. Add RESEND_API_KEY in Cloudflare.")}`);
     const existing = await env.DB.prepare("SELECT id FROM contractor_accounts WHERE lower(email)=? LIMIT 1").bind(email).first();
     if (existing) return redirect(`/contractor?view=users&tone=err&msg=${encodeURIComponent("That email already has a user account.")}`);
+    const limit = await env.DB.prepare("SELECT max_users AS maxUsers FROM companies WHERE id=? LIMIT 1").bind(s.companyId).first<Record<string, unknown>>();
+    const usage = await env.DB.prepare(`SELECT (SELECT COUNT(*) FROM contractor_accounts WHERE company_id=?) + (SELECT COUNT(*) FROM user_invitations_v3 WHERE company_id=? AND status='pending' AND datetime(expires_at)>datetime('now')) AS n`).bind(s.companyId,s.companyId).first<Record<string, unknown>>();
+    if (Number(usage?.n || 0) >= Number(limit?.maxUsers || 0)) return redirect(`/contractor?view=users&tone=err&msg=${encodeURIComponent(`User limit reached (${Number(limit?.maxUsers || 0)}). Contact Sindane Asset Solutions to increase the pilot or licence limit.`)}`);
 
     const token = `${crypto.randomUUID()}${crypto.randomUUID().replace(/-/g, "")}`;
     const tokenHash = await sha256(token);
