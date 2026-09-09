@@ -21,6 +21,7 @@ function token(){const b=crypto.getRandomValues(new Uint8Array(32));let s="";for
 async function sha256(v:string){return bytesToHex(new Uint8Array(await crypto.subtle.digest("SHA-256",enc.encode(v))));}
 async function passwordHash(password:string,saltHex:string){const key=await crypto.subtle.importKey("raw",enc.encode(password),"PBKDF2",false,["deriveBits"]);const bits=await crypto.subtle.deriveBits({name:"PBKDF2",hash:"SHA-256",salt:hexToBytes(saltHex),iterations:100000},key,256);return bytesToHex(new Uint8Array(bits));}
 async function first(env:Env,sql:string,binds:unknown[]=[]){try{return await env.DB.prepare(sql).bind(...binds).first<Row>()}catch{return null}}
+async function all(env:Env,sql:string,binds:unknown[]=[]){try{return (await env.DB.prepare(sql).bind(...binds).all<Row>()).results||[]}catch{return []}}
 function redirect(location:string){return new Response(null,{status:303,headers:{location,"cache-control":"no-store"}});}
 function html(body:string,status=200){return new Response(body,{status,headers:{"content-type":"text/html; charset=utf-8","cache-control":"private, no-store"}});}
 
