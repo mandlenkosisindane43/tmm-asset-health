@@ -78,6 +78,11 @@ function monthStart() {
 function uid() {
   return crypto.randomUUID();
 }
+async function pilotLimits(env: CompanyAdminEnv, companyId: number) {
+  try {
+    return await env.DB.prepare("SELECT max_sites AS maxSites,max_machines AS maxMachines FROM company_pilot_limits_v1 WHERE company_id=? LIMIT 1").bind(companyId).first<Record<string, unknown>>();
+  } catch { return null; }
+}
 function bytesToHex(bytes: Uint8Array) {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
@@ -958,6 +963,9 @@ async function handlePost(
           "err",
         ),
       );
+    const companyLimit = await env.DB.prepare("SELECT max_users AS maxUsers FROM companies WHERE id=? LIMIT 1").bind(s.companyId).first<Record<string, unknown>>();
+    const companyUsage = await env.DB.prepare("SELECT COUNT(*) n FROM contractor_accounts WHERE company_id=?").bind(s.companyId).first<Record<string, unknown>>();
+    if (num(companyUsage?.n) >= num(companyLimit?.maxUsers)) return redirect(toastUrl("users", `User limit reached (${num(companyLimit?.maxUsers)}). Contact Sindane Asset Solutions to increase it.`, "err"));
     const salt = bytesToHex(crypto.getRandomValues(new Uint8Array(16))),
       hash = await passwordHash(password, salt),
       now = new Date().toISOString();
@@ -1064,6 +1072,14 @@ async function handlePost(
       return redirect(
         toastUrl("fleet", "Machine ID, type and site are required.", "err"),
       );
+    const pilot = await pilotLimits(env, s.companyId);
+    if (pilot) {
+      const machineCount = await env.DB.prepare("SELECT COUNT(*) n FROM machines WHERE company_id=?").bind(s.companyId).first<Record<string, unknown>>();
+      if (num(machineCount?.n) >= num(pilot.maxMachines)) return redirect(toastUrl("fleet", `Pilot machine limit reached (${num(pilot.maxMachines)}). Contact Sindane Asset Solutions to increase it.`, "err"));
+      const siteExists = await env.DB.prepare("SELECT 1 FROM (SELECT name site FROM company_sites WHERE company_id=? AND active=1 UNION SELECT site FROM machines WHERE company_id=?) WHERE lower(site)=lower(?) LIMIT 1").bind(s.companyId,s.companyId,site).first();
+      const siteCount = await env.DB.prepare("SELECT COUNT(*) n FROM (SELECT lower(name) site FROM company_sites WHERE company_id=? AND active=1 AND trim(name)<>'' UNION SELECT lower(site) FROM machines WHERE company_id=? AND trim(site)<>'')").bind(s.companyId,s.companyId).first<Record<string, unknown>>();
+      if (!siteExists && num(siteCount?.n) >= num(pilot.maxSites)) return redirect(toastUrl("fleet", `Pilot site limit reached (${num(pilot.maxSites)}). Use an existing site or contact Sindane Asset Solutions.`, "err"));
+    }
     await env.DB.prepare(
       "INSERT INTO machines(company_id,fleet_number,category,site,status,operating_hours,availability_target,next_service_hours,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
     )
@@ -1092,6 +1108,15 @@ async function handlePost(
       if (!/\.(csv|xlsx|xls)$/i.test(file.name) || file.size === 0)
         return redirect(toastUrl("fleet", "Choose a non-empty Excel or CSV fleet file.", "err"));
       const rows = await importWorkbook(file);
+      const pilot = await pilotLimits(env, s.companyId);
+      let remainingMachines = Number.POSITIVE_INFINITY;
+      let allowedSites = new Set<string>();
+      if (pilot) {
+        const current = await env.DB.prepare("SELECT COUNT(*) n FROM machines WHERE company_id=?").bind(s.companyId).first<Record<string, unknown>>();
+        remainingMachines = Math.max(0,num(pilot.maxMachines)-num(current?.n));
+        const currentSites = (await env.DB.prepare("SELECT lower(name) site FROM company_sites WHERE company_id=? AND active=1 AND trim(name)<>'' UNION SELECT lower(site) FROM machines WHERE company_id=? AND trim(site)<>''").bind(s.companyId,s.companyId).all<Record<string, unknown>>()).results || [];
+        allowedSites = new Set(currentSites.map(r=>String(r.site)));
+      }
       let created = 0,
         updated = 0,
         skipped = 0;
@@ -1118,16 +1143,21 @@ async function handlePost(
         const existing = await env.DB.prepare(
           "SELECT id FROM machines WHERE company_id=? AND lower(fleet_number)=lower(?) ORDER BY id LIMIT 1",
         ).bind(s.companyId, fleet).first<Record<string, unknown>>();
+        if (pilot && !allowedSites.has(site.toLowerCase()) && allowedSites.size >= num(pilot.maxSites)) { skipped++; continue; }
         if (existing) {
           await env.DB.prepare(
             "UPDATE machines SET fleet_number=?,category=?,site=?,status=?,operating_hours=?,next_service_hours=? WHERE id=? AND company_id=?",
           ).bind(fleet, category, site, status, operatingHours, nextService, num(existing.id), s.companyId).run();
           updated++;
+          allowedSites.add(site.toLowerCase());
         } else {
+          if (pilot && created >= remainingMachines) { skipped++; continue; }
+          if (pilot && !allowedSites.has(site.toLowerCase()) && allowedSites.size >= num(pilot.maxSites)) { skipped++; continue; }
           await env.DB.prepare(
             "INSERT INTO machines(company_id,fleet_number,category,site,status,operating_hours,availability_target,next_service_hours,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
           ).bind(s.companyId, fleet, category, site, status, operatingHours, 0.9, nextService, new Date().toISOString()).run();
           created++;
+          allowedSites.add(site.toLowerCase());
         }
       }
       if (!created && !updated)
@@ -1347,6 +1377,8 @@ async function handlePost(
     const name = txt(f.get("name"), 120);
     if (!name)
       return redirect(toastUrl("setup", "Site name is required.", "err"));
+    const pilot = await pilotLimits(env,s.companyId);
+    if(pilot){const exists=await env.DB.prepare("SELECT 1 FROM (SELECT name site FROM company_sites WHERE company_id=? AND active=1 UNION SELECT site FROM machines WHERE company_id=?) WHERE lower(site)=lower(?) LIMIT 1").bind(s.companyId,s.companyId,name).first();const count=await env.DB.prepare("SELECT COUNT(*) n FROM (SELECT lower(name) site FROM company_sites WHERE company_id=? AND active=1 AND trim(name)<>'' UNION SELECT lower(site) FROM machines WHERE company_id=? AND trim(site)<>'')").bind(s.companyId,s.companyId).first<Record<string,unknown>>();if(!exists&&num(count?.n)>=num(pilot.maxSites))return redirect(toastUrl("setup",`Pilot site limit reached (${num(pilot.maxSites)}). Contact Sindane Asset Solutions to increase it.`,"err"));}
     await env.DB.prepare(
       "INSERT INTO company_sites(company_id,name,code,active,created_at) VALUES(?,?,?,?,?)",
     )
