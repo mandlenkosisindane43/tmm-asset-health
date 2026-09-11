@@ -84,6 +84,15 @@ const shellFix=`<style id="full-admin-shell-fix">
 @media(max-width:820px){.main{width:100%!important;max-width:100vw!important;overflow-x:auto!important;overflow-y:visible!important;-webkit-overflow-scrolling:touch!important;touch-action:pan-x pan-y!important}.content{width:760px!important;min-width:760px!important;max-width:none!important;padding:18px!important}.pagehead,.hero,.panel,.metric{max-width:none!important}.panel{overflow:visible!important}}
 </style>`;
 
+function addHourMeterPreview(body:string){
+ const fields='<div class="twocol"><label class="field">Hour meter start<input name="hourMeterStart" type="number" min="0" step="0.01"></label><label class="field">Hour meter end<input name="hourMeterEnd" type="number" min="0" step="0.01"></label></div>';
+ const upgraded='<div class="twocol"><label class="field">Hour meter start<input id="dailyHourMeterStart" name="hourMeterStart" type="number" min="0" step="0.01" inputmode="decimal"></label><label class="field">Hour meter end<input id="dailyHourMeterEnd" name="hourMeterEnd" type="number" min="0" step="0.01" inputmode="decimal"></label></div><label class="field">Hours worked (automatic)<input id="dailyHoursWorked" type="text" value="" placeholder="End − start" readonly aria-live="polite"></label>';
+ if(!body.includes(fields))return body;
+ body=body.replace(fields,upgraded);
+ const script=`<script id="hour-meter-preview">(()=>{const start=document.getElementById('dailyHourMeterStart'),end=document.getElementById('dailyHourMeterEnd'),worked=document.getElementById('dailyHoursWorked');if(!start||!end||!worked)return;const update=()=>{const a=Number(start.value),b=Number(end.value);if(start.value===''||end.value===''||!Number.isFinite(a)||!Number.isFinite(b)){worked.value='';return}worked.value=b>=a?(b-a).toFixed(2)+' hours':'End must be greater than start'};start.addEventListener('input',update);end.addEventListener('input',update);update()})()</script>`;
+ return body.replace('</body>',script+'</body>');
+}
+
 async function polish(req:Request,res:Response,env:Env){
   if(req.method!=="GET")return res;
   const ct=res.headers.get("content-type")||"";
@@ -94,6 +103,7 @@ async function polish(req:Request,res:Response,env:Env){
   body=body.replace(/<aside class="side">[\s\S]*?<\/aside>/,fullSidebar(view,a));
   body=body.replace(/<a[^>]*href="\/contractor\?view=subscription-request"[^>]*>[\s\S]*?<\/a>/g,"");
   if(view==="fleet")body=await fleetUpgrade(body,env,a);
+  if(view==="daily"||view==="dashboard")body=addHourMeterPreview(body);
   if(!body.includes('id="tmm-navy-company-theme"')&&body.includes("</head>"))body=body.replace("</head>",navyCompanyTheme+shellFix+"</head>");
   else if(!body.includes('id="full-admin-shell-fix"')&&body.includes("</head>"))body=body.replace("</head>",shellFix+"</head>");
   const h=new Headers(res.headers);h.delete("content-length");h.set("cache-control","private, no-store");
