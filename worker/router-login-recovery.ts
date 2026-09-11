@@ -39,7 +39,7 @@ async function fastLogin(req:Request,env:Env,ctx:ExecutionContext){
       verified=await secureEqual(h100,stored);
       if(!verified){const h150=await derivePassword(password,salt,150000);verified=await secureEqual(h150,stored)}
     }
-    if(!verified)return json({error:"Invalid email or password."},401);
+    if(!verified)return fail("Invalid email or password.",401);
     if(!licenceValid(String(row.licenceStatus||""),String(row.licenceExpires||""),Number(row.graceDays||0)))return fail("Company licence is inactive or expired.",403);
 
     const token=b64url(crypto.getRandomValues(new Uint8Array(32)));
