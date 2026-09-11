@@ -1160,7 +1160,15 @@ async function handlePost(
         const category = txt(n.type || n.category || "Machine", 120);
         const site = txt(n.site || "Main Site", 120);
         const status = lower(n.status || "operating");
-        const operatingHours = num(n.hourmeter || n.operatinghours);
+        const currentHourMeter =
+          n.currenthourmeter ??
+          n.currenthourmetre ??
+          n.hourmeter ??
+          n.hourmetre ??
+          n.openinghourmeter ??
+          n.openinghourmetre ??
+          n.operatinghours;
+        const operatingHours = num(currentHourMeter);
         const nextService = String(n.nextservicehour || n.nextservicehours || "").trim() === ""
           ? null
           : num(n.nextservicehour || n.nextservicehours);
