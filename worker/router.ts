@@ -1,4 +1,4 @@
-import legacyWorker from "./index";
+import legacyWorker from "./vinext-base";
 import { handleContractorLiveV2, type ContractorEnvV2 } from "./contractor-live-v2";
 import { ownerContractorsFormPage } from "./owner-contractors-server";
 import { handleContractorAuthFix } from "./contractor-auth-fix";
