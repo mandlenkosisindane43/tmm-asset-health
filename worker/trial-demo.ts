@@ -294,79 +294,6 @@ function severityClass(v: unknown) {
   const s = lower(v);
   return s === "critical" ? "red" : s === "high" ? "amber" : "blue";
 }
-async function sendDemoEmail(
-  env: Env,
-  s: Session,
-  batch: number,
-  recipients: string[],
-  alerts: Row[],
-) {
-  const critical = alerts.filter(
-      (a) => lower(a.severity) === "critical",
-    ).length,
-    high = alerts.filter((a) => lower(a.severity) === "high").length,
-    missing = alerts.filter((a) => a.alert_kind === "missing_report").length;
-  const items = alerts
-    .slice(0, 20)
-    .map(
-      (a) =>
-        `<tr><td style="padding:7px;border-bottom:1px solid #e5e7eb"><b>${esc(String(a.severity).toUpperCase())}</b></td><td style="padding:7px;border-bottom:1px solid #e5e7eb">${esc(a.fleet_number || "Company")}</td><td style="padding:7px;border-bottom:1px solid #e5e7eb">${esc(a.title)}<br><small>${esc(a.details)}</small></td></tr>`,
-    )
-    .join("");
-  const html = `<!doctype html><html><body style="font-family:Arial,sans-serif;background:#f3f6f5;color:#102230;padding:24px"><div style="max-width:760px;margin:auto;background:#fff;border:1px solid #dce5e1;border-radius:12px;overflow:hidden"><div style="background:#061827;color:#fff;padding:22px"><h2 style="margin:0">HISTORICAL TRIAL ALERT DEMONSTRATION</h2><p style="color:#e4ad17">TMM Asset Health · ${esc(s.companyName)}</p></div><div style="padding:22px"><p><b>This is a demonstration using previous-month records. It is not a current live incident.</b></p><p>${alerts.length} alerts would have triggered: ${critical} critical, ${high} high and ${missing} missing-report alerts.</p><table style="width:100%;border-collapse:collapse;font-size:12px"><tr><th align="left">Severity</th><th align="left">Fleet</th><th align="left">Alert</th></tr>${items}</table>${alerts.length > 20 ? `<p>And ${alerts.length - 20} more alerts. Sign in to view the complete demonstration.</p>` : ""}<p><a href="https://tmm-asset-health.mandlenkosisindane43.workers.dev/trial-demo" style="display:inline-block;background:#10975b;color:#fff;text-decoration:none;padding:11px 16px;border-radius:7px;font-weight:bold">Open Trial Analysis</a></p></div></div></body></html>`;
-  let status = "failed",
-    provider = "",
-    error = "";
-  if (!env.RESEND_API_KEY) error = "Email service is not configured";
-  else
-    try {
-      const res = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${env.RESEND_API_KEY}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          from: txt(
-            env.NOTIFICATION_FROM_EMAIL ||
-              "TMM Asset Health <notifications@sindaneassetsolutions.co.za>",
-            250,
-          ),
-          to: recipients,
-          subject: `HISTORICAL TRIAL · ${alerts.length} TMM alerts · ${s.companyName}`,
-          html,
-          reply_to: "admin@sindaneassetsolutions.co.za",
-        }),
-      });
-      const data = (await res.json().catch(() => ({}))) as Row;
-      if (res.ok) {
-        status = "sent";
-        provider = txt(data.id);
-      } else
-        error = txt(
-          data.message || `Email service returned ${res.status}`,
-          500,
-        );
-    } catch (e) {
-      error = e instanceof Error ? e.message : String(e);
-    }
-  await env.DB.prepare(
-    "INSERT INTO demo_alert_deliveries_v1(batch_id,company_id,recipients,alert_count,status,provider_id,error,sent_by,sent_at) VALUES(?,?,?,?,?,?,?,?,?)",
-  )
-    .bind(
-      batch,
-      s.companyId,
-      recipients.join(","),
-      alerts.length,
-      status,
-      provider || null,
-      error || null,
-      s.accountId,
-      new Date().toISOString(),
-    )
-    .run();
-  return { status, error };
-}
 function bars(rows: Row[], value: string, label: string) {
   const max = Math.max(1, ...rows.map((r) => num(r[value])));
   return (
@@ -567,139 +494,6 @@ async function importDemo(req: Request, env: Env, s: Session) {
     `${parsed.length} ${period.label} row(s) matched and imported. ${unmatched.size} fleet number(s) unmatched; ${outside} row(s) outside the previous month.`,
   );
 }
-async function generateAlerts(
-  env: Env,
-  s: Session,
-  batch: number,
-  recipients: string[],
-) {
-  if (!["company_admin", "admin"].includes(s.role))
-    return redirect("Company Administrator authority is required.", "err");
-  const owned = await first(
-    env,
-    "SELECT id,period_start start,period_end end FROM demo_import_batches_v1 WHERE id=? AND company_id=?",
-    [batch, s.companyId],
-  );
-  if (!owned) return redirect("Trial import not found.", "err");
-  await env.DB.prepare(
-    "DELETE FROM demo_alerts_v1 WHERE batch_id=? AND company_id=?",
-  )
-    .bind(batch, s.companyId)
-    .run();
-  const now = new Date().toISOString(),
-    add = async (
-      kind: string,
-      sev: string,
-      fleet: string,
-      title: string,
-      details: string,
-    ) =>
-      env.DB.prepare(
-        "INSERT INTO demo_alerts_v1(batch_id,company_id,alert_kind,severity,fleet_number,title,details,created_at) VALUES(?,?,?,?,?,?,?,?)",
-      )
-        .bind(batch, s.companyId, kind, sev, fleet || null, title, details, now)
-        .run();
-  const faults = await all(
-    env,
-    "SELECT fleet_number fleet,fault_reason fault,severity,unplanned_downtime downtime,report_date date FROM demo_import_records_v1 WHERE batch_id=? AND (fault_reason IS NOT NULL OR unplanned_downtime>0)",
-    [batch],
-  );
-  for (const x of faults)
-    if (["critical", "high"].includes(lower(x.severity)))
-      await add(
-        "critical_condition",
-        lower(x.severity),
-        txt(x.fleet),
-        `${String(x.severity).toUpperCase()} condition · ${txt(x.fleet)}`,
-        `${txt(x.date)} · ${txt(x.fault) || "Unplanned downtime"} · ${fmt(num(x.downtime))} h downtime`,
-      );
-  const repeats = await all(
-    env,
-    "SELECT fleet_number fleet,lower(trim(fault_reason)) fault,COUNT(*) count FROM demo_import_records_v1 WHERE batch_id=? AND trim(COALESCE(fault_reason,''))<>'' GROUP BY fleet_number,lower(trim(fault_reason)) HAVING COUNT(*)>=2",
-    [batch],
-  );
-  for (const x of repeats)
-    await add(
-      "repeat_failure",
-      "high",
-      txt(x.fleet),
-      `Repeated failure · ${txt(x.fleet)}`,
-      `${txt(x.fault)} occurred ${num(x.count)} times in the imported month.`,
-    );
-  const machines = await all(
-    env,
-    "SELECT fleet_number fleet,operating_hours hours,next_service_hours service FROM machines WHERE company_id=? AND next_service_hours IS NOT NULL",
-    [s.companyId],
-  );
-  for (const m of machines) {
-    const left = num(m.service) - num(m.hours);
-    if (left <= 30)
-      await add(
-        "service_due",
-        left <= 0 ? "critical" : "high",
-        txt(m.fleet),
-        `${left <= 0 ? "Overdue" : "Due soon"} service · ${txt(m.fleet)}`,
-        `${fmt(Math.abs(left))} operating hour(s) ${left <= 0 ? "overdue" : "remaining"}.`,
-      );
-  }
-  const dates: string[] = [];
-  for (
-    let d = new Date(txt(owned.start) + "T00:00:00Z"),
-      end = new Date(txt(owned.end) + "T00:00:00Z");
-    d <= end;
-    d.setUTCDate(d.getUTCDate() + 1)
-  )
-    dates.push(d.toISOString().slice(0, 10));
-  const reported = new Set(
-    (
-      await all(
-        env,
-        "SELECT DISTINCT report_date date,fleet_number fleet FROM demo_import_records_v1 WHERE batch_id=?",
-        [batch],
-      )
-    ).map((x) => `${x.date}|${lower(x.fleet)}`),
-  );
-  for (const m of machines)
-    for (const d of dates)
-      if (!reported.has(`${d}|${lower(m.fleet)}`))
-        await add(
-          "missing_report",
-          "medium",
-          txt(m.fleet),
-          `Missing daily report · ${txt(m.fleet)}`,
-          `No report matched for ${d}.`,
-        );
-  const preview = await all(
-    env,
-    "SELECT * FROM demo_alerts_v1 WHERE batch_id=? ORDER BY CASE severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 ELSE 3 END,id",
-    [batch],
-  );
-  const allowed = new Set(
-    (
-      await all(
-        env,
-        "SELECT lower(email) email FROM contractor_accounts WHERE company_id=? AND status='active' UNION SELECT lower(email) email FROM alert_contacts_v3 WHERE company_id=? AND active=1",
-        [s.companyId, s.companyId],
-      )
-    )
-      .map((x) => lower(x.email))
-      .filter((x) => x.includes("@")),
-  );
-  const selected = [...new Set(recipients.map(lower))]
-    .filter((x) => allowed.has(x))
-    .slice(0, 10);
-  if (!selected.length)
-    return redirect("Select at least one valid demonstration recipient.", "err");
-  const sent = await sendDemoEmail(env, s, batch, selected, preview);
-  return sent.status === "sent"
-    ? redirect(
-        `${preview.length} alert preview(s) emailed to ${selected.length} selected recipient(s).`,
-      )
-    : redirect(
-        `${preview.length} previews were generated, but email failed: ${sent.error}`,
-        "err",
-      );
-}
 async function page(req: Request, env: Env, s: Session) {
   const url = new URL(req.url),
     batchRow = await first(
@@ -818,7 +612,7 @@ async function page(req: Request, env: Env, s: Session) {
     p1 = (operating / pieTotal) * 100,
     p2 = p1 + (planned / pieTotal) * 100;
   return response(
-    `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Previous Month Trial · TMM Asset Health</title>${css()}</head><body><header class="top"><img src="/sindane-logo.png" alt="Sindane Asset Solutions"><div><a href="/contractor">Dashboard</a><a href="/select-role">Switch Role</a></div></header><main class="wrap"><section class="hero"><div><h1>Previous Month Trial / Demo</h1><p>${esc(s.companyName)} · ${esc(roleTitle[s.role] || s.role)} view${batchRow ? ` · ${esc(batchRow.period_start)} to ${esc(batchRow.period_end)}` : ""}</p></div><span class="pill">${esc(s.licenceStatus.toUpperCase())} LICENCE</span></section>${flash ? `<div class="notice ${url.searchParams.get("tone") === "err" ? "err" : ""}">${esc(flash)}</div>` : ""}<div class="safe"><b>Controlled demonstration:</b> importing history is silent. Emails are sent only after the Company Admin selects recipients and presses Send Alert Demonstration. Every email is labelled HISTORICAL TRIAL.</div>${admin ? `<div class="panel"><h2>Import the previous calendar month</h2><form class="upload" method="post" action="/trial-demo/import" enctype="multipart/form-data"><input type="hidden" name="csrf" value="${csrf}"><label class="field">Excel or CSV daily report<input type="file" name="file" accept=".csv,.xlsx,.xls" required></label><button class="btn" type="submit">Match Fleet & Import</button></form><p class="muted">Required: Date and Fleet Number. Supported: Site, Shift Hours, Planned Downtime, Unplanned Downtime, Operating Hours, Productive Hours, Tonnes, Fault Cause, Severity and Hour Meter.</p>${batch ? `<form method="post" action="/trial-demo/run-alerts"><input type="hidden" name="batch" value="${batch}"><input type="hidden" name="csrf" value="${csrf}"><h2>Select demonstration recipients</h2><div>${recipients.map((r) => `<label style="display:block;padding:6px"><input type="checkbox" name="recipient" value="${esc(r.email)}"> <b>${esc(r.name)}</b> — ${esc(r.role)} · ${esc(r.email)}</label>`).join("") || '<p class="muted">Add active users or alert contacts before sending.</p>'}</div><button class="btn amber" type="submit">Send Alert Demonstration</button></form>` : ""}</div>` : ""}${
+    `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Previous Month Trial · TMM Asset Health</title>${css()}</head><body><header class="top"><img src="/sindane-logo.png" alt="Sindane Asset Solutions"><div><a href="/contractor">Dashboard</a><a href="/select-role">Switch Role</a></div></header><main class="wrap"><section class="hero"><div><h1>Previous Month Trial / Demo</h1><p>${esc(s.companyName)} · ${esc(roleTitle[s.role] || s.role)} view${batchRow ? ` · ${esc(batchRow.period_start)} to ${esc(batchRow.period_end)}` : ""}</p></div><span class="pill">${esc(s.licenceStatus.toUpperCase())} LICENCE</span></section>${flash ? `<div class="notice ${url.searchParams.get("tone") === "err" ? "err" : ""}">${esc(flash)}</div>` : ""}<div class="safe"><b>Controlled demonstration:</b> importing history is silent. No previous-month email is sent from this page.</div>${admin ? `<div class="panel"><h2>Import the previous calendar month</h2><form class="upload" method="post" action="/trial-demo/import" enctype="multipart/form-data"><input type="hidden" name="csrf" value="${csrf}"><label class="field">Excel or CSV daily report<input type="file" name="file" accept=".csv,.xlsx,.xls" required></label><button class="btn" type="submit">Match Fleet & Import</button></form><p class="muted">Required: Date and Fleet Number. Supported: Site, Shift Hours, Planned Downtime, Unplanned Downtime, Operating Hours, Productive Hours, Tonnes, Fault Cause, Severity and Hour Meter.</p>${batch ? `<form method="post" action="/trial-demo/run-sms"><input type="hidden" name="batch" value="${batch}"><input type="hidden" name="csrf" value="${csrf}"><span id="sms-demo-anchor"></span></form>` : ""}</div>` : ""}${
       batch
         ? `<div class="kpis"><div class="kpi"><small>Availability</small><b>${fmt(availability)}%</b></div><div class="kpi"><small>Utilisation</small><b>${fmt(utilisation)}%</b></div><div class="kpi"><small>Production</small><b>${fmt(tonnes)} t</b></div><div class="kpi"><small>Operating</small><b>${fmt(operating)} h</b></div><div class="kpi"><small>Unplanned DT</small><b>${fmt(unplanned)} h</b></div><div class="kpi"><small>Missing Reports</small><b>${missing}</b></div></div><div class="grid"><div class="panel chart"><h2>Daily availability trend</h2>${trend(days)}</div><div class="panel"><h2>Operating vs downtime</h2><div style="width:170px;height:170px;border-radius:50%;margin:auto;background:conic-gradient(#10975b 0 ${p1}%,#e4a900 ${p1}% ${p2}%,#d82b2b ${p2}% 100%);position:relative"><div style="position:absolute;inset:36px;border-radius:50%;background:#fff;display:grid;place-content:center;text-align:center"><b>${fmt(availability)}%</b><small>available</small></div></div><p style="text-align:center"><span style="color:#10975b">●</span> Operating ${fmt(operating)} h &nbsp; <span style="color:#e4a900">●</span> Planned ${fmt(planned)} h &nbsp; <span style="color:#d82b2b">●</span> Unplanned ${fmt(unplanned)} h</p></div>${rolePanel}<div class="panel"><h2>Machine comparison</h2>${bars(machines, "availability", "fleet")}</div><div class="panel"><h2>Fault causes and downtime</h2>${bars(faults, "hours", "fault")}</div><div class="panel"><h2>Alert demonstration preview</h2><table class="table"><tr><th>Severity</th><th>Fleet</th><th>Would trigger</th><th>Details</th></tr>${
             alerts
@@ -851,17 +645,6 @@ export async function handleTrialDemo(
     return response("Licence access is not active.", 403);
   if (req.method === "POST" && path === "/trial-demo/import")
     return importDemo(req, env, s);
-  if (req.method === "POST" && path === "/trial-demo/run-alerts") {
-    const f = await req.formData();
-    if (txt(f.get("csrf")) !== (await hash(s.token + "|trial-demo")))
-      return redirect("Security check failed.", "err");
-    return generateAlerts(
-      env,
-      s,
-      num(f.get("batch")),
-      f.getAll("recipient").map(String),
-    );
-  }
   if (req.method !== "GET") return response("Method not allowed", 405);
   return page(req, env, s);
 }
