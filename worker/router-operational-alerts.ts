@@ -107,7 +107,7 @@ async function ensureSchema(env: Env) {
     `CREATE INDEX IF NOT EXISTS idx_operational_alert_company ON operational_alert_audit_v1(company_id,created_at)`,
   ).run();
 }
-async function companyFromRequest(req: Request, env: Env) {
+export async function companyFromRequest(req: Request, env: Env) {
   const token = getCookie(req, COOKIE);
   if (!token) return 0;
   const r = await first(
@@ -177,10 +177,10 @@ async function deliver(
   await ensureSchema(env);
   const exists = await first(
     env,
-    "SELECT id FROM operational_alert_audit_v1 WHERE alert_key=? LIMIT 1",
+    "SELECT id,status FROM operational_alert_audit_v1 WHERE alert_key=? LIMIT 1",
     [key],
   );
-  if (exists) return false;
+  if (exists && String(exists.status) === "sent") return false;
   const to = await recipients(env, cid, kind);
   if (!to.length) return false;
   let status = "failed",
@@ -220,7 +220,8 @@ async function deliver(
     }
   }
   await env.DB.prepare(
-    "INSERT OR IGNORE INTO operational_alert_audit_v1(company_id,alert_key,alert_kind,subject,recipients,status,provider_ids,error,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
+    `INSERT INTO operational_alert_audit_v1(company_id,alert_key,alert_kind,subject,recipients,status,provider_ids,error,created_at) VALUES(?,?,?,?,?,?,?,?,?)
+     ON CONFLICT(alert_key) DO UPDATE SET recipients=excluded.recipients,status=excluded.status,provider_ids=excluded.provider_ids,error=excluded.error,created_at=excluded.created_at`,
   )
     .bind(
       cid,
@@ -237,7 +238,7 @@ async function deliver(
   return status === "sent";
 }
 
-async function scanCompany(env: Env, cid: number) {
+export async function scanCompany(env: Env, cid: number) {
   if (!cid) return;
   const company = await companyName(env, cid);
   const today = zaDate();
@@ -403,7 +404,7 @@ async function scanAll(env: Env) {
   );
   for (const c of companies) await scanCompany(env, num(c.id));
 }
-function shouldInstantScan(path: string) {
+export function shouldInstantScan(path: string) {
   return (
     path === "/company-admin/daily/manual" ||
     path === "/company-admin/daily/import" ||
