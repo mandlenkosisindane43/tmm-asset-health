@@ -1,4 +1,4 @@
-import currentApp from "./router-telemetry-ready";
+import currentApp from "./router-telemetry-ingestion-v2";
 
 interface ExecutionContext { waitUntil(promise: Promise<unknown>): void; passThroughOnException(): void; }
 interface ScheduledController { scheduledTime:number; cron:string; noRetry():void; }
