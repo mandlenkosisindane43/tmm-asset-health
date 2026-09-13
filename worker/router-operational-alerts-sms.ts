@@ -523,10 +523,10 @@ async function enhanceTrialPage(req: Request, env: Env, response: Response) {
           )
           .join("")
       : '<p class="muted">No SMS contacts yet. Add a phone number under Dashboard → Alerts → Configure alert contacts.</p>'
-  }</div><div class="actions"><button class="btn amber" type="submit">Send Email Demonstration</button><button class="btn" type="submit" formaction="/trial-demo/run-sms" ${contacts.length ? "" : "disabled"}>Send SMS Demonstration</button></div><p class="muted">SMS gateway: ${smsConfigured(env) ? "Twilio configured" : "Twilio waiting for Cloudflare secrets"}.</p>`;
+  }</div><div class="actions"><button class="btn" type="submit" formaction="/trial-demo/run-sms" ${contacts.length ? "" : "disabled"}>Send SMS Demonstration</button></div><p class="muted">SMS gateway: ${smsConfigured(env) ? "Twilio configured" : "Twilio waiting for Cloudflare secrets"}.</p>`;
 
   let body = await response.text();
-  const needle = '<button class="btn amber" type="submit">Send Alert Demonstration</button>';
+  const needle = '<span id="sms-demo-anchor"></span>';
   if (body.includes(needle)) body = body.replace(needle, block);
   return new Response(body, { status: response.status, headers: response.headers });
 }
