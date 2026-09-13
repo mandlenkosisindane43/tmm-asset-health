@@ -174,7 +174,7 @@ export default {
     const delivery = await handleInviteDelivery(request, env);
     if (delivery) return delivery;
 
-    const invitation = await handleUserInvitations(request, env);
+    const invitation = await handleUserInvitations(request, env, ctx);
     if (invitation) return invitation;
 
     const roleDashboard = await handleRoleDashboardsV4(request, env);
