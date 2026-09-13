@@ -2,6 +2,8 @@ import currentApp from "./router-login-recovery";
 import { handleCompanyAdminV3 } from "./company-admin-v3";
 import { handleContractorReports } from "./contractor-reports";
 import { sindaneLogoDataUri } from "./sindane-logo-data";
+import { handleUserInvitations } from "./user-invitations";
+import { companyFromRequest, scanCompany, shouldInstantScan } from "./router-operational-alerts";
 
 interface ExecutionContext { waitUntil(promise: Promise<unknown>): void; passThroughOnException(): void; }
 interface ScheduledController { scheduledTime:number; cron:string; noRetry():void; }
@@ -39,6 +41,10 @@ export default {
   async fetch(req:Request,env:Env,ctx:ExecutionContext):Promise<Response>{
     const url=new URL(req.url);
 
+    // Invitation delivery must run before the Company Admin fast path.
+    const invitation=await handleUserInvitations(req,env as never,ctx);
+    if(invitation)return invitation;
+
     // Lightweight GET route: do not initialise schemas or traverse the legacy
     // router chain just to render the owner login screen. This was the main
     // source of "Too many API requests by single Worker invocation" on /owner-login.
@@ -59,8 +65,12 @@ export default {
 
     // Core Company Admin pages: one direct handler, no legacy wrapper cascade.
     if(isDirectCompanyRoute(req,url)){
+      const cid=req.method==="POST"&&shouldInstantScan(url.pathname)?await companyFromRequest(req,env as never):0;
       const direct=await handleCompanyAdminV3(req,env as never);
-      if(direct) return direct;
+      if(direct){
+        if(cid&&direct.status<400)ctx.waitUntil(scanCompany(env as never,cid).catch(error=>console.error("direct operational alert scan failed",error)));
+        return direct;
+      }
     }
 
     // Reports Centre has its own complete server handler; bypass wrappers here too.
