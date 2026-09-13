@@ -4,6 +4,10 @@ export interface InvitationEnv {
   INVITE_FROM_EMAIL?: string;
 }
 
+export interface InvitationExecutionContext {
+  waitUntil(promise: Promise<unknown>): void;
+}
+
 type Session = {
   companyId: number;
   accountId: number;
@@ -105,7 +109,7 @@ async function sendInviteEmail(env: InvitationEnv, input: { to: string; name: st
   return String(data.id || "");
 }
 
-export async function handleUserInvitations(request: Request, env: InvitationEnv): Promise<Response | null> {
+export async function handleUserInvitations(request: Request, env: InvitationEnv, ctx?: InvitationExecutionContext): Promise<Response | null> {
   const url = new URL(request.url);
   const path = url.pathname;
   if (!["/company-admin/users/invite", "/accept-invite", "/invite-health"].includes(path)) return null;
@@ -141,14 +145,21 @@ export async function handleUserInvitations(request: Request, env: InvitationEnv
     const inserted = await env.DB.prepare("INSERT INTO user_invitations_v3(company_id,email,full_name,role,token_hash,status,created_by,created_at,expires_at) VALUES(?,?,?,?,?,'pending',?,?,?)").bind(s.companyId, email, fullName, role, tokenHash, s.accountId, now.toISOString(), expires.toISOString()).run();
     const inviteId = Number(inserted.meta?.last_row_id || 0);
     const link = `${url.origin}/accept-invite?token=${encodeURIComponent(token)}`;
-    try {
-      const providerId = await sendInviteEmail(env, { to: email, name: fullName, company: s.companyName, role, link, inviter: s.fullName });
-      if (inviteId) await env.DB.prepare("UPDATE user_invitations_v3 SET provider_message_id=? WHERE id=? AND company_id=?").bind(providerId, inviteId, s.companyId).run();
-    } catch (error) {
-      if (inviteId) await env.DB.prepare("UPDATE user_invitations_v3 SET status='send_failed' WHERE id=? AND company_id=?").bind(inviteId, s.companyId).run();
-      return redirect(`/contractor?view=users&tone=err&msg=${encodeURIComponent(`Invitation email failed: ${error instanceof Error ? error.message : "Unknown email error"}`)}`);
+    const deliverInvitation = async () => {
+      try {
+        const providerId = await sendInviteEmail(env, { to: email, name: fullName, company: s.companyName, role, link, inviter: s.fullName });
+        if (inviteId) await env.DB.prepare("UPDATE user_invitations_v3 SET provider_message_id=? WHERE id=? AND company_id=?").bind(providerId, inviteId, s.companyId).run();
+      } catch (error) {
+        if (inviteId) await env.DB.prepare("UPDATE user_invitations_v3 SET status='send_failed' WHERE id=? AND company_id=?").bind(inviteId, s.companyId).run();
+        console.error("Invitation email delivery failed", { inviteId, companyId: s.companyId, error: error instanceof Error ? error.message : String(error) });
+      }
+    };
+    if (ctx) {
+      ctx.waitUntil(deliverInvitation());
+      return redirect(`/contractor?view=users&msg=${encodeURIComponent(`Invitation queued for ${email}. Check Invitation Delivery for its status. The link expires in 48 hours.`)}`);
     }
-    return redirect(`/contractor?view=users&msg=${encodeURIComponent(`Invitation sent to ${email}. The link expires in 48 hours.`)}`);
+    await deliverInvitation();
+    return redirect(`/contractor?view=users&msg=${encodeURIComponent(`Invitation processed for ${email}. Check Invitation Delivery for its status. The link expires in 48 hours.`)}`);
   }
 
   if (path === "/accept-invite" && request.method === "GET") {
