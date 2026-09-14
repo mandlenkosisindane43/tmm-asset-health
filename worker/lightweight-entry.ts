@@ -4,6 +4,7 @@ import licenceApp from "./router-company-licence-clean";
 import telemetryApp from "./router-telemetry-ingestion-v2";
 import classicCompanyAdminApp from "./router-company-admin-safe";
 import { handleCompanyAdminV3 } from "./company-admin-v3";
+import { handleTmmAssistant } from "./tmm-ai-assistant";
 
 interface ExecutionContext { waitUntil(promise: Promise<unknown>): void; passThroughOnException(): void; }
 interface ScheduledController { scheduledTime:number; cron:string; noRetry():void; }
@@ -52,6 +53,7 @@ export default {
   async fetch(req:Request,env:Env,ctx:ExecutionContext):Promise<Response>{
     const url=new URL(req.url),path=url.pathname;
     if(path==="/presentation-full")return redirect("/contractor-login");
+    const assistant=await handleTmmAssistant(req,env as never);if(assistant)return assistant;
     if(path==="/contractor-login"&&req.method==="GET")return html(robustContractorLoginPage(url.searchParams.get("error")||url.searchParams.get("msg")||""));
     if(path==="/accept-company-admin")return acceptCompanyAdmin(req,env);
 
