@@ -28,6 +28,7 @@ const fullNav = `<nav>
 <a data-nav="setup" href="/contractor?view=setup"><span>⚙</span>Company Setup</a>
 <a data-nav="licence" href="/company-licence"><span>▧</span>Licence</a>
 <a data-nav="telematics" href="/telemetry"><span>⌁</span>Telematics</a>
+<a data-nav="oem-connections" href="/telemetry/connections"><span>↔</span>OEM Connections</a>
 <a data-nav="settings" href="/contractor?view=settings"><span>⚙</span>Settings</a>
 <a data-nav="install" href="/install-app"><span>⬇</span>Install App</a>
 </nav>`;
@@ -37,7 +38,7 @@ const viewLabels:Record<string,string>={
  production:"Production Dashboard","reports-live":"Reports Dashboard",fleet:"Fleet Dashboard",
  daily:"Daily Reports Dashboard",users:"Users & Roles Dashboard",alerts:"Alerts Dashboard",
  approvals:"Approvals Dashboard","reports-admin":"Reports Centre",previous:"Previous Month Dashboard",
- documents:"Documents Dashboard",setup:"Company Setup",licence:"Licence Dashboard",telematics:"Telematics Dashboard",
+ documents:"Documents Dashboard",setup:"Company Setup",licence:"Licence Dashboard",telematics:"Telematics Dashboard","oem-connections":"OEM Connections",
  settings:"Settings Dashboard",install:"Install TMM Asset Health"
 };
 
