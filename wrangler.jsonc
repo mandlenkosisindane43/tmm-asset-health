@@ -17,6 +17,6 @@
     "database_id": "93fdd54e-404e-4fe0-ab59-dde7425575e6"
   }],
   "r2_buckets": [{ "binding": "BUCKET", "bucket_name": "tmm-asset-health-files" }],
-  "triggers": { "crons": ["0 * * * *"] },
+  "triggers": { "crons": ["0 16 * * *"] },
   "observability": { "enabled": true }
 }
