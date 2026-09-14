@@ -64,7 +64,7 @@ export default {
     if(path==="/owner-login"||path==="/owner"||path.startsWith("/owner/"))return ownerApp.fetch(req,env as never,ctx as never);
     if(path==="/company-licence"||path.startsWith("/company-licence/"))return licenceApp.fetch(req,env as never,ctx as never);
     if(path==="/telemetry"||path.startsWith("/telemetry/")||path.startsWith("/api/telemetry"))return telemetryApp.fetch(req,env as never,ctx as never);
-    if(path==="/contractor"&&req.method==="GET"){if(!hasCompanySession(req))return redirect("/contractor-login");return classicCompanyAdminApp.fetch(req,env as never,ctx as never);}
+    if(path==="/contractor"&&req.method==="GET"){if(!hasCompanySession(req))return redirect("/contractor-login");const res=await classicCompanyAdminApp.fetch(req,env as never,ctx as never);const ct=res.headers.get("content-type")||"";if(!ct.includes("text/html"))return res;let body=await res.text();if(body.includes("</nav>")&&!body.includes('href="/tmm-assistant"'))body=body.replace("</nav>",'<a href="/tmm-assistant"><span>✦</span>Ask TMM Assistant</a></nav>');const h=new Headers(res.headers);h.delete("content-length");h.set("cache-control","private, no-store");return new Response(body,{status:res.status,statusText:res.statusText,headers:h});}
     if(path.startsWith("/company-admin/")){const direct=await handleCompanyAdminV3(req,env as never);if(direct)return direct;}
     return coreApp.fetch(req,env as never,ctx as never);
   },
