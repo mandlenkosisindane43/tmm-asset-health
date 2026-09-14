@@ -3,7 +3,7 @@ import { handleCompanyAdminV3 } from "./company-admin-v3";
 import { handleContractorReports } from "./contractor-reports";
 import { sindaneLogoDataUri } from "./sindane-logo-data";
 import { handleUserInvitations } from "./user-invitations";
-import { companyFromRequest, scanCompany, shouldInstantScan } from "./router-operational-alerts";
+import { companyFromRequest, scanAll, scanCompany, shouldInstantScan } from "./router-operational-alerts";
 
 interface ExecutionContext { waitUntil(promise: Promise<unknown>): void; passThroughOnException(): void; }
 interface ScheduledController { scheduledTime:number; cron:string; noRetry():void; }
@@ -84,6 +84,7 @@ export default {
     return currentApp.fetch(req,env as never,ctx as never);
   },
   async scheduled(c:ScheduledController,env:Env,ctx:ExecutionContext){
+    ctx.waitUntil(scanAll(env as never).catch(error=>console.error("scheduled operational alert scan failed",error)));
     const app=currentApp as unknown as {scheduled?:(c:ScheduledController,e:Env,x:ExecutionContext)=>Promise<void>|void};
     if(app.scheduled) return app.scheduled(c,env,ctx);
   }
