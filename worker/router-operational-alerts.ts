@@ -350,30 +350,47 @@ export async function scanCompany(env: Env, cid: number) {
   }
   const zaHour = zaNow().getUTCHours();
   if (zaHour >= 18) {
-    const report = await first(
+    const missing = await all(
       env,
-      "SELECT id FROM daily_reports_v3 WHERE company_id=? AND report_date=? LIMIT 1",
+      `SELECT m.fleet_number AS fleet,m.site
+       FROM machines m
+       WHERE m.company_id=?
+         AND lower(COALESCE(m.status,'')) NOT IN ('retired','inactive')
+         AND NOT EXISTS (
+           SELECT 1 FROM daily_reports_v3 d
+           WHERE d.company_id=m.company_id
+             AND lower(d.fleet_number)=lower(m.fleet_number)
+             AND d.report_date=?
+         )
+       ORDER BY m.site,m.fleet_number`,
       [cid, today],
     );
-    if (!report)
+    if (missing.length) {
+      const fleetList = missing
+        .slice(0, 100)
+        .map((m) => `${txt(m.fleet, 80)}${txt(m.site, 100) ? ` (${txt(m.site, 100)})` : ""}`)
+        .join(", ");
       await deliver(
         env,
         cid,
         "missing_report",
         `missing-report:${cid}:${today}`,
-        `MISSING DAILY REPORT · ${company} · ${today}`,
+        `MISSING DAILY REPORTS (${missing.length}) · ${company} · ${today}`,
         emailHtml(
           company,
-          "Daily TMM report has not been submitted",
+          "Daily TMM reports are missing",
           "REPORT ALERT",
           [
             ["Report date", today],
             ["Cut-off", "18:00 SAST"],
-            ["Status", "No daily report found"],
+            ["Missing machines", missing.length],
+            ["Fleet / site", fleetList],
+            ["Status", "No report found for the listed active machines"],
           ],
           "Open Daily Reports",
         ),
       );
+    }
   }
   const repeats = await all(
     env,
@@ -397,7 +414,7 @@ export async function scanCompany(env: Env, cid: number) {
     );
   }
 }
-async function scanAll(env: Env) {
+export async function scanAll(env: Env) {
   const companies = await all(
     env,
     "SELECT id FROM companies WHERE lower(licence_status) IN ('active','trial')",
