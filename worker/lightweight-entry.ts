@@ -6,6 +6,7 @@ import classicCompanyAdminApp from "./router-company-admin-safe";
 import { handleCompanyAdminV3 } from "./company-admin-v3";
 import { handleTmmAssistant } from "./tmm-ai-assistant";
 import { handleOwnerAiControl } from "./owner-ai-control";
+import { handleTutorialCentre } from "./tutorial-centre";
 
 interface ExecutionContext { waitUntil(promise: Promise<unknown>): void; passThroughOnException(): void; }
 interface ScheduledController { scheduledTime:number; cron:string; noRetry():void; }
@@ -55,6 +56,7 @@ export default {
     const url=new URL(req.url),path=url.pathname;
     if(path==="/presentation-full")return redirect("/contractor-login");
     const assistant=await handleTmmAssistant(req,env as never);if(assistant)return assistant;
+    const tutorial=await handleTutorialCentre(req,env as never);if(tutorial)return tutorial;
     const aiControl=await handleOwnerAiControl(req,env as never);if(aiControl)return aiControl;
     if(path==="/contractor-login"&&req.method==="GET")return html(robustContractorLoginPage(url.searchParams.get("error")||url.searchParams.get("msg")||""));
     if(path==="/accept-company-admin")return acceptCompanyAdmin(req,env);
@@ -66,7 +68,7 @@ export default {
     if(path==="/owner-login"||path==="/owner"||path.startsWith("/owner/")){const res=await ownerApp.fetch(req,env as never,ctx as never);if(req.method!=="GET"||path!=="/owner")return res;const ct=res.headers.get("content-type")||"";if(!ct.includes("text/html"))return res;let body=await res.text();if(body.includes("</nav>")&&!body.includes('href="/owner/ai-control"'))body=body.replace("</nav>",'<a href="/owner/ai-control"><span>✦</span><b>AI Subscription Control</b></a></nav>');else if(!body.includes('href="/owner/ai-control"'))body=body.replace("</main>",'<section class="panel section-gap" style="border:2px solid #e3a500"><h2>TMM AI Subscription Control</h2><p class="muted">Choose which companies may use the AI Assistant and manage their subscription status.</p><a class="btn amber" href="/owner/ai-control">Open AI Subscription Control</a></section></main>');const h=new Headers(res.headers);h.delete("content-length");h.set("cache-control","private, no-store");return new Response(body,{status:res.status,statusText:res.statusText,headers:h});}
     if(path==="/company-licence"||path.startsWith("/company-licence/"))return licenceApp.fetch(req,env as never,ctx as never);
     if(path==="/telemetry"||path.startsWith("/telemetry/")||path.startsWith("/api/telemetry"))return telemetryApp.fetch(req,env as never,ctx as never);
-    if(path==="/contractor"&&req.method==="GET"){if(!hasCompanySession(req))return redirect("/contractor-login");const res=await classicCompanyAdminApp.fetch(req,env as never,ctx as never);const ct=res.headers.get("content-type")||"";if(!ct.includes("text/html"))return res;let body=await res.text();if(body.includes("</nav>")&&!body.includes('href="/tmm-assistant"'))body=body.replace("</nav>",'<a href="/tmm-assistant"><span>✦</span>Ask TMM Assistant</a></nav>');const h=new Headers(res.headers);h.delete("content-length");h.set("cache-control","private, no-store");return new Response(body,{status:res.status,statusText:res.statusText,headers:h});}
+    if(path==="/contractor"&&req.method==="GET"){if(!hasCompanySession(req))return redirect("/contractor-login");const res=await classicCompanyAdminApp.fetch(req,env as never,ctx as never);const ct=res.headers.get("content-type")||"";if(!ct.includes("text/html"))return res;let body=await res.text();if(body.includes("</nav>")&&!body.includes('href="/tutorials"'))body=body.replace("</nav>",'<a href="/tutorials"><span>▶</span>Tutorial Centre</a></nav>');if(body.includes("</nav>")&&!body.includes('href="/tmm-assistant"'))body=body.replace("</nav>",'<a href="/tmm-assistant"><span>✦</span>Ask TMM Assistant</a></nav>');const h=new Headers(res.headers);h.delete("content-length");h.set("cache-control","private, no-store");return new Response(body,{status:res.status,statusText:res.statusText,headers:h});}
     if(path.startsWith("/company-admin/")){const direct=await handleCompanyAdminV3(req,env as never);if(direct)return direct;}
     return coreApp.fetch(req,env as never,ctx as never);
   },
