@@ -217,6 +217,7 @@ function sidebar(s: AdminSession, active: string) {
     ["users", "♙", "Users"],
     ["fleet", "▣", "Fleet"],
     ["daily", "▤", "Daily Reports"],
+    ["offline", "↓", "Offline Capture"],
     ["trial-demo", "◈", "Previous Month Trial"],
     ["reports", "▥", "Reports Centre"],
     ["alerts", "♧", "Alerts"],
@@ -225,7 +226,7 @@ function sidebar(s: AdminSession, active: string) {
     ["settings", "⚙", "Settings"],
     ["switch-role", "⇄", "Switch Role"],
   ];
-  return `<aside class="side"><div class="logo"><img src="/sindane-logo.png" alt="Sindane Asset Solutions"><div class="tag">TRACK. PREVENT. PERFORM.</div></div><nav>${items.map(([id, ic, label]) => `<a class="${active === id ? "active" : ""}" href="${id === "reports" ? "/contractor-reports" : id === "trial-demo" ? "/trial-demo" : id === "switch-role" ? "/select-role" : `/contractor?view=${id}`}"><span>${ic}</span>${label}</a>`).join("")}</nav><div class="userbox"><div class="avatar">●</div><div><b>${esc(s.fullName)}</b><small>${esc(roleName(s.role))}</small></div></div></aside>`;
+  return `<aside class="side"><div class="logo"><img src="/sindane-logo.png" alt="Sindane Asset Solutions"><div class="tag">TRACK. PREVENT. PERFORM.</div></div><nav>${items.map(([id, ic, label]) => `<a class="${active === id ? "active" : ""}" href="${id === "offline" ? "/contractor/offline" : id === "reports" ? "/contractor-reports" : id === "trial-demo" ? "/trial-demo" : id === "switch-role" ? "/select-role" : `/contractor?view=${id}`}"><span>${ic}</span>${label}</a>`).join("")}</nav><div class="userbox"><div class="avatar">●</div><div><b>${esc(s.fullName)}</b><small>${esc(roleName(s.role))}</small></div></div></aside>`;
 }
 function baseCss() {
   return `<style>
