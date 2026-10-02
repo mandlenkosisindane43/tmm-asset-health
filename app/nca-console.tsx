@@ -200,6 +200,7 @@ export default function NcaConsole({
           <button className="iconbtn" onClick={() => window.print()}>
             ▣ Print
           </button>
+          <a href="/offline-capture">Offline capture</a>
           <button
             className="primary"
             onClick={() =>
