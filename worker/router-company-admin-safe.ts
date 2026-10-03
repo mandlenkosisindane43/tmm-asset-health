@@ -1,3 +1,4 @@
+import { canViewCompanyPage, filterCompanyForms, isCompanyAdmin } from "./company-navigation-access";
 import classicApp from "./router-company-admin-demo-ui-v2";
 import { handleCompanyAdminV3 } from "./company-admin-v3";
 import { navyCompanyTheme } from "./navy-company-theme";
@@ -15,7 +16,7 @@ const fullNav = `<nav>
 <a data-nav="dashboard" href="/contractor"><span>⌂</span>Dashboard</a>
 <a data-nav="fleet" href="/contractor?view=fleet"><span>▣</span>Fleet</a>
 <a data-nav="daily" href="/contractor?view=daily"><span>⇧</span>Daily Reports</a>
-<a data-nav="previous" href="/trial-demo"><span>◈</span>Previous Month</a>
+<a data-nav="previous" href="/contractor?view=previous"><span>◈</span>Previous Month</a>
 <a data-nav="breakdowns" href="/contractor?view=breakdowns"><span>⚙</span>Breakdowns</a>
 <a data-nav="maintenance" href="/contractor?view=maintenance"><span>▦</span>Maintenance</a>
 <a data-nav="production" href="/contractor?view=production"><span>▥</span>Production</a>
@@ -46,7 +47,7 @@ function esc(v:unknown){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;"
 function num(v:unknown,f=0){const n=Number(v);return Number.isFinite(n)?n:f;}
 function getCookie(req:Request){for(const p of (req.headers.get("cookie")||"").split(";")){const i=p.indexOf("=");if(i>-1&&p.slice(0,i).trim()==="sas_contractor_v2")return p.slice(i+1).trim()}return "";}
 async function sha256(v:string){return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",enc.encode(v))),b=>b.toString(16).padStart(2,"0")).join("");}
-async function account(req:Request,env:Env){const token=getCookie(req);if(!token)return null;try{return await env.DB.prepare(`SELECT c.id companyId,a.full_name fullName,a.email,a.role,c.name companyName,c.licence_status licenceStatus FROM contractor_sessions s JOIN contractor_accounts a ON a.id=s.account_id AND a.company_id=s.company_id JOIN companies c ON c.id=s.company_id WHERE s.token_hash=? LIMIT 1`).bind(await sha256(token)).first<Row>()}catch{return null}}
+async function account(req:Request,env:Env){const token=getCookie(req);if(!token)return null;try{return await env.DB.prepare(`SELECT c.id companyId,a.full_name fullName,a.email,COALESCE(NULLIF(s.active_role,''),a.role) role,c.name companyName,c.licence_status licenceStatus FROM contractor_sessions s JOIN contractor_accounts a ON a.id=s.account_id AND a.company_id=s.company_id JOIN companies c ON c.id=s.company_id WHERE s.token_hash=? LIMIT 1`).bind(await sha256(token)).first<Row>()}catch{return null}}
 function nextServiceFromHm(hm:number){return (Math.floor(Math.max(0,hm)/SERVICE_INTERVAL_HOURS)+1)*SERVICE_INTERVAL_HOURS;}
 function serviceState(remaining:number){
  if(remaining<0)return {label:"OVERDUE",dot:"🔴",bg:"#fff1f2",fg:"#b42318"};
@@ -57,9 +58,11 @@ function serviceState(remaining:number){
 
 function fullSidebar(view:string,a:Row|null){
  const active=view==="reports"?"reports-live":view;
- const nav=fullNav.replace(`data-nav="${active}"`,`data-nav="${active}" class="active"`);
+ const role=String(a?.role||"");
+ const permittedNav=fullNav.replace(/<a data-nav="([^"]+)"[^>]*>[\s\S]*?<\/a>/g,(link, key)=>canViewCompanyPage(role,key)?link:"");
+ const nav=permittedNav.replace(`data-nav="${active}"`,`data-nav="${active}" class="active"`);
  const label=viewLabels[active]||"Company Admin Dashboard";
- return `<aside class="side full-admin-side"><div class="brand compact-brand"><img src="/sindane-logo.png" alt="Sindane Asset Solutions"><div><b>TMM Asset Health</b><small>${esc(label)}</small></div></div>${nav}<div class="companybox"><small>COMPANY ADMIN</small><b>${esc(a?.companyName||"Company Workspace")}</b><span>${esc(a?.licenceStatus||"active")} licence</span></div><div class="userbox full-user"><div><b>${esc(a?.fullName||"Company Admin")}</b><small>${esc(a?.email||"")}</small><span>${esc(a?.role||"company_admin")}</span></div><form method="post" action="/api/contractor/logout"><button type="submit">Sign out</button></form></div></aside>`;
+ return `<aside class="side full-admin-side"><div class="brand compact-brand"><img src="/sindane-logo.png" alt="Sindane Asset Solutions"><div><b>TMM Asset Health</b><small>${esc(label)}</small></div></div>${nav}<div class="companybox"><small>${esc(isCompanyAdmin(role)?"COMPANY ADMIN":"COMPANY WORKSPACE")}</small><b>${esc(a?.companyName||"Company Workspace")}</b><span>${esc(a?.licenceStatus||"active")} licence</span></div><div class="userbox full-user"><div><b>${esc(a?.fullName||"Company Admin")}</b><small>${esc(a?.email||"")}</small><span>${esc(a?.role||"company_admin")}</span></div><form method="post" action="/api/contractor/logout"><button type="submit">Sign out</button></form></div></aside>`;
 }
 
 async function fleetUpgrade(body:string,env:Env,a:Row|null){
@@ -106,7 +109,8 @@ async function polish(req:Request,res:Response,env:Env){
   const a=await account(req,env);
   body=body.replace(/<aside class="side">[\s\S]*?<\/aside>/,fullSidebar(view,a));
   body=body.replace(/<a[^>]*href="\/contractor\?view=subscription-request"[^>]*>[\s\S]*?<\/a>/g,"");
-  if(view==="fleet")body=await fleetUpgrade(body,env,a);
+  if(view==="fleet"&&isCompanyAdmin(String(a?.role||"")))body=await fleetUpgrade(body,env,a);
+  body=filterCompanyForms(body,String(a?.role||""));
   if(view==="daily"||view==="dashboard")body=addHourMeterPreview(body);
   if(!body.includes('id="tmm-navy-company-theme"')&&body.includes("</head>"))body=body.replace("</head>",navyCompanyTheme+shellFix+"</head>");
   else if(!body.includes('id="full-admin-shell-fix"')&&body.includes("</head>"))body=body.replace("</head>",shellFix+"</head>");
@@ -119,6 +123,13 @@ export default {
     const url=new URL(req.url);
     if(url.pathname==="/contractor"&&req.method==="GET"){
       const view=url.searchParams.get("view")||"dashboard";
+      if(view==="previous"){
+        const a=await account(req,env);
+        if(a&&canViewCompanyPage(String(a.role),view)){
+          const now=new Date(),month=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()-1,1)).toISOString().slice(0,7);
+          return new Response(null,{status:303,headers:{location:`/contractor-reports?type=monthly&month=${month}`,"cache-control":"private, no-store"}});
+        }
+      }
       if(SAFE_V3_VIEWS.has(view)){
         const direct=await handleCompanyAdminV3(req,env as never);
         if(direct)return polish(req,direct,env);
