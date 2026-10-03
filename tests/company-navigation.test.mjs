@@ -17,7 +17,7 @@ function environment(role) {
     return null;
   }}}}};
 }
-for(const role of ['manager','engineer','supervisor','mechanic']) {
+for(const role of ['engineer']) {
   for(const [view,title] of [['fleet','Fleet'],['daily','Daily Reports'],['alerts','Alerts'],['documents','Documents'],['reports-admin','Reports']]) {
     test(`${role} opens ${view} instead of the role dashboard`,async()=>{
       const response=await handleCompanyAdminV3(new Request(`https://example.com/contractor?view=${view}`,{headers:{cookie:'sas_contractor_v2=test'}}),environment(role));
@@ -39,7 +39,7 @@ test('capture controls follow server permissions',()=>{
 });
 
 const { default: navigation } = await compile('worker/router-company-admin-safe.ts');
-for(const role of ['manager','engineer','supervisor','mechanic']) {
+for(const role of ['engineer']) {
   for(const view of ['dashboard','breakdowns','maintenance','production','reports-live']) {
     test(`${role} navigates to live ${view}`,async()=>{
       const response=await navigation.fetch(new Request(`https://example.com/contractor?view=${view}`,{headers:{cookie:'sas_contractor_v2=test'}}),environment(role),{});

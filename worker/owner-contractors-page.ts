@@ -8,7 +8,7 @@ export function ownerContractorsPage(): Response {
   <label class="field">Administrator email<input name="email" type="email" required></label>
   <label class="field">Contractor password<input name="password" type="password" minlength="10" required><span class="hint">Minimum 10 characters.</span></label>
   <label class="field">Licence days<input name="licenceDays" type="number" min="1" value="30" required></label>
-  <label class="field">Role<select name="role"><option value="company_admin">Company Admin</option><option value="engineer">Engineer</option><option value="manager">Manager</option></select></label>
+  <label class="field">Role<select name="role"><option value="company_admin">Company Admin</option><option value="engineer">Engineer</option></select></label>
   <div class="wide"><button id="submitBtn" class="btn" type="submit">Create contractor</button><div id="msg" class="msg">Ready. Fill in every field, then click Create contractor.</div></div>
   </form></div><script>
   var form=document.getElementById('f'),msg=document.getElementById('msg'),btn=document.getElementById('submitBtn');

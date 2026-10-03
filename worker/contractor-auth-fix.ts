@@ -1,3 +1,4 @@
+import { validRoles } from "./account-roles";
 export interface ContractorAuthFixEnv {
   DB: D1Database;
   ADMIN_PASSWORD?: string;
@@ -153,7 +154,7 @@ async function createFromOwnerForm(request: Request, env: ContractorAuthFixEnv) 
     const fullName = text(form.get("fullName"), 120);
     const userEmail = email(form.get("email"));
     const password = String(form.get("password") || "");
-    const role = text(form.get("role") || "company_admin", 40);
+    const role = supportedAccountRole(text(form.get("role") || "company_admin", 40));
 
     if (!companyName || !fullName || !userEmail) {
       return page("Missing information", `<h1>Contractor not created</h1><div class="result err">Company name, administrator name and email are required.</div><a class="btn" href="/owner/contractors">Back</a>`, 400);
@@ -265,4 +266,10 @@ export async function handleContractorAuthFix(request: Request, env: ContractorA
   }
 
   return null;
+}
+
+function supportedAccountRole(value: unknown) {
+  const roles = validRoles([value]);
+  if (!roles.length) throw new Error("Choose Company Administrator or Engineer.");
+  return roles[0];
 }

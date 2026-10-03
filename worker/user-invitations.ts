@@ -127,8 +127,9 @@ export async function handleUserInvitations(request: Request, env: InvitationEnv
     const fullName = txt(f.get("fullName"), 120);
     const email = lower(f.get("email"));
     const roleRaw = lower(f.get("role"));
-    const allowed = ["engineer", "mechanic", "supervisor", "manager", "company_admin"];
-    const role = allowed.includes(roleRaw) ? roleRaw : "mechanic";
+    const allowed = ["engineer", "company_admin"];
+    if (!allowed.includes(roleRaw)) return redirect(`/contractor?view=users&tone=err&msg=${encodeURIComponent("Choose Company Administrator or Engineer.")}`);
+    const role = roleRaw;
     if (!fullName || !email.includes("@")) return redirect(`/contractor?view=users&tone=err&msg=${encodeURIComponent("Enter a valid full name and email address.")}`);
     if (!env.RESEND_API_KEY) return redirect(`/contractor?view=users&tone=err&msg=${encodeURIComponent("Invitation email is not configured yet. Add RESEND_API_KEY in Cloudflare.")}`);
     const existing = await env.DB.prepare("SELECT id FROM contractor_accounts WHERE lower(email)=? LIMIT 1").bind(email).first();
