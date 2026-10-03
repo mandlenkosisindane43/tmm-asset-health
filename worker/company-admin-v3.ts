@@ -1,3 +1,4 @@
+import { canViewCompanyPage, canChangeCompanyPage, isCompanyAdmin, filterCompanyForms } from "./company-navigation-access";
 import * as XLSX from "xlsx";
 import {
   ACCOUNT_ROLES,
@@ -241,6 +242,7 @@ function shell(
   body: string,
   alertCount = 0,
 ) {
+  body = filterCompanyForms(body, s.role);
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} · TMM Asset Health</title>${baseCss()}</head><body><div class="app">${sidebar(s, active)}<main class="main"><header class="topbar"><div>☰</div><div class="right"><button class="btn gray" type="button" onclick="window.print()">🖨 Print Dashboard</button><span class="bell">♟</span>${alertCount ? `<span class="badge">${alertCount}</span>` : ""}<span>▦</span><span class="company">${esc(s.companyName)}</span><form method="post" action="/api/contractor/logout"><button class="btn gray" type="submit">Sign out</button></form></div></header><div class="content">${body}</div><footer class="foot"><span>◈ Secure. Reliable. Insightful. &nbsp; | &nbsp; TMM Asset Health v3.0.0 &nbsp; | &nbsp; © 2026 Sindane Asset Solutions.</span><span class="brandline">TRACK. PREVENT. PERFORM.</span></footer></main></div></body></html>`;
 }
 
@@ -910,7 +912,7 @@ async function handlePost(
   s: AdminSession,
   path: string,
 ): Promise<Response | null> {
-  if (s.role !== "company_admin" && s.role !== "admin")
+  if (!canChangeCompanyPage(s.role, path))
     return responseHtml(
       shell(
         s,
@@ -1546,7 +1548,7 @@ export async function handleCompanyAdminV3(
     }
   }
   if (path === "/company-admin/export" && request.method === "GET") {
-    if (s.role !== "company_admin" && s.role !== "admin")
+    if (!canViewCompanyPage(s.role, "reports-admin"))
       return new Response("Forbidden", { status: 403 });
     return exportSummary(
       env,
@@ -1557,7 +1559,9 @@ export async function handleCompanyAdminV3(
   }
   if (path !== "/contractor" || request.method !== "GET") return null;
   const view = url.searchParams.get("view") || "dashboard";
-  if (!["company_admin", "admin"].includes(s.role)) return roleDashboard(s);
+  if (!canViewCompanyPage(s.role, view))
+    return responseHtml(shell(s, "dashboard", "Access denied", '<div class="notice err">This page requires Company Administrator authority.</div>'), 403);
+  if (view === "dashboard" && !isCompanyAdmin(s.role)) return roleDashboard(s);
   if (view === "users") return usersPage(env, s, url);
   if (view === "fleet") return fleetPage(env, s, url);
   if (view === "daily") return dailyPage(env, s, url);

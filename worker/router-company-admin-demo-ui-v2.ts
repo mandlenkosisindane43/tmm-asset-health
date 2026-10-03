@@ -1,3 +1,4 @@
+import { canViewCompanyPage, isCompanyAdmin } from "./company-navigation-access";
 import currentApp from "./router-company-admin-demo-ui";
 
 interface ExecutionContext { waitUntil(promise: Promise<unknown>): void; passThroughOnException(): void; }
@@ -94,14 +95,14 @@ export default {
   const url=new URL(req.url);
   if(url.pathname==="/contractor"){
    const s=await session(req,env);
-   if(s&&["company_admin","admin"].includes(low(s.role))){
+   if(s&&canViewCompanyPage(low(s.role),url.searchParams.get("view")||"dashboard")){
     const view=url.searchParams.get("view")||"dashboard";
     if(view==="dashboard"&&req.method==="GET")return dashboard(env,s);
     if(view==="breakdowns"&&req.method==="GET")return breakdowns(env,s);
     if(view==="maintenance"&&req.method==="GET")return maintenance(env,s);
     if(view==="production"&&req.method==="GET")return production(env,s);
     if(view==="reports-live"&&req.method==="GET")return reports(env,s);
-    if(view==="subscription-request")return subscriptionRequest(req,env,s);
+    if(view==="subscription-request"&&isCompanyAdmin(low(s.role)))return subscriptionRequest(req,env,s);
    }
   }
   return currentApp.fetch(req,env as never,ctx as never);
