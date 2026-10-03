@@ -408,6 +408,10 @@ async function usersPage(env: CompanyAdminEnv, s: AdminSession, url: URL) {
   ).results;
   const msg = url.searchParams.get("msg"),
     tone = url.searchParams.get("tone") === "err" ? "err" : "";
+  if (!isCompanyAdmin(s.role)) {
+    const directory = `<div class="pagehead"><div><h1>Users & Roles</h1><p>Company directory. Contact your Company Administrator to change access or roles.</p></div></div><section class="panel"><h2>Company users</h2><table class="bigtable"><thead><tr><th>Name</th><th>Email</th><th>Roles</th><th>Status</th></tr></thead><tbody>${rows.map(r => `<tr><td>${esc(r.fullName)}</td><td>${esc(r.email)}</td><td>${String(r.roles || r.role).split(",").filter(Boolean).map(role => esc(roleName(role))).join(", ")}</td><td>${esc(r.status)}</td></tr>`).join("")}</tbody></table></section>`;
+    return responseHtml(shell(s, "users", "Users", directory));
+  }
   const roleChecks = (selected: string[] = []) =>
     ACCOUNT_ROLES.map(
       (role) =>
@@ -434,11 +438,12 @@ async function fleetPage(env: CompanyAdminEnv, s: AdminSession, url: URL) {
   ).results;
   const msg = url.searchParams.get("msg"),
     tone = url.searchParams.get("tone") === "err" ? "err" : "";
-  const deleteAll = rows.length
+  const deleteAll = isCompanyAdmin(s.role) && rows.length
     ? `<section class="panel section" style="border-color:#fecaca"><h2 style="color:#b91c1c">Delete all fleet</h2><p style="color:#687589">This removes all ${rows.length} machines from this company’s fleet register. Historical reports remain available. Type <b>DELETE ALL</b> to confirm.</p><form method="post" action="/company-admin/fleet/delete-all" class="btnrow" onsubmit="return confirm('Delete all ${rows.length} machines from the fleet register?');"><label class="field" style="margin:0;min-width:210px">Confirmation<input name="confirmation" autocomplete="off" placeholder="DELETE ALL" required></label><button class="btn red" type="submit">Delete All Fleet</button></form></section>`
     : "";
   const body = `${msg ? `<div class="notice ${tone}">${esc(msg)}</div>` : ""}<div class="pagehead"><div><h1>Fleet</h1><p>Register machines manually or bulk-import machine records.</p></div></div><div class="split"><section class="panel"><h2>Add machine</h2><form method="post" action="/company-admin/fleet/add"><div class="twocol"><label class="field">Machine ID<input name="fleetNumber" required></label><label class="field">Type<input name="category" placeholder="ADT / Excavator / Dozer" required></label></div><div class="twocol"><label class="field">Site<input name="site" required></label><label class="field">Status<select name="status"><option>operating</option><option>attention</option><option>down</option><option>maintenance</option></select></label></div><div class="twocol"><label class="field">Hour meter<input name="operatingHours" type="number" min="0" step="0.1" value="0"></label><label class="field">Next service hour<input name="nextServiceHours" type="number" min="0" step="0.1"></label></div><button class="btn" type="submit">Register Machine</button></form><h2 style="margin-top:22px">Bulk import</h2><form method="post" action="/company-admin/fleet/import" enctype="multipart/form-data"><label class="field">Excel / CSV<input name="file" type="file" accept=".xlsx,.xls,.csv,text/csv" required></label><p style="font-size:10px;color:#687589">Recommended columns: Machine ID, Type, Site, Status, Hour Meter, Next Service Hour.</p><button class="btn blue" type="submit">Import Machines</button></form></section><section class="panel"><h2>Machine register</h2><div style="overflow-x:auto"><table class="bigtable"><thead><tr><th>Machine ID</th><th>Type</th><th>Site</th><th>Status</th><th>Hour meter</th><th>Service due</th><th>Action</th></tr></thead><tbody>${rows.map((r) => `<tr><td><b>${esc(r.fleet)}</b></td><td>${esc(r.category)}</td><td>${esc(r.site)}</td><td><span class="pill ${String(r.status).toLowerCase() === "down" ? "red" : String(r.status).toLowerCase() === "attention" ? "amber" : ""}">${esc(r.status)}</span></td><td>${num(r.hours).toFixed(1)}</td><td>${r.nextService == null ? "—" : num(r.nextService).toFixed(1)}</td><td><form method="post" action="/company-admin/fleet/delete" onsubmit="return confirm('Delete this machine from the fleet register? Historical reports will remain available.');"><input type="hidden" name="id" value="${num(r.id)}"><button class="btn red" type="submit">Delete</button></form></td></tr>`).join("")}</tbody></table></div></section></div>${deleteAll}`;
-  return responseHtml(shell(s, "fleet", "Fleet", body));
+  const fleetBody = canChangeCompanyPage(s.role, "/company-admin/fleet/add") ? body : body.replace(/<section class="panel"><h2>Add machine<\/h2>[\s\S]*?<\/section>/, '<section class="panel"><h2>Fleet access</h2><p>View the company fleet here. An engineer or Company Administrator can register machines or import the fleet.</p></section>');
+  return responseHtml(shell(s, "fleet", "Fleet", fleetBody));
 }
 
 async function dailyPage(env: CompanyAdminEnv, s: AdminSession, url: URL) {

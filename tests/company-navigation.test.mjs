@@ -25,9 +25,10 @@ for(const role of ['manager','engineer','supervisor','mechanic']) {
       assert.ok(!html.includes('action="/company-admin/fleet/delete-all"'));
     });
   }
-  test(`${role} cannot access user management or delete fleet`,async()=>{
+  test(`${role} can view the directory but cannot delete fleet`,async()=>{
     const env=environment(role),headers={cookie:'sas_contractor_v2=test'};
-    assert.equal((await handleCompanyAdminV3(new Request('https://example.com/contractor?view=users',{headers}),env)).status,403);
+    const directory=await handleCompanyAdminV3(new Request('https://example.com/contractor?view=users',{headers}),env);
+    assert.equal(directory.status,200);assert.ok(!(await directory.text()).includes('Save roles'));
     assert.equal((await handleCompanyAdminV3(new Request('https://example.com/company-admin/fleet/delete-all',{method:'POST',headers,body:new URLSearchParams({confirmation:'DELETE ALL'})}),env)).status,403);
   });
 }
@@ -44,7 +45,7 @@ for(const role of ['manager','engineer','supervisor','mechanic']) {
     test(`${role} navigates to live ${view}`,async()=>{
       const response=await navigation.fetch(new Request(`https://example.com/contractor?view=${view}`,{headers:{cookie:'sas_contractor_v2=test'}}),environment(role),{});
       assert.equal(response.status,200);const html=await response.text();
-      assert.ok(!html.includes('data-nav="users"'));
+      assert.ok(html.includes('data-nav="users"'));
       assert.ok(html.includes(`data-nav="${view}" class="active"`));
       assert.ok(html.includes('data-nav="previous" href="/contractor?view=previous"'));
     });
@@ -55,4 +56,16 @@ test('previous month opens actual company report for September 2026',async()=>{
   assert.equal(response.status,303);
   const now=new Date(),expected=new Date(Date.UTC(now.getUTCFullYear(),now.getUTCMonth()-1,1)).toISOString().slice(0,7);
   assert.equal(response.headers.get('location'),`/contractor-reports?type=monthly&month=${expected}`);
+});
+
+test('engineer fleet has registration and import controls',async()=>{
+ const response=await navigation.fetch(new Request('https://example.com/contractor?view=fleet',{headers:{cookie:'sas_contractor_v2=test'}}),environment('engineer'),{});
+ const html=await response.text();assert.ok(html.includes('name="fleetNumber"'));assert.ok(html.includes('action="/company-admin/fleet/import"'));
+ assert.equal(canChangeCompanyPage('engineer','/company-admin/fleet/add'),true);
+ assert.equal(canChangeCompanyPage('engineer','/company-admin/fleet/import'),true);
+ assert.equal(canChangeCompanyPage('engineer','/company-admin/fleet/delete-all'),false);
+});
+test('read-only fleet shows an access explanation instead of empty input panels',async()=>{
+ const response=await navigation.fetch(new Request('https://example.com/contractor?view=fleet',{headers:{cookie:'sas_contractor_v2=test'}}),environment('mechanic'),{});
+ const html=await response.text();assert.ok(html.includes('Fleet access'));assert.ok(!html.includes('<h2>Add machine</h2>'));
 });
