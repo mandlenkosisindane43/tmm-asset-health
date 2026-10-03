@@ -1,3 +1,4 @@
+import { validRoles } from "./account-roles";
 export interface OwnerContractorEnv {
   DB: D1Database;
   ADMIN_PASSWORD?: string;
@@ -42,7 +43,7 @@ export function ownerContractorsFormPage() {
     <label class="field">Administrator email<input name="email" type="email" required maxlength="200"></label>
     <label class="field">Contractor password<input name="password" type="password" minlength="10" required><span class="hint">Minimum 10 characters.</span></label>
     <label class="field">Licence days<input name="licenceDays" type="number" min="1" max="3650" value="30" required></label>
-    <label class="field">Role<select name="role"><option value="company_admin">Company Admin</option><option value="engineer">Engineer</option><option value="manager">Manager</option></select></label>
+    <label class="field">Role<select name="role"><option value="company_admin">Company Admin</option><option value="engineer">Engineer</option></select></label>
     <div class="wide"><button class="btn" type="submit">Create contractor</button><div class="result">This version submits directly to the Cloudflare Worker. No browser JavaScript is required.</div></div>
   </form>`);
 }
@@ -56,7 +57,7 @@ export async function createOwnerContractorFromForm(request: Request, env: Owner
     if (!configured) return page("Setup required", `<h1>Cannot create contractor</h1><div class="result err">ADMIN_PASSWORD is not configured in Cloudflare.</div><a class="btn" href="/owner/contractors">Back</a>`, 503);
     if (!ownerPassword || !(await secureEqual(ownerPassword, configured))) return page("Authentication failed", `<h1>Contractor not created</h1><div class="result err"><b>Owner password is incorrect.</b><br>Use the exact ADMIN_PASSWORD configured in the Cloudflare Worker secret.</div><a class="btn" href="/owner/contractors">Try again</a>`, 401);
 
-    const companyName = text(form.get("companyName"),120), fullName = text(form.get("fullName"),120), userEmail = email(form.get("email")), password = String(form.get("password") || ""), role = text(form.get("role") || "company_admin",40);
+    const companyName = text(form.get("companyName"),120), fullName = text(form.get("fullName"),120), userEmail = email(form.get("email")), password = String(form.get("password") || ""), role = supportedAccountRole(text(form.get("role") || "company_admin",40));
     if (!companyName || !fullName || !userEmail) return page("Missing information", `<h1>Contractor not created</h1><div class="result err">Company name, administrator name and email are required.</div><a class="btn" href="/owner/contractors">Back</a>`,400);
     if (!userEmail.includes("@")) return page("Invalid email", `<h1>Contractor not created</h1><div class="result err">Enter a valid administrator email address.</div><a class="btn" href="/owner/contractors">Back</a>`,400);
     if (password.length < 10) return page("Password too short", `<h1>Contractor not created</h1><div class="result err">Contractor password must contain at least 10 characters.</div><a class="btn" href="/owner/contractors">Back</a>`,400);
@@ -76,4 +77,10 @@ export async function createOwnerContractorFromForm(request: Request, env: Owner
     console.error("OWNER_CONTRACTOR_CREATE_ERROR", error);
     return page("Creation error", `<h1>Contractor not created</h1><div class="result err">Server/database error: ${escapeHtml(error instanceof Error ? error.message : String(error))}</div><a class="btn" href="/owner/contractors">Back</a>`,500);
   }
+}
+
+function supportedAccountRole(value: unknown) {
+  const roles = validRoles([value]);
+  if (!roles.length) throw new Error("Choose Company Administrator or Engineer.");
+  return roles[0];
 }

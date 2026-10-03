@@ -1,4 +1,4 @@
-const STAFF_ROLES = new Set(['manager', 'engineer', 'supervisor', 'mechanic']);
+const STAFF_ROLES = new Set(['engineer']);
 const OPERATIONAL_VIEWS = new Set(['dashboard', 'fleet', 'daily', 'previous', 'breakdowns', 'maintenance', 'production', 'reports-live', 'reports-admin', 'alerts', 'documents', 'install']);
 export function isCompanyAdmin(role: string): boolean {
   return role === 'company_admin' || role === 'admin';
@@ -10,7 +10,7 @@ export function canChangeCompanyPage(role: string, path: string): boolean {
   if (isCompanyAdmin(role)) return true;
   if (!STAFF_ROLES.has(role)) return false;
   if (path === '/company-admin/documents/upload') return true;
-  return ['engineer', 'supervisor', 'mechanic'].includes(role) && path === '/company-admin/daily/manual';
+  return role === 'engineer' && path === '/company-admin/daily/manual';
 }
 export function filterCompanyForms(body: string, role: string): string {
   if (isCompanyAdmin(role)) return body;

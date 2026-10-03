@@ -1,4 +1,4 @@
-export const ACCOUNT_ROLES = ["company_admin", "manager", "engineer", "supervisor", "mechanic"] as const;
+export const ACCOUNT_ROLES = ["company_admin", "engineer"] as const;
 export type AccountRole = typeof ACCOUNT_ROLES[number];
 
 type RoleEnv = { DB: D1Database };
@@ -11,13 +11,20 @@ export function validRoles(values: unknown[]): AccountRole[] {
 export function roleLabel(role: string) {
   return ({
     company_admin: "Company Administrator",
-    manager: "Mine Manager",
     engineer: "Engineer",
-    supervisor: "Supervisor",
-    mechanic: "Mechanic",
   } as Record<string, string>)[role] || role.replace(/_/g, " ");
 }
 
+export const TWO_ROLE_MIGRATION_SQL = [
+  "UPDATE contractor_accounts SET role='company_admin' WHERE role='admin'",
+  "UPDATE contractor_accounts SET role='engineer' WHERE role IN ('manager','supervisor','mechanic')",
+  `INSERT OR IGNORE INTO contractor_account_roles_v1(account_id,company_id,role,created_at)
+   SELECT account_id,company_id,CASE WHEN role='admin' THEN 'company_admin' ELSE 'engineer' END,created_at
+   FROM contractor_account_roles_v1 WHERE role IN ('admin','manager','supervisor','mechanic')`,
+  "DELETE FROM contractor_account_roles_v1 WHERE role IN ('admin','manager','supervisor','mechanic')",
+  "UPDATE contractor_sessions SET active_role='company_admin' WHERE active_role='admin'",
+  "UPDATE contractor_sessions SET active_role='engineer' WHERE active_role IN ('manager','supervisor','mechanic')",
+];
 let ready: Promise<void> | null = null;
 export async function ensureAccountRoles(env: RoleEnv) {
   if (ready) return ready;
@@ -41,19 +48,30 @@ export async function ensureAccountRoles(env: RoleEnv) {
     if (!(info.results || []).some(row => String(row.name) === "active_role")) {
       await env.DB.prepare("ALTER TABLE contractor_sessions ADD COLUMN active_role TEXT").run();
     }
+    if (accountsTable) {
+      await env.DB.prepare("CREATE TABLE IF NOT EXISTS account_role_migrations_v1 (name TEXT PRIMARY KEY, applied_at TEXT NOT NULL)").run();
+      const applied = await env.DB.prepare("SELECT name FROM account_role_migrations_v1 WHERE name='admin-engineer-only'").first();
+      if (!applied) {
+        const statements = TWO_ROLE_MIGRATION_SQL.map(sql => env.DB.prepare(sql));
+        const invitations = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='user_invitations_v3'").first();
+        if (invitations) statements.push(env.DB.prepare("UPDATE user_invitations_v3 SET role='engineer' WHERE role IN ('manager','supervisor','mechanic')"));
+        statements.push(env.DB.prepare("INSERT OR IGNORE INTO account_role_migrations_v1(name,applied_at) VALUES('admin-engineer-only',datetime('now'))"));
+        await env.DB.batch(statements);
+      }
+    }
   })().catch(error => { ready = null; throw error; });
   return ready;
 }
 
 export async function rolesForAccount(env: RoleEnv, accountId: number, companyId: number) {
   await ensureAccountRoles(env);
-  const rows = await env.DB.prepare("SELECT role FROM contractor_account_roles_v1 WHERE account_id=? AND company_id=? ORDER BY CASE role WHEN 'company_admin' THEN 1 WHEN 'manager' THEN 2 WHEN 'engineer' THEN 3 WHEN 'supervisor' THEN 4 ELSE 5 END")
+  const rows = await env.DB.prepare("SELECT role FROM contractor_account_roles_v1 WHERE account_id=? AND company_id=? ORDER BY CASE role WHEN 'company_admin' THEN 1 ELSE 2 END")
     .bind(accountId, companyId).all<Record<string, unknown>>();
   return validRoles((rows.results || []).map(row => row.role));
 }
 
 export async function replaceAccountRoles(env: RoleEnv, accountId: number, companyId: number, roles: AccountRole[]) {
-  if (!roles.length) throw new Error("Select at least one role.");
+  if (!roles.length || validRoles(roles).length !== roles.length) throw new Error("Select Company Administrator or Engineer.");
   await ensureAccountRoles(env);
   const now = new Date().toISOString();
   await env.DB.prepare("DELETE FROM contractor_account_roles_v1 WHERE account_id=? AND company_id=?").bind(accountId, companyId).run();

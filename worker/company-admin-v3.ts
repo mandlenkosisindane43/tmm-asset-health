@@ -413,7 +413,7 @@ async function usersPage(env: CompanyAdminEnv, s: AdminSession, url: URL) {
       (role) =>
         `<label style="display:inline-block;margin:4px 9px 4px 0;font-size:10px"><input type="checkbox" name="role" value="${role}" ${selected.includes(role) ? "checked" : ""}> ${esc(roleName(role))}</label>`,
     ).join("");
-  const body = `${msg ? `<div class="notice ${tone}">${esc(msg)}</div>` : ""}<div class="pagehead"><div><h1>Users & Roles</h1><p>Invite employees securely, then manage additional roles after they activate their account.</p></div></div><div class="split"><section class="panel"><h2>Invite a user</h2><p style="font-size:12px;color:#5f6d76;line-height:1.5;margin-top:-4px">The user receives a secure email link, creates their own password, and activates the assigned workspace role. The link expires after 48 hours.</p><form method="post" action="/company-admin/users/invite"><label class="field">Full name<input name="fullName" required></label><label class="field">Email<input name="email" type="email" required></label><label class="field">Initial role<select name="role" required><option value="company_admin">Company Administrator</option><option value="manager">Mine Manager</option><option value="engineer">Engineer</option><option value="supervisor">Supervisor</option><option value="mechanic" selected>Mechanic</option></select></label><button class="btn" type="submit">Send Invitation Email</button><a href="/invite-delivery" style="display:block;text-align:center;margin-top:10px;padding:11px 14px;border:1px solid #b9d9c7;border-radius:8px;color:#087548;text-decoration:none;font-size:12px;font-weight:800;background:#f4fbf7">Check Invitation Delivery</a><small style="display:block;color:#6b7780;margin-top:9px;line-height:1.4">No temporary password is created. Add more roles after the user accepts the invitation.</small></form></section><section class="panel"><h2>Company users</h2><table class="bigtable"><thead><tr><th>Name</th><th>Email</th><th>Roles</th><th>Status</th><th>Access</th></tr></thead><tbody>${rows
+  const body = `${msg ? `<div class="notice ${tone}">${esc(msg)}</div>` : ""}<div class="pagehead"><div><h1>Users & Roles</h1><p>Invite employees securely, then manage additional roles after they activate their account.</p></div></div><div class="split"><section class="panel"><h2>Invite a user</h2><p style="font-size:12px;color:#5f6d76;line-height:1.5;margin-top:-4px">The user receives a secure email link, creates their own password, and activates the assigned workspace role. The link expires after 48 hours.</p><form method="post" action="/company-admin/users/invite"><label class="field">Full name<input name="fullName" required></label><label class="field">Email<input name="email" type="email" required></label><label class="field">Initial role<select name="role" required><option value="company_admin">Company Administrator</option><option value="engineer" selected>Engineer</option></select></label><button class="btn" type="submit">Send Invitation Email</button><a href="/invite-delivery" style="display:block;text-align:center;margin-top:10px;padding:11px 14px;border:1px solid #b9d9c7;border-radius:8px;color:#087548;text-decoration:none;font-size:12px;font-weight:800;background:#f4fbf7">Check Invitation Delivery</a><small style="display:block;color:#6b7780;margin-top:9px;line-height:1.4">No temporary password is created. Add more roles after the user accepts the invitation.</small></form></section><section class="panel"><h2>Company users</h2><table class="bigtable"><thead><tr><th>Name</th><th>Email</th><th>Roles</th><th>Status</th><th>Access</th></tr></thead><tbody>${rows
     .map((r) => {
       const selected = String(r.roles || r.role)
         .split(",")
@@ -594,28 +594,13 @@ function weekKey(date: string) {
 
 function roleDashboard(s: AdminSession) {
   const role = roleName(s.role);
-  const cards =
-    s.role === "mechanic"
-      ? [
-          ["Fleet", "/contractor?view=fleet"],
-          ["Daily Reports", "/contractor?view=daily"],
-          ["Documents", "/contractor?view=documents"],
-          ["Alerts", "/contractor?view=alerts"],
-        ]
-      : s.role === "manager"
-        ? [
-            ["Reports Centre", "/contractor-reports"],
-            ["Fleet", "/contractor?view=fleet"],
-            ["Alerts", "/contractor?view=alerts"],
-            ["Documents", "/contractor?view=documents"],
-          ]
-        : [
-            ["Fleet", "/contractor?view=fleet"],
-            ["Daily Reports", "/contractor?view=daily"],
-            ["Reports Centre", "/contractor-reports"],
-            ["Alerts", "/contractor?view=alerts"],
-            ["Documents", "/contractor?view=documents"],
-          ];
+  const cards = [
+    ["Fleet", "/contractor?view=fleet"],
+    ["Daily Reports", "/contractor?view=daily"],
+    ["Reports Centre", "/contractor-reports"],
+    ["Alerts", "/contractor?view=alerts"],
+    ["Documents", "/contractor?view=documents"],
+  ];
   const body = `<div class="rolehero"><img src="/sindane-logo.png" alt="Sindane Asset Solutions"><div><h1>${esc(role)} Dashboard</h1><p>${esc(s.companyName)} · Secure company workspace</p></div></div><div class="cards">${cards.map((c) => `<a class="card" href="${c[1]}" style="text-decoration:none;color:#111827"><h3>${c[0]}</h3><p>Open ${c[0]} for this company.</p><span class="green"><b>Open →</b></span></a>`).join("")}</div>`;
   return responseHtml(shell(s, "dashboard", `${role} Dashboard`, body));
 }

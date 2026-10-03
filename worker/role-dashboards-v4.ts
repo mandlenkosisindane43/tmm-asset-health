@@ -847,11 +847,7 @@ export async function handleRoleDashboardsV4(
   if (request.method !== "GET" || url.pathname !== "/contractor") return null;
   const s = await getSession(request, env);
   if (!s) return null;
-  if (!["engineer", "supervisor", "mechanic", "manager"].includes(s.role))
-    return null;
+  if (s.role !== "engineer") return null;
   const c = await loadCommon(env, s);
-  if (s.role === "engineer") return engineer(env, s, c);
-  if (s.role === "supervisor") return supervisor(env, s, c);
-  if (s.role === "mechanic") return mechanic(env, s, c);
-  return manager(env, s, c);
+  return engineer(env, s, c);
 }

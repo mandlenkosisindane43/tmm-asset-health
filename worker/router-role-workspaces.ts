@@ -907,7 +907,7 @@ export default {
           new URL("/subscription-locked", request.url).toString(),
           302,
         );
-      if (!["engineer", "supervisor", "mechanic", "manager"].includes(s.role))
+      if (!["engineer"].includes(s.role))
         return Response.redirect(
           new URL("/contractor", request.url).toString(),
           302,
@@ -931,7 +931,7 @@ export default {
       const s = await session(request, env);
       if (
         s &&
-        ["engineer", "supervisor", "mechanic", "manager"].includes(s.role) &&
+        ["engineer"].includes(s.role) &&
         licenceActive(s)
       ) {
         let body = await response.text();
