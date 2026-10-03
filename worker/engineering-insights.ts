@@ -35,9 +35,3 @@ export function qualityIssues(production:Row[],daily:Row[]){
  return issues;
 }
 export function overdueRecommendation(r:Row,today:string){return !!r.due_date&&String(r.due_date)<today&&r.status!=='completed';}
-export function demoDataset(){
- const machines=[{id:1,fleet:'DEMO-01',category:'Excavator',site:'Demo Site',status:'operating',hours:247,nextService:250},{id:2,fleet:'DEMO-02',category:'Truck',site:'Demo Site',status:'attention',hours:520,nextService:500}];
- const production=Array.from({length:14},(_,i)=>machines.map((m,j)=>({id:i*2+j+1,reportDate:`2026-10-${String(i+1).padStart(2,'0')}`,fleet:m.fleet,shiftHours:12,plannedDowntime:1,unplannedDowntime:i%4===j?2:0,operatingHours:8,productiveHours:7,tonnes:150+i*8+j*30}))).flat();
- const events=[{id:1,fleet:'DEMO-01',eventType:'breakdown',system:'Hydraulics',description:'Illustrative hydraulic fault',openedAt:'2026-10-03',closedAt:'2026-10-04',downtime:6,status:'closed'},{id:2,fleet:'DEMO-01',eventType:'breakdown',system:'Hydraulics',description:'Illustrative repeat fault',openedAt:'2026-10-08',closedAt:'2026-10-09',downtime:4,status:'closed'},{id:3,fleet:'DEMO-02',eventType:'breakdown',system:'Tyres',description:'Illustrative tyre damage',openedAt:'2026-10-10',closedAt:null,downtime:2,status:'open'}];
- return {machines,production,events,settings:{dailyTarget:450,availabilityTarget:90},users:[]};
-}

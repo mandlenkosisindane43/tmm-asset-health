@@ -17,7 +17,7 @@ const fullNav = `<nav>
 <a data-nav="recommendations" href="/contractor?view=recommendations"><span>✎</span>Recommendations</a>
 <a data-nav="machine-history" href="/contractor?view=machine-history"><span>◷</span>Machine History</a>
 <a data-nav="data-quality" href="/contractor?view=data-quality"><span>✓</span>Data Quality</a>
-<a data-nav="demo" href="/contractor?view=demo"><span>▶</span>Presentation Demo</a>
+<a data-nav="management-presentation" href="/contractor?view=management-presentation"><span>▶</span>Management Presentation</a>
 <a data-nav="fleet" href="/contractor?view=fleet"><span>▣</span>Fleet</a>
 <a data-nav="daily" href="/contractor?view=daily"><span>⇧</span>Daily Reports</a>
 <a data-nav="previous" href="/contractor?view=previous"><span>◈</span>Previous Month</a>
@@ -39,7 +39,7 @@ const fullNav = `<nav>
 </nav>`;
 
 const viewLabels:Record<string,string>={
- dashboard:"Company Admin Dashboard","machine-history":"Machine History","data-quality":"Data Quality",demo:"Presentation Demo",breakdowns:"Breakdowns Dashboard",maintenance:"Maintenance Dashboard",
+ dashboard:"Company Admin Dashboard","machine-history":"Machine History","data-quality":"Data Quality","management-presentation":"Management Presentation",breakdowns:"Breakdowns Dashboard",maintenance:"Maintenance Dashboard",
  production:"Production Dashboard","reports-live":"Reports Dashboard",fleet:"Fleet Dashboard",
  daily:"Daily Reports Dashboard",users:"Users & Roles Dashboard",alerts:"Alerts Dashboard",
  approvals:"Approvals Dashboard","reports-admin":"Reports Centre",previous:"Previous Month Dashboard",
@@ -111,7 +111,6 @@ async function polish(req:Request,res:Response,env:Env){
   let body=await res.text();
   const url=new URL(req.url),view=url.searchParams.get("view")||"dashboard";
   let a=await account(req,env);
-  if(view==="demo"&&a)a={...a,companyName:"Demo Mine",fullName:"Demo User",email:"",licenceStatus:"sample"};
   body=body.replace(/<aside class="side">[\s\S]*?<\/aside>/,fullSidebar(view,a));
   body=body.replace(/<a[^>]*href="\/contractor\?view=subscription-request"[^>]*>[\s\S]*?<\/a>/g,"");
   if(view==="fleet"&&isCompanyAdmin(String(a?.role||"")))body=await fleetUpgrade(body,env,a);
@@ -129,6 +128,7 @@ export default {
     const url=new URL(req.url);
     if(url.pathname==="/contractor"&&req.method==="GET"){
       const view=url.searchParams.get("view")||"dashboard";
+      if(view==="demo"){url.searchParams.set("view","management-presentation");url.searchParams.delete("download");return new Response(null,{status:303,headers:{location:url.pathname+url.search,"cache-control":"private, no-store"}});}
       if(view==="previous"){
         const a=await account(req,env);
         if(a&&canViewCompanyPage(String(a.role),view)){

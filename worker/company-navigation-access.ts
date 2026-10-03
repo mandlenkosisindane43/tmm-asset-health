@@ -1,5 +1,5 @@
 const STAFF_ROLES = new Set(['engineer']);
-const OPERATIONAL_VIEWS = new Set(['dashboard', 'recommendations', 'machine-history', 'data-quality', 'demo', 'fleet', 'daily', 'previous', 'breakdowns', 'maintenance', 'production', 'reports-live', 'reports-admin', 'alerts', 'documents', 'install']);
+const OPERATIONAL_VIEWS = new Set(['dashboard', 'recommendations', 'machine-history', 'data-quality', 'management-presentation', 'fleet', 'daily', 'previous', 'breakdowns', 'maintenance', 'production', 'reports-live', 'reports-admin', 'alerts', 'documents', 'install']);
 export function isCompanyAdmin(role: string): boolean {
   return role === 'company_admin' || role === 'admin';
 }
