@@ -15,6 +15,9 @@ const SERVICE_INTERVAL_HOURS=250;
 const fullNav = `<nav>
 <a data-nav="dashboard" href="/contractor"><span>⌂</span>Dashboard</a>
 <a data-nav="recommendations" href="/contractor?view=recommendations"><span>✎</span>Recommendations</a>
+<a data-nav="machine-history" href="/contractor?view=machine-history"><span>◷</span>Machine History</a>
+<a data-nav="data-quality" href="/contractor?view=data-quality"><span>✓</span>Data Quality</a>
+<a data-nav="demo" href="/contractor?view=demo"><span>▶</span>Presentation Demo</a>
 <a data-nav="fleet" href="/contractor?view=fleet"><span>▣</span>Fleet</a>
 <a data-nav="daily" href="/contractor?view=daily"><span>⇧</span>Daily Reports</a>
 <a data-nav="previous" href="/contractor?view=previous"><span>◈</span>Previous Month</a>
@@ -36,7 +39,7 @@ const fullNav = `<nav>
 </nav>`;
 
 const viewLabels:Record<string,string>={
- dashboard:"Company Admin Dashboard",breakdowns:"Breakdowns Dashboard",maintenance:"Maintenance Dashboard",
+ dashboard:"Company Admin Dashboard","machine-history":"Machine History","data-quality":"Data Quality",demo:"Presentation Demo",breakdowns:"Breakdowns Dashboard",maintenance:"Maintenance Dashboard",
  production:"Production Dashboard","reports-live":"Reports Dashboard",fleet:"Fleet Dashboard",
  daily:"Daily Reports Dashboard",users:"Users & Roles Dashboard",alerts:"Alerts Dashboard",
  approvals:"Approvals Dashboard","reports-admin":"Reports Centre",previous:"Previous Month Dashboard",
@@ -107,7 +110,8 @@ async function polish(req:Request,res:Response,env:Env){
   if(!ct.includes("text/html"))return res;
   let body=await res.text();
   const url=new URL(req.url),view=url.searchParams.get("view")||"dashboard";
-  const a=await account(req,env);
+  let a=await account(req,env);
+  if(view==="demo"&&a)a={...a,companyName:"Demo Mine",fullName:"Demo User",email:"",licenceStatus:"sample"};
   body=body.replace(/<aside class="side">[\s\S]*?<\/aside>/,fullSidebar(view,a));
   body=body.replace(/<a[^>]*href="\/contractor\?view=subscription-request"[^>]*>[\s\S]*?<\/a>/g,"");
   if(view==="fleet"&&isCompanyAdmin(String(a?.role||"")))body=await fleetUpgrade(body,env,a);
