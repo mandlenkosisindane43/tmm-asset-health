@@ -33,7 +33,7 @@ for(const role of ['engineer']) {
 }
 test('capture controls follow server permissions',()=>{
   const form='<form method="post" action="/company-admin/daily/manual"><button>Save daily</button></form>';
-  assert.ok(filterCompanyForms(form,'engineer').includes('Save daily'));
+  assert.equal(filterCompanyForms(form,'engineer'),'');
   assert.equal(filterCompanyForms(form,'manager'),'');
   assert.equal(canChangeCompanyPage('mechanic','/company-admin/users/roles'),false);
 });

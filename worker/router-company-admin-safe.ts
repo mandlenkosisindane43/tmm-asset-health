@@ -14,6 +14,7 @@ const SERVICE_INTERVAL_HOURS=250;
 
 const fullNav = `<nav>
 <a data-nav="dashboard" href="/contractor"><span>⌂</span>Dashboard</a>
+<a data-nav="recommendations" href="/contractor?view=recommendations"><span>✎</span>Recommendations</a>
 <a data-nav="fleet" href="/contractor?view=fleet"><span>▣</span>Fleet</a>
 <a data-nav="daily" href="/contractor?view=daily"><span>⇧</span>Daily Reports</a>
 <a data-nav="previous" href="/contractor?view=previous"><span>◈</span>Previous Month</a>
@@ -61,7 +62,7 @@ function fullSidebar(view:string,a:Row|null){
  const role=String(a?.role||"");
  const permittedNav=fullNav.replace(/<a data-nav="([^"]+)"[^>]*>[\s\S]*?<\/a>/g,(link, key)=>canViewCompanyPage(role,key)?link:"");
  const nav=permittedNav.replace(`data-nav="${active}"`,`data-nav="${active}" class="active"`);
- const label=viewLabels[active]||"Company Admin Dashboard";
+ const label=active==="dashboard"?(isCompanyAdmin(role)?"Admin Dashboard":"Engineer Dashboard"):active==="recommendations"?"Recommendations":viewLabels[active]||"Company Workspace";
  return `<aside class="side full-admin-side"><div class="brand compact-brand"><img src="/sindane-logo.png" alt="Sindane Asset Solutions"><div><b>TMM Asset Health</b><small>${esc(label)}</small></div></div>${nav}<div class="companybox"><small>${esc(isCompanyAdmin(role)?"COMPANY ADMIN":"COMPANY WORKSPACE")}</small><b>${esc(a?.companyName||"Company Workspace")}</b><span>${esc(a?.licenceStatus||"active")} licence</span></div><div class="userbox full-user"><div><b>${esc(a?.fullName||"Company Admin")}</b><small>${esc(a?.email||"")}</small><span>${esc(a?.role||"company_admin")}</span></div><form method="post" action="/api/contractor/logout"><button type="submit">Sign out</button></form></div></aside>`;
 }
 
@@ -111,6 +112,7 @@ async function polish(req:Request,res:Response,env:Env){
   body=body.replace(/<a[^>]*href="\/contractor\?view=subscription-request"[^>]*>[\s\S]*?<\/a>/g,"");
   if(view==="fleet"&&isCompanyAdmin(String(a?.role||"")))body=await fleetUpgrade(body,env,a);
   body=filterCompanyForms(body,String(a?.role||""));
+  if(a?.role==="engineer"&&["fleet","daily","documents","reports-admin"].includes(view))body=body.replace(/(<h1[^>]*>[\s\S]*?<\/h1>)/,'$1<p>Engineer access: view records and exports. Use Recommendations to add findings or request corrections from the Admin.</p>');
   if(view==="daily"||view==="dashboard")body=addHourMeterPreview(body);
   if(!body.includes('id="tmm-navy-company-theme"')&&body.includes("</head>"))body=body.replace("</head>",navyCompanyTheme+shellFix+"</head>");
   else if(!body.includes('id="full-admin-shell-fix"')&&body.includes("</head>"))body=body.replace("</head>",shellFix+"</head>");
