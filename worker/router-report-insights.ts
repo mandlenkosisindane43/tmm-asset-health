@@ -1,4 +1,3 @@
-import {completePeriodSummary} from './period-summary';
 import currentApp from "./router-user-removal";
 
 interface ExecutionContext {
@@ -251,10 +250,9 @@ async function enhancePeriodicReport(req: Request, env: Env, response: Response)
 
   let body = await response.text();
   const marker = '<div class="panel"><h2>Fleet performance</h2>';
-  const complete = await completePeriodSummary(env, s.companyId, start, end);
   const panel = body.indexOf('<div class="panel"><h2>Fleet performance');
-  if (panel >= 0) body = body.slice(0, panel) + complete + insight + body.slice(panel);
-  else body = body.replace("</main>", complete + insight + "</main>");
+  if (panel >= 0) body = body.slice(0, panel) + insight + body.slice(panel);
+  else body = body.replace("</main>", insight + "</main>");
   return new Response(body, { status: response.status, headers: response.headers });
 }
 
