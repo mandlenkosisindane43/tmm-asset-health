@@ -1,3 +1,4 @@
+import {previousMonthUpload} from './previous-month-upload';
 import {completePeriodSummary} from './period-summary';
 export interface ContractorReportsEnv {
   DB: D1Database;
@@ -129,7 +130,7 @@ async function dailyReport(env: ContractorReportsEnv, s: ReportSession, url: URL
   return html("Daily Operations Report", chrome(s, content));
 }
 
-async function periodFleetReport(env: ContractorReportsEnv, s: ReportSession, type: "weekly"|"monthly", url: URL, asCsv: boolean) {
+async function periodFleetReport(env: ContractorReportsEnv, s: ReportSession, type: "weekly"|"monthly", url: URL, asCsv: boolean, token = "") {
   const now = isoDate(new Date());
   let start: string, end: string, label: string;
   if (type === "weekly") { const anchor=validDate(url.searchParams.get("date")||"",now); start=mondayOf(anchor); end=addDays(start,7); label=`Week ${start} to ${addDays(end,-1)}`; }
@@ -141,8 +142,9 @@ async function periodFleetReport(env: ContractorReportsEnv, s: ReportSession, ty
   const tonnes=enriched.reduce((a,r)=>a+Number(r.tonnes||0),0), downtime=enriched.reduce((a,r)=>a+Number(r.unplannedDowntime||0),0), scheduled=enriched.reduce((a,r)=>a+Math.max(0,Number(r.shiftHours||0)-Number(r.plannedDowntime||0)),0), operating=enriched.reduce((a,r)=>a+Number(r.operatingHours||0),0), av=scheduled?operating/scheduled*100:0;
   const controls=type==="weekly"?`<label>Week containing<input type="date" name="date" value="${esc(start)}"></label>`:`<label>Month<input type="month" name="month" value="${esc(start.slice(0,7))}"></label>`;
   const qp=type==="weekly"?`date=${encodeURIComponent(start)}`:`month=${encodeURIComponent(start.slice(0,7))}`;
+  const upload=type==="monthly"?previousMonthUpload(s.role,await sha256(token+"|trial-demo")):"";
   const complete=await completePeriodSummary(env,s.companyId,start,end);
-  const content=`<div class="hero"><small>${type.toUpperCase()}</small><h1>${type==="weekly"?"Weekly Fleet Summary":"Monthly Availability"}</h1><p>${esc(label)}</p></div><form class="toolbar no-print" method="get"><input type="hidden" name="type" value="${type}">${controls}<button class="btn">Refresh</button><a class="btn secondary" href="/contractor-reports/export?type=${type}&${qp}">Download CSV</a><button class="btn secondary" type="button" onclick="window.print()">Print / PDF</button></form><div class="metrics"><div class="metric"><small>Production</small><b>${num(tonnes)} t</b></div><div class="metric"><small>Availability</small><b>${pct(av)}</b></div><div class="metric"><small>Unplanned downtime</small><b>${num(downtime)} h</b></div><div class="metric"><small>Fleet with records</small><b>${enriched.length}</b></div></div>${complete}<div class="panel"><h2>Fleet performance</h2>${table}</div>`;
+  const content=`<div class="hero"><small>${type.toUpperCase()}</small><h1>${type==="weekly"?"Weekly Fleet Summary":"Monthly Availability"}</h1><p>${esc(label)}</p></div><form class="toolbar no-print" method="get"><input type="hidden" name="type" value="${type}">${controls}<button class="btn">Refresh</button><a class="btn secondary" href="/contractor-reports/export?type=${type}&${qp}">Download CSV</a><button class="btn secondary" type="button" onclick="window.print()">Print / PDF</button></form><div class="metrics"><div class="metric"><small>Production</small><b>${num(tonnes)} t</b></div><div class="metric"><small>Availability</small><b>${pct(av)}</b></div><div class="metric"><small>Unplanned downtime</small><b>${num(downtime)} h</b></div><div class="metric"><small>Fleet with records</small><b>${enriched.length}</b></div></div>${upload}${complete}<div class="panel"><h2>Fleet performance</h2>${table}</div>`;
   return html(type==="weekly"?"Weekly Fleet Summary":"Monthly Availability",chrome(s,content));
 }
 
@@ -195,7 +197,7 @@ export async function handleContractorReports(request:Request,env:ContractorRepo
     if(!type&&!asCsv)return reportHome(env,s);
     if(type==="daily")return dailyReport(env,s,url,asCsv);
     if(type==="weekly")return periodFleetReport(env,s,"weekly",url,asCsv);
-    if(type==="monthly")return periodFleetReport(env,s,"monthly",url,asCsv);
+    if(type==="monthly")return periodFleetReport(env,s,"monthly",url,asCsv,cookie(request));
     if(type==="pareto")return paretoReport(env,s,url,asCsv);
     if(type==="maintenance")return maintenanceReport(env,s,asCsv);
     if(type==="production")return productionReport(env,s,url,asCsv);
