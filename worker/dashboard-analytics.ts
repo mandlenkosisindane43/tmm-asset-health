@@ -35,7 +35,19 @@ export function chart(title:string,labels:string[],series:{name:string;color:str
  const x=(i:number)=>left+(i+.5)*plotW/labels.length,y=(v:number)=>top+plotH-v/scale*plotH;
  const ticks=[0,.25,.5,.75,1].map(t=>`<line x1="${left}" x2="${w-right}" y1="${y(scale*t)}" y2="${y(scale*t)}" stroke="#e5eaf0"/><text x="${left-7}" y="${y(scale*t)+4}" text-anchor="end">${(scale*t).toFixed(0)}${unit}</text>`).join('');
  const marks=series.map((s,j)=>kind==='bar'?s.values.map((v,i)=>v===null?'':`<rect x="${x(i)-plotW/labels.length*.35+j*plotW/labels.length*.7/series.length}" y="${y(v)}" width="${plotW/labels.length*.7/series.length}" height="${v/scale*plotH}" fill="${s.color}"><title>${escapeHtml(labels[i])}: ${escapeHtml(s.name)} ${v.toFixed(1)}${unit}</title></rect>`).join(''):`${s.values.reduce<string[][]>((segments,v,i)=>{if(v===null){segments.push([]);}else{segments[segments.length-1].push(`${x(i)},${y(v)}`);}return segments;},[[]]).filter(points=>points.length).map(points=>`<polyline points="${points.join(' ')}" fill="none" stroke="${s.color}" stroke-width="2.5"/>`).join('')}${s.values.map((v,i)=>v===null?'':`<circle cx="${x(i)}" cy="${y(v)}" r="3" fill="${s.color}"><title>${escapeHtml(labels[i])}: ${escapeHtml(s.name)} ${v.toFixed(1)}${unit}</title></circle>`).join('')}`).join('');
- const axis=labels.map((l,i)=>`<text x="${x(i)}" y="${h-bottom+20}" text-anchor="middle">${escapeHtml(l)}</text>`).join('');
+ // Reserve space for each date label; never remove the underlying data points.
+ const compactLabel=(label:string)=>/^\d{4}-\d{2}-\d{2}$/.test(label)?`${label.slice(8,10)}/${label.slice(5,7)}`:label;
+ const labelWidth=Math.max(64,...labels.map(l=>compactLabel(l).length*8+20));
+ const maxLabels=Math.max(2,Math.min(8,Math.floor(plotW/labelWidth)));
+ const neededStep=Math.ceil(labels.length/maxLabels);
+ const step=[1,2,5,10,15,20,30,60,90,180,365].find(n=>n>=neededStep)??neededStep;
+ const visible=labels.map((_,i)=>i).filter(i=>i%step===0);
+ const last=labels.length-1;
+ if(visible[visible.length-1]!==last){
+   if(visible.length>1&&x(last)-x(visible[visible.length-1])<labelWidth)visible.pop();
+   visible.push(last);
+ }
+ const axis=visible.map(i=>`<text class="chart-axis-label" x="${x(i)}" y="${h-bottom+22}" text-anchor="middle" font-size="13" fill="#334155"><title>${escapeHtml(labels[i])}</title>${escapeHtml(compactLabel(labels[i]))}</text>`).join('');
  return `<section class="panel chart"><h2>${escapeHtml(title)}</h2><p>${series.map(s=>`<span style="color:${s.color}">● ${escapeHtml(s.name)}</span>`).join(' · ')}</p><div class="chart-scroll"><svg role="img" aria-label="${escapeHtml(title)}" viewBox="0 0 ${w} ${h}" style="min-width:${w}px">${ticks}${marks}${axis}</svg></div><details><summary>View chart data</summary><div class="chart-scroll"><table><thead><tr><th>Date</th>${series.map(s=>`<th>${escapeHtml(s.name)}</th>`).join('')}</tr></thead><tbody>${labels.map((l,i)=>`<tr><td>${escapeHtml(l)}</td>${series.map(s=>`<td>${s.values[i]==null?'—':s.values[i]!.toFixed(1)+unit}</td>`).join('')}</tr>`).join('')}</tbody></table></div></details></section>`;
 }
 export function paretoChart(title:string,rows:ReturnType<typeof paretoRows>){
