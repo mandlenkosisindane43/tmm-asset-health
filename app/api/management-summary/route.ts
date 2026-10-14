@@ -1,9 +1,9 @@
 import { and, eq, gte, lte } from "drizzle-orm";
-import { getChatGPTUser } from "../../../chatgpt-auth";
-import { ensureCoreSchema } from "../../../../db/bootstrap";
-import { getDb } from "../../../../db";
-import { companies, events, machines, productionRecords, purchaseOrders, softwareUsers } from "../../../../db/schema";
-import { downtimePareto, groupProduction, summarizeProduction, type ProductionRow } from "../../../../lib/management-intelligence";
+import { getChatGPTUser } from "../../chatgpt-auth";
+import { ensureCoreSchema } from "../../../db/bootstrap";
+import { getDb } from "../../../db";
+import { companies, events, machines, productionRecords, purchaseOrders, softwareUsers } from "../../../db/schema";
+import { downtimePareto, groupProduction, summarizeProduction, type ProductionRow } from "../../../lib/management-intelligence";
 export const dynamic = "force-dynamic";
 export async function GET(request:Request){
   const user=await getChatGPTUser();
