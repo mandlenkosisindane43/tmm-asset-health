@@ -13,6 +13,7 @@ const nav = [
   "Work orders",
   "Spares & OEM",
   "Intelligence",
+  "Management intelligence",
   "Import centre",
   "Reports",
   "Pricing & quotes",
@@ -33,6 +34,7 @@ const icons = [
   "☑",
   "▣",
   "◈",
+  "▤",
   "⇧",
   "▥",
   "R",
@@ -163,7 +165,7 @@ export default function NcaConsole({
             <button
               key={n}
               className={active === n ? "active" : ""}
-              onClick={() => setActive(n)}
+              onClick={() => n === "Management intelligence" ? window.location.assign("/management") : setActive(n)}
             >
               <i>{icons[i]}</i>
               {n}
