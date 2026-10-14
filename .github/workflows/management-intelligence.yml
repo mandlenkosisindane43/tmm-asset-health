@@ -19,9 +19,7 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - name: TypeScript check
-        run: npx tsc --noEmit
+      - name: Build application with project-supported verification
+        run: npm run build
       - name: Lint changed files
         run: npx eslint app/api/management-summary/route.ts app/management/page.tsx app/management/management-client.tsx lib/management-intelligence.ts
-      - name: Build application
-        run: npm run build
