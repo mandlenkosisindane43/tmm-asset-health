@@ -2,47 +2,15 @@
 import { ChangeEvent, FormEvent, ReactNode, useEffect, useState } from "react";
 import * as XLSX from "xlsx";
 
-const nav = [
-  "Overview",
-  "Companies",
-  "Fleet",
-  "Daily production",
-  "Breakdowns",
-  "Leaks & hoses",
-  "Maintenance",
-  "Work orders",
-  "Spares & OEM",
-  "Intelligence",
-  "Import centre",
-  "Reports",
-  "Pricing & quotes",
-  "Payments & orders",
-  "Alerts & contacts",
-  "Users & roles",
-  "Security",
-  "Software Licence",
+const navigationGroups = [
+  { title: "Fleet Overview", icon: "▦", items: ["Overview", "Fleet"] },
+  { title: "Production & Downtime", icon: "◷", items: ["Daily production", "Breakdowns", "Leaks & hoses"] },
+  { title: "Maintenance Centre", icon: "⚙", items: ["Maintenance", "Work orders", "Spares & OEM"] },
+  { title: "Mining Intelligence", icon: "◈", items: ["Intelligence", "Management intelligence"] },
+  { title: "Reports & Presentations", icon: "▥", items: ["Reports"] },
+  { title: "Fleet Register", icon: "▣", items: ["Fleet"] },
+  { title: "Administration", icon: "⌾", items: ["Companies", "Import centre", "Users & roles", "Security", "Software Licence", "Pricing & quotes", "Payments & orders", "Alerts & contacts"] },
 ];
-const icons = [
-  "⌂",
-  "◎",
-  "▦",
-  "P",
-  "⚙",
-  "⌁",
-  "◷",
-  "☑",
-  "▣",
-  "◈",
-  "⇧",
-  "▥",
-  "R",
-  "PO",
-  "✦",
-  "♙",
-  "⌾",
-  "◇",
-];
-
 type ImportRow = Record<string, string | number | boolean | null>;
 
 function cleanKey(value: string) {
@@ -158,16 +126,21 @@ export default function NcaConsole({
             <small>{owner.businessName}</small>
           </div>
         </div>
-        <nav>
-          {nav.map((n, i) => (
-            <button
-              key={n}
-              className={active === n ? "active" : ""}
-              onClick={() => setActive(n)}
-            >
-              <i>{icons[i]}</i>
-              {n}
-            </button>
+        <nav aria-label="Mining operations navigation">
+          {navigationGroups.map((group) => (
+            <details key={group.title} open={group.items.includes(active) || undefined}>
+              <summary style={{cursor:"pointer",padding:"12px 10px",fontWeight:700}}>
+                <span aria-hidden="true" style={{marginRight:10}}>{group.icon}</span>{group.title}
+              </summary>
+              <div style={{paddingLeft:12}}>
+                {group.items.map((item) => (
+                  <button key={item} className={active === item ? "active" : ""}
+                    onClick={() => item === "Management intelligence" ? window.location.assign("/management") : setActive(item)}>
+                    {item}
+                  </button>
+                ))}
+              </div>
+            </details>
           ))}
         </nav>
         <div className="lic blanklic">
