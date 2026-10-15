@@ -27,3 +27,5 @@
 @media print{.control-room{background:white;color:black}.cr-card,.cr-panel{background:white;color:black;box-shadow:none}.cr-table th{background:white;color:black}}
 
 /* Rebuild request: refresh Cloudflare development preview for mining control room. */
+
+/* Trigger preview branch build after configuring Cloudflare Previews Base. */
