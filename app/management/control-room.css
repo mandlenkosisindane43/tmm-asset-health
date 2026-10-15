@@ -25,3 +25,5 @@
 .cr-two{gap:18px}
 @media(max-width:650px){.control-room{padding:16px}.cr-card,.cr-panel{padding:16px}.cr-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.cr-card{min-height:118px}.cr-card strong{font-size:clamp(19px,5vw,26px)}}
 @media print{.control-room{background:white;color:black}.cr-card,.cr-panel{background:white;color:black;box-shadow:none}.cr-table th{background:white;color:black}}
+
+/* Rebuild request: refresh Cloudflare development preview for mining control room. */
