@@ -2,14 +2,17 @@
 import { ChangeEvent, FormEvent, ReactNode, useEffect, useState } from "react";
 import * as XLSX from "xlsx";
 
-const navigationGroups = [
-  { title: "Fleet Overview", icon: "▦", items: ["Overview", "Fleet"] },
-  { title: "Production & Downtime", icon: "◷", items: ["Daily production", "Breakdowns", "Leaks & hoses"] },
-  { title: "Maintenance Centre", icon: "⚙", items: ["Maintenance", "Work orders", "Spares & OEM"] },
-  { title: "Mining Intelligence", icon: "◈", items: ["Intelligence", "Management intelligence"] },
-  { title: "Reports & Presentations", icon: "▥", items: ["Reports"] },
-  { title: "Fleet Register", icon: "▣", items: ["Fleet"] },
-  { title: "Administration", icon: "⌾", items: ["Companies", "Import centre", "Users & roles", "Security", "Software Licence", "Pricing & quotes", "Payments & orders", "Alerts & contacts"] },
+const navigationItems = [
+  { label: "Dashboard", icon: "▦", target: "Overview" },
+  { label: "Fleet Management", icon: "▣", target: "Fleet" },
+  { label: "Daily Capture", icon: "▤", target: "Daily production" },
+  { label: "Breakdown Capture", icon: "⚒", target: "Breakdowns" },
+  { label: "Fleet Performance", icon: "▥", target: "Intelligence" },
+  { label: "Reports", icon: "▧", target: "Reports" },
+  { label: "Management Intelligence", icon: "◈", target: "Management intelligence" },
+  { label: "Alerts", icon: "◉", target: "Alerts & contacts" },
+  { label: "Users & Roles", icon: "♙", target: "Users & roles" },
+  { label: "Settings", icon: "⚙", target: "Settings" },
 ];
 type ImportRow = Record<string, string | number | boolean | null>;
 
@@ -127,20 +130,20 @@ export default function NcaConsole({
           </div>
         </div>
         <nav aria-label="Mining operations navigation">
-          {navigationGroups.map((group) => (
-            <details key={group.title} open={group.items.includes(active) || undefined}>
-              <summary style={{cursor:"pointer",padding:"12px 10px",fontWeight:700}}>
-                <span aria-hidden="true" style={{marginRight:10}}>{group.icon}</span>{group.title}
-              </summary>
-              <div style={{paddingLeft:12}}>
-                {group.items.map((item) => (
-                  <button key={item} className={active === item ? "active" : ""}
-                    onClick={() => item === "Management intelligence" ? window.location.assign("/management") : setActive(item)}>
-                    {item}
-                  </button>
-                ))}
-              </div>
-            </details>
+          {navigationItems.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              className={active === item.target ? "active" : ""}
+              aria-current={active === item.target ? "page" : undefined}
+              onClick={() => item.target === "Management intelligence"
+                ? window.location.assign("/management")
+                : setActive(item.target)}
+              style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left" }}
+            >
+              <span aria-hidden="true" style={{ width: 20, textAlign: "center", flexShrink: 0 }}>{item.icon}</span>
+              <span>{item.label}</span>
+            </button>
           ))}
         </nav>
         <div className="lic blanklic">
@@ -201,6 +204,8 @@ export default function NcaConsole({
             <Intelligence />
           ) : active === "Users & roles" ? (
             <Roles />
+          ) : active === "Settings" ? (
+            <Security />
           ) : active === "Security" ? (
             <Security />
           ) : active === "Reports" ? (
