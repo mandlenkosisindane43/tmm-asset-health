@@ -2,47 +2,18 @@
 import { ChangeEvent, FormEvent, ReactNode, useEffect, useState } from "react";
 import * as XLSX from "xlsx";
 
-const nav = [
-  "Overview",
-  "Companies",
-  "Fleet",
-  "Daily production",
-  "Breakdowns",
-  "Leaks & hoses",
-  "Maintenance",
-  "Work orders",
-  "Spares & OEM",
-  "Intelligence",
-  "Import centre",
-  "Reports",
-  "Pricing & quotes",
-  "Payments & orders",
-  "Alerts & contacts",
-  "Users & roles",
-  "Security",
-  "Software Licence",
+const navigationItems = [
+  { label: "Dashboard", icon: "▦", target: "Overview" },
+  { label: "Fleet Management", icon: "▣", target: "Fleet" },
+  { label: "Daily Capture", icon: "▤", target: "Daily production" },
+  { label: "Breakdown Capture", icon: "⚒", target: "Breakdowns" },
+  { label: "Fleet Performance", icon: "▥", target: "Intelligence" },
+  { label: "Reports", icon: "▧", target: "Reports" },
+  { label: "Management Intelligence", icon: "◈", target: "Management intelligence" },
+  { label: "Alerts", icon: "◉", target: "Alerts & contacts" },
+  { label: "Users & Roles", icon: "♙", target: "Users & roles" },
+  { label: "Settings", icon: "⚙", target: "Settings" },
 ];
-const icons = [
-  "⌂",
-  "◎",
-  "▦",
-  "P",
-  "⚙",
-  "⌁",
-  "◷",
-  "☑",
-  "▣",
-  "◈",
-  "⇧",
-  "▥",
-  "R",
-  "PO",
-  "✦",
-  "♙",
-  "⌾",
-  "◇",
-];
-
 type ImportRow = Record<string, string | number | boolean | null>;
 
 function cleanKey(value: string) {
@@ -158,15 +129,20 @@ export default function NcaConsole({
             <small>{owner.businessName}</small>
           </div>
         </div>
-        <nav>
-          {nav.map((n, i) => (
+        <nav aria-label="Mining operations navigation">
+          {navigationItems.map((item) => (
             <button
-              key={n}
-              className={active === n ? "active" : ""}
-              onClick={() => setActive(n)}
+              key={item.label}
+              type="button"
+              className={active === item.target ? "active" : ""}
+              aria-current={active === item.target ? "page" : undefined}
+              onClick={() => item.target === "Management intelligence"
+                ? window.location.assign("/management")
+                : setActive(item.target)}
+              style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", textAlign: "left" }}
             >
-              <i>{icons[i]}</i>
-              {n}
+              <span aria-hidden="true" style={{ width: 20, textAlign: "center", flexShrink: 0 }}>{item.icon}</span>
+              <span>{item.label}</span>
             </button>
           ))}
         </nav>
@@ -228,6 +204,8 @@ export default function NcaConsole({
             <Intelligence />
           ) : active === "Users & roles" ? (
             <Roles />
+          ) : active === "Settings" ? (
+            <Security />
           ) : active === "Security" ? (
             <Security />
           ) : active === "Reports" ? (

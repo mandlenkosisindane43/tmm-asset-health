@@ -1,0 +1,25 @@
+name: Management intelligence checks
+on:
+  pull_request:
+    paths:
+      - 'app/api/management-summary/**'
+      - 'app/management/**'
+      - 'app/nca-console.tsx'
+      - 'lib/management-intelligence*'
+      - '.github/workflows/management-intelligence.yml'
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Build application with project-supported verification
+        run: npm run build
+      - name: Lint changed files
+        run: npx eslint app/api/management-summary/route.ts app/management/page.tsx app/management/management-client.tsx lib/management-intelligence.ts
