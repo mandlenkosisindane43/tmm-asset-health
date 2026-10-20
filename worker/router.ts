@@ -72,6 +72,28 @@ async function polishCompanyAdminWorkspace(request: Request, response: Response)
   body = body.replaceAll('src="/sindane-logo.png"', `src="${SIDEBAR_LOGO}"`);
   body = body.replaceAll('src="/sindane-logo-sidebar.svg"', `src="${SIDEBAR_LOGO}"`);
 
+  // Keep the existing contractor dashboard, but hide optional sidebar links.
+  // This changes navigation only; the underlying pages and APIs remain intact.
+  const hiddenSidebarLabels = [
+    "Telematics",
+    "OEM Connections",
+    "Install App",
+    "Tutorial Centre",
+    "Ask TMM Assistant",
+  ];
+  body = body.replace(/(<nav\\b[^>]*>)([\\s\\S]*?)(<\\/nav>)/i, (_match, open, links, close) => {
+    let filtered = String(links);
+    for (const label of hiddenSidebarLabels) {
+      filtered = filtered.replace(
+        /<a\\b[^>]*>[\\s\\S]*?<\\/a>/gi,
+        (anchor) => anchor.replace(/<[^>]*>/g, " ").replace(/&[^;]+;/g, " ").includes(label)
+          ? ""
+          : anchor,
+      );
+    }
+    return open + filtered + close;
+  });
+
   body = body.replace(
     ".side{background:linear-gradient(180deg,#071622,#06131e);color:white;min-height:100vh;padding:18px;position:sticky;top:0;height:100vh}",
     ".side{background:linear-gradient(180deg,#08151d,#06131e);color:white;min-height:100vh;padding:10px 14px 14px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;overflow:hidden}",
