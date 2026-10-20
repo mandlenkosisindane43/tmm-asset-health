@@ -81,11 +81,11 @@ async function polishCompanyAdminWorkspace(request: Request, response: Response)
     "Tutorial Centre",
     "Ask TMM Assistant",
   ];
-  body = body.replace(/(<nav\\b[^>]*>)([\\s\\S]*?)(<\\/nav>)/i, (_match, open, links, close) => {
+  body = body.replace(/(<nav\b[^>]*>)([\s\S]*?)(<\/nav>)/i, (_match, open, links, close) => {
     let filtered = String(links);
     for (const label of hiddenSidebarLabels) {
       filtered = filtered.replace(
-        /<a\\b[^>]*>[\\s\\S]*?<\\/a>/gi,
+        /<a\b[^>]*>[\s\S]*?<\/a>/gi,
         (anchor) => anchor.replace(/<[^>]*>/g, " ").replace(/&[^;]+;/g, " ").includes(label)
           ? ""
           : anchor,
