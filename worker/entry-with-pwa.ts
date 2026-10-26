@@ -100,6 +100,26 @@ select{background:#0b1d2b;border:1px solid #4d7087;color:white;border-radius:7px
 <svg id="fleetTrend" viewBox="0 0 650 260" role="img" aria-label="Illustrative selected machine performance chart" style="width:100%;height:auto;margin-top:12px"></svg><p><i class="dot gold"></i>Availability <i class="dot blue"></i>Utilisation · Illustrative history</p></section>
 <section class="panel"><h3>Machine detail</h3><div id="fleetDetail" style="line-height:2"></div><p>All readings are synthetic. No OEM connection or database access.</p></section></div>
 </section>
+<section id="health" class="hidden">
+<div class="kpis">
+<div class="kpi"><small>Active fault events</small><strong id="healthTotal">—</strong><div class="foot">Synthetic events</div></div>
+<div class="kpi"><small>Critical alerts</small><strong id="healthCritical" style="color:#f07472">—</strong><div class="foot">Requires urgent review</div></div>
+<div class="kpi"><small>Machines affected</small><strong id="healthAffected">—</strong><div class="foot">Unique assets</div></div>
+<div class="kpi"><small>Recurring fault groups</small><strong id="healthRecurring">—</strong><div class="foot">Repeated asset and code</div></div>
+</div>
+<div class="panel" style="margin-top:15px"><h3>Diagnostic alerts and fault history</h3>
+<p>Demonstration data only — no live OEM diagnostics, predictive failure claims or maintenance work orders.</p>
+<div class="controls" style="margin:15px 0;gap:12px;display:flex;flex-wrap:wrap">
+<label>Machine <select id="healthAsset"><option value="all">All machines</option></select></label>
+<label>Severity <select id="healthSeverity"><option value="all">All severities</option><option>Critical</option><option>Warning</option><option>Info</option></select></label>
+<label>Status <select id="healthState"><option value="all">All statuses</option><option>Active</option><option>Resolved</option></select></label></div>
+<div style="overflow-x:auto"><table style="width:100%;min-width:720px;border-collapse:collapse;text-align:left">
+<thead><tr style="color:#b4cbd9;border-bottom:1px solid #34556b"><th style="padding:12px">Asset</th><th>Fault code</th><th>Description</th><th>Severity</th><th>Status</th><th>Occurrence</th></tr></thead><tbody id="healthRows"></tbody></table></div>
+<p id="healthEmpty" class="hidden">No diagnostic events match the selected filters.</p></div>
+<div class="grid">
+<section class="panel"><h3>Condition indicators</h3><div id="healthIndicators"></div><p style="font-size:12px">Illustrative risk indicators, not measured temperatures, pressures or verified failure probabilities.</p></section>
+<section class="panel"><h3>Engineering review queue</h3><div id="healthActions"></div><p style="font-size:12px">Recommendations are generic inspection prompts. Confirm against the OEM manual and site procedures before acting.</p></section>
+</div></section>
 <section id="module" class="panel module hidden"><h3 id="moduleTitle"></h3><p>This section is being developed. The preview is deliberately disconnected from production and does not read or modify any customer records.</p></section>
 <div class="footer">TMM Asset Health · Development branch preview · Sample data · No D1, R2 or OEM requests</div></main></div>
 <script>
@@ -136,7 +156,25 @@ function drawFleet(){const m=machines.find(x=>x.id===fAsset.value)||machines[0];
 Array.from({length:n},(_,i)=>{chart.append(el("text",{x:43+i*590/(n-1),y:251,fill:"#b6cad8","text-anchor":"middle","font-size":"11"},fPeriod.value==="7"?"D"+(i+1):"P"+(i+1)))});
 const detail=document.getElementById("fleetDetail");detail.replaceChildren();[["Asset",m.id],["Manufacturer",m.oem],["Model",m.model],["Status",m.status],["Engine hours",m.hours.toLocaleString()+" h"],["Availability",m.a+"%"],["Utilisation",m.u+"%"],["Last update",m.updated]].forEach(([key,value])=>{const row=document.createElement("div");row.style.borderBottom="1px solid #28465b";const label=document.createElement("span");label.style.color="#9eb6c8";label.textContent=key+": ";const strong=document.createElement("strong");strong.textContent=value;row.append(label,strong);detail.append(row)})}
 [fSearch,fOEM,fStatus].forEach(input=>input.addEventListener(input===fSearch?"input":"change",fleetFilter));[fAsset,fPeriod].forEach(input=>input.addEventListener("change",drawFleet));fleetFilter();drawFleet();
-document.querySelectorAll("#nav button").forEach(button=>button.addEventListener("click",()=>{document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("active",b===button));const page=button.dataset.page;document.getElementById("pageTitle").textContent=page;document.getElementById("heroTitle").textContent=page==="Executive Overview"?"Fleet health at a glance":page;document.getElementById("overview").classList.toggle("hidden",page!=="Executive Overview");document.getElementById("fleet").classList.toggle("hidden",page!=="Fleet Intelligence");document.getElementById("module").classList.toggle("hidden",page==="Executive Overview"||page==="Fleet Intelligence");document.getElementById("moduleTitle").textContent=page}));
+const healthEvents=[
+{asset:"EX-101",code:"E101",desc:"Hydraulic pressure event",severity:"Critical",state:"Active",when:"Today 08:12",action:"Inspect hydraulic circuit and confirm sensor readings"},
+{asset:"EX-101",code:"E101",desc:"Hydraulic pressure event",severity:"Critical",state:"Active",when:"Yesterday 14:30",action:"Review repeat occurrence and maintenance history"},
+{asset:"ADT-202",code:"W204",desc:"Engine temperature warning",severity:"Warning",state:"Active",when:"Today 07:48",action:"Check cooling system and verify temperature"},
+{asset:"LD-302",code:"E320",desc:"Electrical supply fault",severity:"Critical",state:"Active",when:"Today 06:05",action:"Request qualified electrical inspection"},
+{asset:"LD-302",code:"E320",desc:"Electrical supply fault",severity:"Warning",state:"Resolved",when:"Yesterday 16:10",action:"Review recurrence and repair records"},
+{asset:"EX-103",code:"I015",desc:"Scheduled service approaching",severity:"Info",state:"Active",when:"Today 05:50",action:"Verify service meter and maintenance plan"},
+{asset:"ADT-201",code:"W410",desc:"Fuel system event",severity:"Warning",state:"Resolved",when:"Yesterday 11:15",action:"Review fuel system event history"}
+];
+const hAsset=document.getElementById("healthAsset"),hSeverity=document.getElementById("healthSeverity"),hState=document.getElementById("healthState");
+[...new Set(healthEvents.map(e=>e.asset))].sort().forEach(id=>{const o=document.createElement("option");o.value=id;o.textContent=id;hAsset.append(o)});
+function renderHealth(){const list=healthEvents.filter(e=>(hAsset.value==="all"||e.asset===hAsset.value)&&(hSeverity.value==="all"||e.severity===hSeverity.value)&&(hState.value==="all"||e.state===hState.value));
+const active=list.filter(e=>e.state==="Active");document.getElementById("healthTotal").textContent=String(active.length);document.getElementById("healthCritical").textContent=String(active.filter(e=>e.severity==="Critical").length);document.getElementById("healthAffected").textContent=String(new Set(active.map(e=>e.asset)).size);
+const counts={};list.forEach(e=>{const k=e.asset+" "+e.code;counts[k]=(counts[k]||0)+1});document.getElementById("healthRecurring").textContent=String(Object.values(counts).filter(v=>v>1).length);
+const tbody=document.getElementById("healthRows");tbody.replaceChildren();list.forEach(e=>{const tr=document.createElement("tr");tr.style.borderBottom="1px solid #2b465a";[e.asset,e.code,e.desc,e.severity,e.state,e.when].forEach((v,i)=>{const td=document.createElement("td");td.textContent=v;td.style.padding="12px 8px";if(i===3)td.style.color=e.severity==="Critical"?"#f07472":e.severity==="Warning"?"#f2b94b":"#61c99a";tr.append(td)});tbody.append(tr)});document.getElementById("healthEmpty").classList.toggle("hidden",list.length!==0);
+const indicators=document.getElementById("healthIndicators");indicators.replaceChildren();const groups=[["Critical",active.filter(e=>e.severity==="Critical").length,"#f07472"],["Warning",active.filter(e=>e.severity==="Warning").length,"#f2b94b"],["Information",active.filter(e=>e.severity==="Info").length,"#61c99a"]];groups.forEach(([label,num,color])=>{const wrap=document.createElement("div");wrap.style.margin="17px 0";const caption=document.createElement("div");caption.textContent=label+" · "+num+" active events";caption.style.marginBottom="7px";const track=document.createElement("div");track.style.background="#25465b";track.style.borderRadius="7px";track.style.height="13px";const bar=document.createElement("div");bar.style.width=(active.length?100*num/active.length:0)+"%";bar.style.height="100%";bar.style.background=color;bar.style.borderRadius="7px";track.append(bar);wrap.append(caption,track);indicators.append(wrap)});
+const actions=document.getElementById("healthActions");actions.replaceChildren();const seen=new Set();active.slice().sort((a,b)=>(a.severity==="Critical"?0:1)-(b.severity==="Critical"?0:1)).forEach(e=>{const key=e.asset+" "+e.code;if(seen.has(key))return;seen.add(key);const row=document.createElement("div");row.style.padding="12px 0";row.style.borderBottom="1px solid #2b465a";const title=document.createElement("strong");title.textContent=e.asset+" · "+e.code+" · "+e.severity;title.style.color=e.severity==="Critical"?"#f07472":"#f2b94b";const p=document.createElement("p");p.textContent=e.action;row.append(title,p);actions.append(row)})}
+[hAsset,hSeverity,hState].forEach(x=>x.addEventListener("change",renderHealth));renderHealth();
+document.querySelectorAll("#nav button").forEach(button=>button.addEventListener("click",()=>{document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("active",b===button));const page=button.dataset.page;document.getElementById("pageTitle").textContent=page;document.getElementById("heroTitle").textContent=page==="Executive Overview"?"Fleet health at a glance":page;document.getElementById("overview").classList.toggle("hidden",page!=="Executive Overview");document.getElementById("fleet").classList.toggle("hidden",page!=="Fleet Intelligence");document.getElementById("health").classList.toggle("hidden",page!=="Machine Health");document.getElementById("module").classList.toggle("hidden",page==="Executive Overview"||page==="Fleet Intelligence"||page==="Machine Health");document.getElementById("moduleTitle").textContent=page}));
 })();
 </script></body></html>`;
       return new Response(html, {
