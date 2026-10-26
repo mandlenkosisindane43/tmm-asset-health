@@ -56,15 +56,25 @@ select{background:#0b1d2b;border:1px solid #4d7087;color:white;border-radius:7px
 @media(max-width:1050px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.grid{grid-template-columns:1fr}}
 @media(max-width:700px){.layout{display:block}aside{padding:14px;gap:13px}.sidebar-note{display:none}nav{display:flex;overflow-x:auto}nav button{white-space:nowrap}main{padding:15px}.hero{padding:23px}}
 @media(max-width:440px){.kpis{grid-template-columns:1fr}.barrow{grid-template-columns:85px minmax(0,1fr) 35px}}
+
+/* Native anchor navigation: functions even if dashboard JavaScript fails. */
+#nav a{display:block;width:100%;border:0;border-radius:9px;text-align:left;padding:13px;background:transparent;color:#b8cad8;text-decoration:none;cursor:pointer;font:inherit}
+#nav a:hover,#nav a:focus-visible{background:#26394a;color:#ffcc6e;outline-offset:2px}
+#nav a[href="#overview"]{background:#26394a;color:#ffcc6e}
+body:has(#fleet:target) #nav a[href="#overview"],body:has(#health:target) #nav a[href="#overview"],body:has(#maintenance:target) #nav a[href="#overview"],body:has(#reports:target) #nav a[href="#overview"],body:has(#oem:target) #nav a[href="#overview"]{background:transparent;color:#b8cad8}
+body:has(#fleet:target) #nav a[href="#fleet"],body:has(#health:target) #nav a[href="#health"],body:has(#maintenance:target) #nav a[href="#maintenance"],body:has(#reports:target) #nav a[href="#reports"],body:has(#oem:target) #nav a[href="#oem"]{background:#26394a;color:#ffcc6e}
+#fleet:target,#health:target,#maintenance:target,#reports:target,#oem:target{display:block!important}
+body:has(#fleet:target) #overview,body:has(#health:target) #overview,body:has(#maintenance:target) #overview,body:has(#reports:target) #overview,body:has(#oem:target) #overview{display:none!important}
+@media(max-width:700px){#nav a{white-space:nowrap}}
 </style></head><body>
 <div class="layout"><aside><div><div class="logo"><span>▲</span> TMM Asset Health</div><div class="subtitle">SINDANE ASSET SOLUTIONS</div></div>
 <nav id="nav" aria-label="Dashboard modules">
-<button class="active" data-page="Executive Overview">▣ Executive Overview</button>
-<button data-page="Fleet Intelligence">▤ Fleet Intelligence</button>
-<button data-page="Machine Health">◈ Machine Health</button>
-<button data-page="Maintenance">⚙ Maintenance</button>
-<button data-page="Reports">▥ Reports</button>
-<button data-page="OEM Integrations">↔ OEM Integrations</button></nav>
+<a href="#overview">▣ Executive Overview</a>
+<a href="#fleet">▤ Fleet Intelligence</a>
+<a href="#health">◈ Machine Health</a>
+<a href="#maintenance">⚙ Maintenance</a>
+<a href="#reports">▥ Reports</a>
+<a href="#oem">↔ OEM Integrations</a></nav>
 <div class="sidebar-note">Isolated design preview<br>No live data or database requests<br>Production remains unchanged</div></aside>
 <main><header class="top"><h2 id="pageTitle">Executive Overview</h2><span class="pill">● DEMO PREVIEW</span></header>
 <section class="hero"><small>MINING FLEET INTELLIGENCE</small><h1 id="heroTitle">Fleet health at a glance</h1><p>Engineering insights for safer, more reliable and productive mining operations.</p></section>
@@ -149,37 +159,7 @@ select{background:#0b1d2b;border:1px solid #4d7087;color:white;border-radius:7px
 </section>
 <section id="module" class="panel module hidden"><h3 id="moduleTitle"></h3><p>This section is being developed. The preview is deliberately disconnected from production and does not read or modify any customer records.</p></section>
 <div class="footer">TMM Asset Health · Development branch preview · Sample data · No D1, R2 or OEM requests</div></main></div>
-<script>
-(function(){
-  "use strict";
-  const pages={"Executive Overview":"overview","Fleet Intelligence":"fleet","Machine Health":"health","Maintenance":"maintenance","Reports":"reports","OEM Integrations":"oem"};
-  function navigate(page){
-    if(!Object.prototype.hasOwnProperty.call(pages,page))return;
-    Object.entries(pages).forEach(([name,id])=>{
-      const section=document.getElementById(id);
-      if(section){section.classList.toggle("hidden",name!==page);section.hidden=name!==page;}
-    });
-    const placeholder=document.getElementById("module");
-    if(placeholder){placeholder.classList.add("hidden");placeholder.hidden=true;}
-    const title=document.getElementById("pageTitle");
-    if(title)title.textContent=page;
-    const hero=document.getElementById("heroTitle");
-    if(hero)hero.textContent=page==="Executive Overview"?"Fleet health at a glance":page;
-    document.querySelectorAll("#nav button[data-page]").forEach(button=>{
-      const selected=button.dataset.page===page;
-      button.classList.toggle("active",selected);
-      button.setAttribute("aria-current",selected?"page":"false");
-    });
-  }
-  document.addEventListener("click",function(event){
-    const button=event.target.closest("#nav button[data-page]");
-    if(!button)return;
-    event.preventDefault();
-    navigate(button.dataset.page);
-  });
-  document.addEventListener("DOMContentLoaded",function(){navigate("Executive Overview")});
-})();
-</script>
+
 <script>
 (function(){
 const datasets={"7 days":{labels:["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],a:[86,89,87,93,91,94,92],u:[65,70,68,74,76,79,77]},"30 days":{labels:["Week 1","Week 2","Week 3","Week 4"],a:[84,88,90,92],u:[62,69,73,77]},"90 days":{labels:["Month 1","Month 2","Month 3"],a:[83,87,92],u:[61,70,77]}};
