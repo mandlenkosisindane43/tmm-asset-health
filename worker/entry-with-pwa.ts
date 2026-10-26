@@ -24,6 +24,28 @@ const PWA_PATHS = new Set([
 export default {
   async fetch(req:Request,env:Env,ctx:ExecutionContext):Promise<Response>{
     const path=new URL(req.url).pathname;
+    if (path === "/industrial-preview/api/fleet") {
+      const denied=(status:number,message:string)=>Response.json({ok:false,error:message},{status,headers:{"Cache-Control":"private, no-store"}});
+      if(req.method!=="GET")return denied(405,"Method not allowed");
+      const cookie=(req.headers.get("cookie")||"").split(";").map(x=>x.trim()).find(x=>x.startsWith("sas_contractor_v2="));
+      const token=cookie?cookie.slice("sas_contractor_v2=".length):"";
+      if(!token)return denied(401,"Sign in to your existing TMM company account to view real fleet data");
+      const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(token));
+      const hash=Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,"0")).join("");
+      try{
+        const session=await env.DB.prepare("SELECT s.company_id companyId,s.expires_at sessionExpires,a.status accountStatus,COALESCE(NULLIF(s.active_role,''),a.role) role,c.licence_status licenceStatus,c.expires_at licenceExpires,c.grace_days graceDays FROM contractor_sessions s JOIN contractor_accounts a ON a.id=s.account_id AND a.company_id=s.company_id JOIN companies c ON c.id=s.company_id WHERE s.token_hash=? LIMIT 1").bind(hash).first<Record<string,unknown>>();
+        if(!session||String(session.accountStatus||"").toLowerCase()!=="active"||Date.parse(String(session.sessionExpires||""))<=Date.now())return denied(401,"Company session expired or inactive");
+        const role=String(session.role||"").toLowerCase();
+        if(!["admin","engineer"].includes(role))return denied(403,"Only Admin and Engineer can access this view");
+        const licence=String(session.licenceStatus||"").toLowerCase();
+        const until=Date.parse(String(session.licenceExpires||""))+Number(session.graceDays||0)*86400000;
+        if(!["active","trial"].includes(licence)||!Number.isFinite(until)||until<Date.now())return denied(403,"Company licence is not active");
+        const companyId=Number(session.companyId);
+        if(!Number.isSafeInteger(companyId)||companyId<=0)return denied(403,"Invalid company context");
+        const rows=await env.DB.prepare("SELECT id,fleet_number fleet,category,site,status,operating_hours hours,next_service_hours nextService FROM machines WHERE company_id=? ORDER BY fleet_number LIMIT 250").bind(companyId).all<Record<string,unknown>>();
+        return Response.json({ok:true,source:"existing_tmm_d1",machines:rows.results||[],count:(rows.results||[]).length},{headers:{"Cache-Control":"private, no-store","X-Content-Type-Options":"nosniff"}});
+      }catch{return denied(503,"Fleet data temporarily unavailable. No changes were made");}
+    }
     if (path === "/industrial-preview" || path === "/industrial-preview/") {
       const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -90,7 +112,7 @@ body:has(#fleet:target) #overview,body:has(#health:target) #overview,body:has(#m
 <div class="status"><div><span><i class="dot green"></i>Operating</span><b>20</b></div><div><span><i class="dot gold"></i>Idle</span><b>2</b></div><div><span><i class="dot red"></i>Unavailable</span><b>2</b></div></div><p>Illustrative distribution</p></section></div>
 <div class="grid"><section class="panel"><h3>Downtime Pareto analysis</h3><div id="pareto" class="pareto"></div><p>Illustrative downtime hours by fault category</p></section>
 <section class="panel"><h3>Engineering intelligence</h3><p>Machine diagnostic codes, service-meter hours, recurring failures, condition alerts and maintenance recommendations will appear here once authorised sources are connected.</p><h3>OEM connectivity</h3><p>Planned: CAT, Volvo and mixed-fleet connector support, subject to customer permission and available APIs.</p></section></div></div>
-<section id="fleet" class="hidden">
+<section id="fleet" class="hidden"><div class="panel" style="margin-top:15px"><h3>Existing TMM fleet · Read-only connection</h3><p>This securely reads fleet records from your existing company workspace after login. It does not modify machines or replace the demonstration dashboard.</p><button id="loadRealFleet" type="button" style="padding:11px 16px;border:1px solid #4d7087;background:#173a52;color:white;border-radius:8px;cursor:pointer">Load my existing TMM fleet</button><p id="realFleetStatus" role="status">Not connected. Demonstration data is shown below.</p><div id="realFleetTable" style="overflow-x:auto"></div></div>
 <div class="kpis">
 <div class="kpi"><small>Tracked machines</small><strong id="fleetCount">8</strong><div class="foot">Demonstration fleet</div></div>
 <div class="kpi"><small>Average availability</small><strong id="fleetAvailability">—</strong><div class="foot">Selected machines</div></div>
@@ -160,6 +182,26 @@ body:has(#fleet:target) #overview,body:has(#health:target) #overview,body:has(#m
 <section id="module" class="panel module hidden"><h3 id="moduleTitle"></h3><p>This section is being developed. The preview is deliberately disconnected from production and does not read or modify any customer records.</p></section>
 <div class="footer">TMM Asset Health · Development branch preview · Sample data · No D1, R2 or OEM requests</div></main></div>
 
+<script>
+document.addEventListener("click",async function(event){
+  if(event.target.id!=="loadRealFleet")return;
+  const button=event.target,status=document.getElementById("realFleetStatus"),container=document.getElementById("realFleetTable");
+  button.disabled=true;status.textContent="Checking your company session and reading fleet records…";
+  try{
+    const res=await fetch("/industrial-preview/api/fleet",{credentials:"same-origin",cache:"no-store"});
+    const data=await res.json();
+    if(!res.ok||!data.ok)throw Error(data.error||"Unable to load fleet");
+    container.replaceChildren();
+    const table=document.createElement("table");table.style.cssText="width:100%;min-width:650px;border-collapse:collapse;text-align:left";
+    const head=document.createElement("tr");
+    ["Fleet number","Category","Site","Status","Operating hours","Next service hours"].forEach(x=>{const th=document.createElement("th");th.textContent=x;th.style.padding="10px";head.append(th)});
+    table.append(head);
+    data.machines.forEach(m=>{const tr=document.createElement("tr");tr.style.borderTop="1px solid #34556b";[m.fleet,m.category,m.site,m.status,m.hours,m.nextService].forEach(v=>{const td=document.createElement("td");td.textContent=v==null?"—":String(v);td.style.padding="10px";tr.append(td)});table.append(tr)});
+    container.append(table);status.textContent="Connected to existing TMM · "+data.count+" fleet records · Read-only. Demo metrics below remain synthetic.";
+  }catch(error){status.textContent="Not connected: "+error.message+". Sign in through your existing TMM company login on this same preview domain, then retry.";container.replaceChildren();}
+  finally{button.disabled=false;}
+});
+</script>
 <script>
 (function(){
 const datasets={"7 days":{labels:["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],a:[86,89,87,93,91,94,92],u:[65,70,68,74,76,79,77]},"30 days":{labels:["Week 1","Week 2","Week 3","Week 4"],a:[84,88,90,92],u:[62,69,73,77]},"90 days":{labels:["Month 1","Month 2","Month 3"],a:[83,87,92],u:[61,70,77]}};
