@@ -120,6 +120,19 @@ select{background:#0b1d2b;border:1px solid #4d7087;color:white;border-radius:7px
 <section class="panel"><h3>Condition indicators</h3><div id="healthIndicators"></div><p style="font-size:12px">Illustrative risk indicators, not measured temperatures, pressures or verified failure probabilities.</p></section>
 <section class="panel"><h3>Engineering review queue</h3><div id="healthActions"></div><p style="font-size:12px">Recommendations are generic inspection prompts. Confirm against the OEM manual and site procedures before acting.</p></section>
 </div></section>
+<section id="maintenance" class="hidden">
+<div class="kpis">
+<div class="kpi"><small>Overdue services</small><strong id="maintOverdue" style="color:#f07472">—</strong><div class="foot">Based on sample meter hours</div></div>
+<div class="kpi"><small>Services due soon</small><strong id="maintSoon">—</strong><div class="foot">Within 100 engine hours</div></div>
+<div class="kpi"><small>Open work orders</small><strong id="maintOpen">—</strong><div class="foot">Illustrative maintenance tasks</div></div>
+<div class="kpi"><small>Breakdown hours</small><strong id="maintDowntime">—</strong><div class="foot">Sample historical downtime</div></div>
+</div>
+<div class="panel" style="margin-top:15px"><h3>Preventive maintenance schedule</h3><p>Demo data only. Service intervals are illustrative and must be replaced with OEM-approved schedules.</p>
+<div class="controls" style="display:flex;flex-wrap:wrap;gap:12px;margin:15px 0"><label>Search asset <input id="maintSearch" placeholder="Asset or service" style="background:#091c2c;border:1px solid #4d7087;border-radius:7px;padding:9px;color:white"></label><label>Priority <select id="maintPriority"><option value="all">All priorities</option><option>Overdue</option><option>Due soon</option><option>Scheduled</option></select></label></div>
+<div style="overflow-x:auto"><table style="width:100%;min-width:760px;border-collapse:collapse;text-align:left"><thead><tr style="color:#b4cbd9;border-bottom:1px solid #34556b"><th style="padding:12px">Asset</th><th>Service / inspection</th><th>Current meter</th><th>Due at</th><th>Hours remaining</th><th>Priority</th></tr></thead><tbody id="maintRows"></tbody></table></div><p id="maintEmpty" class="hidden">No maintenance tasks match your filters.</p></div>
+<div class="grid"><section class="panel"><h3>Work-order queue</h3><div id="maintOrders"></div><p style="font-size:12px">Read-only sample work orders. No work orders are created or closed in production.</p></section>
+<section class="panel"><h3>Breakdown history</h3><div id="maintBreakdowns"></div><p style="font-size:12px">Illustrative downtime only. Actual root causes require engineering verification.</p></section></div>
+</section>
 <section id="module" class="panel module hidden"><h3 id="moduleTitle"></h3><p>This section is being developed. The preview is deliberately disconnected from production and does not read or modify any customer records.</p></section>
 <div class="footer">TMM Asset Health · Development branch preview · Sample data · No D1, R2 or OEM requests</div></main></div>
 <script>
@@ -174,7 +187,42 @@ const tbody=document.getElementById("healthRows");tbody.replaceChildren();list.f
 const indicators=document.getElementById("healthIndicators");indicators.replaceChildren();const groups=[["Critical",active.filter(e=>e.severity==="Critical").length,"#f07472"],["Warning",active.filter(e=>e.severity==="Warning").length,"#f2b94b"],["Information",active.filter(e=>e.severity==="Info").length,"#61c99a"]];groups.forEach(([label,num,color])=>{const wrap=document.createElement("div");wrap.style.margin="17px 0";const caption=document.createElement("div");caption.textContent=label+" · "+num+" active events";caption.style.marginBottom="7px";const track=document.createElement("div");track.style.background="#25465b";track.style.borderRadius="7px";track.style.height="13px";const bar=document.createElement("div");bar.style.width=(active.length?100*num/active.length:0)+"%";bar.style.height="100%";bar.style.background=color;bar.style.borderRadius="7px";track.append(bar);wrap.append(caption,track);indicators.append(wrap)});
 const actions=document.getElementById("healthActions");actions.replaceChildren();const seen=new Set();active.slice().sort((a,b)=>(a.severity==="Critical"?0:1)-(b.severity==="Critical"?0:1)).forEach(e=>{const key=e.asset+" "+e.code;if(seen.has(key))return;seen.add(key);const row=document.createElement("div");row.style.padding="12px 0";row.style.borderBottom="1px solid #2b465a";const title=document.createElement("strong");title.textContent=e.asset+" · "+e.code+" · "+e.severity;title.style.color=e.severity==="Critical"?"#f07472":"#f2b94b";const p=document.createElement("p");p.textContent=e.action;row.append(title,p);actions.append(row)})}
 [hAsset,hSeverity,hState].forEach(x=>x.addEventListener("change",renderHealth));renderHealth();
-document.querySelectorAll("#nav button").forEach(button=>button.addEventListener("click",()=>{document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("active",b===button));const page=button.dataset.page;document.getElementById("pageTitle").textContent=page;document.getElementById("heroTitle").textContent=page==="Executive Overview"?"Fleet health at a glance":page;document.getElementById("overview").classList.toggle("hidden",page!=="Executive Overview");document.getElementById("fleet").classList.toggle("hidden",page!=="Fleet Intelligence");document.getElementById("health").classList.toggle("hidden",page!=="Machine Health");document.getElementById("module").classList.toggle("hidden",page==="Executive Overview"||page==="Fleet Intelligence"||page==="Machine Health");document.getElementById("moduleTitle").textContent=page}));
+const maintSchedule=[
+{asset:"EX-101",task:"Hydraulic system inspection",meter:4820,due:4800},
+{asset:"EX-102",task:"Engine oil and filter service",meter:6134,due:6250},
+{asset:"ADT-201",task:"Transmission inspection",meter:3288,due:3350},
+{asset:"ADT-202",task:"Cooling system inspection",meter:4012,due:4000},
+{asset:"LD-301",task:"General preventive service",meter:7102,due:7250},
+{asset:"LD-302",task:"Electrical system inspection",meter:5490,due:5450},
+{asset:"EX-103",task:"Undercarriage inspection",meter:2940,due:3000},
+{asset:"ADT-203",task:"Brake system inspection",meter:3675,due:3850}
+];
+const maintOrders=[
+{id:"WO-101",asset:"EX-101",job:"Inspect hydraulic pressure fault",priority:"Critical",status:"Open"},
+{id:"WO-102",asset:"LD-302",job:"Investigate electrical supply issue",priority:"Critical",status:"Open"},
+{id:"WO-103",asset:"ADT-202",job:"Check cooling system",priority:"High",status:"In review"},
+{id:"WO-104",asset:"EX-103",job:"Plan undercarriage inspection",priority:"Normal",status:"Planned"}
+];
+const maintFailures=[
+{asset:"EX-101",reason:"Hydraulic fault",hours:12},
+{asset:"LD-302",reason:"Electrical failure",hours:8},
+{asset:"ADT-202",reason:"Cooling system",hours:5},
+{asset:"EX-102",reason:"Engine fault",hours:4}
+];
+const maintSearch=document.getElementById("maintSearch"),maintPriority=document.getElementById("maintPriority");
+function maintClass(m){const remaining=m.due-m.meter;return remaining<0?"Overdue":remaining<=100?"Due soon":"Scheduled"}
+function renderMaintenance(){
+const filtered=maintSchedule.filter(m=>(maintPriority.value==="all"||maintClass(m)===maintPriority.value)&&[m.asset,m.task].some(v=>v.toLowerCase().includes(maintSearch.value.trim().toLowerCase())));
+document.getElementById("maintOverdue").textContent=String(maintSchedule.filter(m=>maintClass(m)==="Overdue").length);
+document.getElementById("maintSoon").textContent=String(maintSchedule.filter(m=>maintClass(m)==="Due soon").length);
+document.getElementById("maintOpen").textContent=String(maintOrders.filter(o=>o.status==="Open").length);
+document.getElementById("maintDowntime").textContent=maintFailures.reduce((a,b)=>a+b.hours,0)+" h";
+const rows=document.getElementById("maintRows");rows.replaceChildren();filtered.sort((a,b)=>(a.due-a.meter)-(b.due-b.meter)).forEach(m=>{const tr=document.createElement("tr");tr.style.borderBottom="1px solid #2b465a";[m.asset,m.task,m.meter.toLocaleString()+" h",m.due.toLocaleString()+" h",(m.due-m.meter)+" h",maintClass(m)].forEach((v,i)=>{const td=document.createElement("td");td.textContent=v;td.style.padding="12px 8px";if(i===5)td.style.color=maintClass(m)==="Overdue"?"#f07472":maintClass(m)==="Due soon"?"#f2b94b":"#61c99a";tr.append(td)});rows.append(tr)});document.getElementById("maintEmpty").classList.toggle("hidden",filtered.length!==0);
+}
+[maintSearch,maintPriority].forEach(el=>el.addEventListener(el===maintSearch?"input":"change",renderMaintenance));renderMaintenance();
+const orderBox=document.getElementById("maintOrders");maintOrders.forEach(o=>{const div=document.createElement("div");div.style.cssText="padding:12px 0;border-bottom:1px solid #2b465a";const strong=document.createElement("strong");strong.textContent=o.id+" · "+o.asset+" · "+o.priority;strong.style.color=o.priority==="Critical"?"#f07472":"#f2b94b";const p=document.createElement("p");p.textContent=o.job+" — "+o.status;div.append(strong,p);orderBox.append(div)});
+const failureBox=document.getElementById("maintBreakdowns");maintFailures.forEach(f=>{const div=document.createElement("div");div.style.margin="15px 0";const label=document.createElement("div");label.textContent=f.asset+" · "+f.reason+" · "+f.hours+" h";label.style.marginBottom="6px";const track=document.createElement("div");track.style.cssText="height:12px;background:#25465b;border-radius:6px";const bar=document.createElement("div");bar.style.cssText="height:100%;border-radius:6px;background:linear-gradient(90deg,#52a4f5,#f2b94b);width:"+(f.hours/12*100)+"%";track.append(bar);div.append(label,track);failureBox.append(div)});
+document.querySelectorAll("#nav button").forEach(button=>button.addEventListener("click",()=>{document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("active",b===button));const page=button.dataset.page;document.getElementById("pageTitle").textContent=page;document.getElementById("heroTitle").textContent=page==="Executive Overview"?"Fleet health at a glance":page;document.getElementById("overview").classList.toggle("hidden",page!=="Executive Overview");document.getElementById("fleet").classList.toggle("hidden",page!=="Fleet Intelligence");document.getElementById("health").classList.toggle("hidden",page!=="Machine Health");document.getElementById("maintenance").classList.toggle("hidden",page!=="Maintenance");document.getElementById("module").classList.toggle("hidden",page==="Executive Overview"||page==="Fleet Intelligence"||page==="Machine Health"||page==="Maintenance");document.getElementById("moduleTitle").textContent=page}));
 })();
 </script></body></html>`;
       return new Response(html, {
