@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { FleetTrend, FleetStatus, DowntimePareto } from "./graphics";
 
 type Module = "Executive Overview" | "Fleet Intelligence" | "Reliability Engineering" | "Maintenance" | "Reports" | "Integrations";
 const modules: Module[] = ["Executive Overview", "Fleet Intelligence", "Reliability Engineering", "Maintenance", "Reports", "Integrations"];
@@ -18,7 +19,6 @@ const cards = [
 
 export default function IndustrialPreview() {
   const [active, setActive] = useState<Module>("Executive Overview");
-  const [period, setPeriod] = useState("7 days");
   return <main className="industrial">
     <aside className="industrial-side" aria-label="Preview navigation">
       <div className="industrial-logo"><span className="industrial-mark">▲</span><span><strong>TMM Asset Health</strong><small>SINDANE ASSET SOLUTIONS</small></span></div>
@@ -36,7 +36,8 @@ export default function IndustrialPreview() {
         <div className="industrial-info" role="status">This is an isolated design preview. No live OEM feed, production metrics, machine alerts or operational decisions are represented here.</div>
         {active === "Executive Overview" ? <>
           <div className="industrial-kpis">{cards.map(card => <article key={card.label} className={`industrial-kpi ${card.tone}`}><small>{card.label}</small><strong>{card.value}</strong><span>{card.detail}</span></article>)}</div>
-          <div className="industrial-grid"><section className="industrial-panel industrial-wide"><div className="industrial-panelhead"><h2>Fleet performance trend</h2><label>Period <select value={period} onChange={e => setPeriod(e.target.value)}><option>7 days</option><option>30 days</option><option>90 days</option></select></label></div><div className="industrial-chart-empty"><span aria-hidden="true">▥</span><strong>No verified trend data</strong><p>Availability and utilisation graphs will appear when authorised data is available for the selected {period} period.</p></div></section><section className="industrial-panel"><div className="industrial-panelhead"><h2>Fleet status</h2></div><div className="industrial-chart-empty"><span aria-hidden="true">◌</span><strong>No fleet status data</strong><p>Operating, idle and unavailable counts will appear here.</p></div></section></div>
+          <div className="industrial-grid"><section className="industrial-panel industrial-wide"><div className="industrial-panelhead"><h2>Fleet performance trend</h2></div><FleetTrend /></section><section className="industrial-panel"><div className="industrial-panelhead"><h2>Fleet status</h2></div><FleetStatus /></section></div>
+          <section className="industrial-panel" style={{marginBottom:14}}><div className="industrial-panelhead"><h2>Downtime Pareto by system</h2></div><DowntimePareto /></section>
           <div className="industrial-grid"><section className="industrial-panel"><div className="industrial-panelhead"><h2>Machine health overview</h2></div><div className="industrial-chart-empty compact"><strong>Awaiting machine records</strong><p>OEM, model, operating hours, site and condition indicators.</p></div></section><section className="industrial-panel"><div className="industrial-panelhead"><h2>Recent alerts</h2></div><div className="industrial-chart-empty compact"><strong>No connected fault feed</strong><p>OEM diagnostic codes, event timestamps and severity will appear here.</p></div></section></div>
         </> : <section className="industrial-panel"><div className="industrial-panelhead"><h2>{active}</h2></div><div className="industrial-chart-empty"><strong>Module design placeholder</strong><p>Existing workflows and Admin/Engineer permissions will be audited before this screen is connected to production data.</p></div></section>}
         <footer className="industrial-footer">TMM Asset Health · Development branch · Production remains unchanged</footer>
