@@ -151,6 +151,37 @@ select{background:#0b1d2b;border:1px solid #4d7087;color:white;border-radius:7px
 <div class="footer">TMM Asset Health · Development branch preview · Sample data · No D1, R2 or OEM requests</div></main></div>
 <script>
 (function(){
+  "use strict";
+  const pages={"Executive Overview":"overview","Fleet Intelligence":"fleet","Machine Health":"health","Maintenance":"maintenance","Reports":"reports","OEM Integrations":"oem"};
+  function navigate(page){
+    if(!Object.prototype.hasOwnProperty.call(pages,page))return;
+    Object.entries(pages).forEach(([name,id])=>{
+      const section=document.getElementById(id);
+      if(section){section.classList.toggle("hidden",name!==page);section.hidden=name!==page;}
+    });
+    const placeholder=document.getElementById("module");
+    if(placeholder){placeholder.classList.add("hidden");placeholder.hidden=true;}
+    const title=document.getElementById("pageTitle");
+    if(title)title.textContent=page;
+    const hero=document.getElementById("heroTitle");
+    if(hero)hero.textContent=page==="Executive Overview"?"Fleet health at a glance":page;
+    document.querySelectorAll("#nav button[data-page]").forEach(button=>{
+      const selected=button.dataset.page===page;
+      button.classList.toggle("active",selected);
+      button.setAttribute("aria-current",selected?"page":"false");
+    });
+  }
+  document.addEventListener("click",function(event){
+    const button=event.target.closest("#nav button[data-page]");
+    if(!button)return;
+    event.preventDefault();
+    navigate(button.dataset.page);
+  });
+  document.addEventListener("DOMContentLoaded",function(){navigate("Executive Overview")});
+})();
+</script>
+<script>
+(function(){
 const datasets={"7 days":{labels:["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],a:[86,89,87,93,91,94,92],u:[65,70,68,74,76,79,77]},"30 days":{labels:["Week 1","Week 2","Week 3","Week 4"],a:[84,88,90,92],u:[62,69,73,77]},"90 days":{labels:["Month 1","Month 2","Month 3"],a:[83,87,92],u:[61,70,77]}};
 const ns="http://www.w3.org/2000/svg";const chart=document.getElementById("trend");const period=document.getElementById("period");
 function el(tag,attrs,text){const node=document.createElementNS(ns,tag);Object.keys(attrs).forEach(k=>node.setAttribute(k,attrs[k]));if(text!==undefined)node.textContent=text;return node}
@@ -263,7 +294,7 @@ const payload={source:"SYNTHETIC_DEMO",profile:p.title,machineId:p.sample,model:
 document.getElementById("oemPayload").textContent=JSON.stringify(payload,null,2);
 const checklist=document.getElementById("oemChecklist");checklist.replaceChildren();["Obtain written mine/operator authorisation for each machine and company","Confirm OEM or aggregator API programme, licensing and supported models","Obtain API documentation and approved server-side credentials","Map identifiers, timestamps, engine hours, status and fault-code definitions","Validate sample data in a sandbox; handle missing and stale readings","Implement secure Worker ingestion, company isolation, D1/R2 storage and retry controls","Verify calculations against site records before enabling live management KPIs"].forEach((step,i)=>{const row=document.createElement("div");row.style.cssText="padding:11px 0;border-bottom:1px solid #2b465a";const number=document.createElement("strong");number.textContent=(i+1)+". ";number.style.color="#f2b94b";const label=document.createElement("span");label.textContent=step;row.append(number,label);checklist.append(row)})}
 document.getElementById("oemProfile").addEventListener("change",renderOEM);document.getElementById("oemSample").addEventListener("change",renderOEM);renderOEM();
-document.querySelectorAll("#nav button").forEach(button=>button.addEventListener("click",()=>{document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("active",b===button));const page=button.dataset.page;document.getElementById("pageTitle").textContent=page;document.getElementById("heroTitle").textContent=page==="Executive Overview"?"Fleet health at a glance":page;document.getElementById("overview").classList.toggle("hidden",page!=="Executive Overview");document.getElementById("fleet").classList.toggle("hidden",page!=="Fleet Intelligence");document.getElementById("health").classList.toggle("hidden",page!=="Machine Health");document.getElementById("maintenance").classList.toggle("hidden",page!=="Maintenance");document.getElementById("reports").classList.toggle("hidden",page!=="Reports");document.getElementById("oem").classList.toggle("hidden",page!=="OEM Integrations");document.getElementById("module").classList.toggle("hidden",page==="Executive Overview"||page==="Fleet Intelligence"||page==="Machine Health"||page==="Maintenance"||page==="Reports"||page==="OEM Integrations");document.getElementById("moduleTitle").textContent=page}));
+
 })();
 </script></body></html>`;
       return new Response(html, {
