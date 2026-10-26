@@ -80,6 +80,26 @@ select{background:#0b1d2b;border:1px solid #4d7087;color:white;border-radius:7px
 <div class="status"><div><span><i class="dot green"></i>Operating</span><b>20</b></div><div><span><i class="dot gold"></i>Idle</span><b>2</b></div><div><span><i class="dot red"></i>Unavailable</span><b>2</b></div></div><p>Illustrative distribution</p></section></div>
 <div class="grid"><section class="panel"><h3>Downtime Pareto analysis</h3><div id="pareto" class="pareto"></div><p>Illustrative downtime hours by fault category</p></section>
 <section class="panel"><h3>Engineering intelligence</h3><p>Machine diagnostic codes, service-meter hours, recurring failures, condition alerts and maintenance recommendations will appear here once authorised sources are connected.</p><h3>OEM connectivity</h3><p>Planned: CAT, Volvo and mixed-fleet connector support, subject to customer permission and available APIs.</p></section></div></div>
+<section id="fleet" class="hidden">
+<div class="kpis">
+<div class="kpi"><small>Tracked machines</small><strong id="fleetCount">8</strong><div class="foot">Demonstration fleet</div></div>
+<div class="kpi"><small>Average availability</small><strong id="fleetAvailability">—</strong><div class="foot">Selected machines</div></div>
+<div class="kpi"><small>Average utilisation</small><strong id="fleetUtilisation">—</strong><div class="foot">Selected machines</div></div>
+<div class="kpi"><small>Total engine hours</small><strong id="fleetHours">—</strong><div class="foot">Illustrative meter readings</div></div>
+</div>
+<div class="panel" style="margin-top:15px">
+<h3>Fleet register and performance</h3>
+<div class="controls" style="margin:15px 0"><label>Search assets <input id="fleetSearch" aria-label="Search fleet" placeholder="Machine ID, model or OEM" style="background:#091c2c;border:1px solid #4d7087;border-radius:7px;padding:9px;color:white;max-width:100%"></label>
+<label>OEM <select id="fleetOEM"><option value="all">All manufacturers</option><option>CAT</option><option>Volvo</option><option>Komatsu</option></select></label>
+<label>Status <select id="fleetStatus"><option value="all">All statuses</option><option>Operating</option><option>Idle</option><option>Unavailable</option></select></label></div>
+<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:700px;text-align:left" id="fleetTable">
+<thead><tr style="color:#b4cbd9;border-bottom:1px solid #34556b"><th style="padding:12px">Asset</th><th>OEM / model</th><th>Status</th><th>Engine hours</th><th>Availability</th><th>Utilisation</th><th>Last update</th></tr></thead><tbody id="fleetRows"></tbody></table></div>
+<p id="fleetEmpty" class="hidden">No machines match the selected filters.</p>
+</div>
+<div class="grid"><section class="panel"><h3>Selected machine trends</h3><div class="controls"><label>Asset <select id="fleetAsset"></select></label><label>Period <select id="fleetPeriod"><option value="7">7 days</option><option value="30">30 days</option></select></label></div>
+<svg id="fleetTrend" viewBox="0 0 650 260" role="img" aria-label="Illustrative selected machine performance chart" style="width:100%;height:auto;margin-top:12px"></svg><p><i class="dot gold"></i>Availability <i class="dot blue"></i>Utilisation · Illustrative history</p></section>
+<section class="panel"><h3>Machine detail</h3><div id="fleetDetail" style="line-height:2"></div><p>All readings are synthetic. No OEM connection or database access.</p></section></div>
+</section>
 <section id="module" class="panel module hidden"><h3 id="moduleTitle"></h3><p>This section is being developed. The preview is deliberately disconnected from production and does not read or modify any customer records.</p></section>
 <div class="footer">TMM Asset Health · Development branch preview · Sample data · No D1, R2 or OEM requests</div></main></div>
 <script>
@@ -92,7 +112,31 @@ function draw(){const d=datasets[period.value];chart.replaceChildren();[40,60,80
 d.labels.forEach((label,i)=>{const x=43+i*590/(d.labels.length-1);chart.append(el("text",{x,y:251,fill:"#b6cad8","text-anchor":"middle","font-size":"11"},label));const hotspot=el("rect",{x:x-18,y:0,width:36,height:225,fill:"transparent"});hotspot.addEventListener("mouseenter",()=>document.getElementById("chartInfo").textContent=label+" · Availability "+d.a[i]+"% · Utilisation "+d.u[i]+"% (sample)");chart.append(hotspot)})}
 period.addEventListener("change",draw);draw();
 [["Hydraulic",32],["Engine",18],["Electrical",12],["Undercarriage",8],["Other",6]].forEach(([name,h])=>{const row=document.createElement("div");row.className="barrow";const title=document.createElement("span");title.textContent=name;const track=document.createElement("div");track.className="track";const fill=document.createElement("div");fill.className="fill";fill.style.width=(h/32*100)+"%";track.append(fill);const amount=document.createElement("strong");amount.textContent=h+"h";row.append(title,track,amount);document.getElementById("pareto").append(row)});
-document.querySelectorAll("#nav button").forEach(button=>button.addEventListener("click",()=>{document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("active",b===button));const page=button.dataset.page;document.getElementById("pageTitle").textContent=page;document.getElementById("heroTitle").textContent=page==="Executive Overview"?"Fleet health at a glance":page;document.getElementById("overview").classList.toggle("hidden",page!=="Executive Overview");document.getElementById("module").classList.toggle("hidden",page==="Executive Overview");document.getElementById("moduleTitle").textContent=page}));
+const machines=[
+{id:"EX-101",oem:"CAT",model:"320 GC",status:"Operating",hours:4820,a:94,u:82,updated:"2 min ago"},
+{id:"EX-102",oem:"CAT",model:"336",status:"Operating",hours:6134,a:91,u:79,updated:"4 min ago"},
+{id:"ADT-201",oem:"Volvo",model:"A40G",status:"Operating",hours:3288,a:96,u:85,updated:"3 min ago"},
+{id:"ADT-202",oem:"Volvo",model:"A35G",status:"Idle",hours:4012,a:88,u:57,updated:"12 min ago"},
+{id:"LD-301",oem:"Komatsu",model:"WA470",status:"Operating",hours:7102,a:93,u:80,updated:"5 min ago"},
+{id:"LD-302",oem:"CAT",model:"950",status:"Unavailable",hours:5490,a:72,u:31,updated:"1 hr ago"},
+{id:"EX-103",oem:"Komatsu",model:"PC350",status:"Operating",hours:2940,a:95,u:83,updated:"7 min ago"},
+{id:"ADT-203",oem:"Volvo",model:"A45G",status:"Operating",hours:3675,a:92,u:76,updated:"6 min ago"}];
+const fSearch=document.getElementById("fleetSearch"),fOEM=document.getElementById("fleetOEM"),fStatus=document.getElementById("fleetStatus"),fAsset=document.getElementById("fleetAsset"),fPeriod=document.getElementById("fleetPeriod");
+machines.forEach(m=>{const opt=document.createElement("option");opt.value=m.id;opt.textContent=m.id+" · "+m.oem+" "+m.model;fAsset.append(opt)});
+function fleetFilter(){const q=fSearch.value.trim().toLowerCase();const selected=machines.filter(m=>(fOEM.value==="all"||m.oem===fOEM.value)&&(fStatus.value==="all"||m.status===fStatus.value)&&[m.id,m.oem,m.model].some(v=>v.toLowerCase().includes(q)));const tbody=document.getElementById("fleetRows");tbody.replaceChildren();
+selected.forEach(m=>{const tr=document.createElement("tr");tr.style.borderBottom="1px solid #2b465a";[m.id,m.oem+" "+m.model,m.status,m.hours.toLocaleString()+" h",m.a+"%",m.u+"%",m.updated].forEach((v,i)=>{const td=document.createElement("td");td.textContent=v;td.style.padding="12px 8px";if(i===2)td.style.color=m.status==="Operating"?"#61c99a":m.status==="Idle"?"#f2b94b":"#f07472";tr.append(td)});tr.style.cursor="pointer";tr.title="View illustrative machine trend";tr.addEventListener("click",()=>{fAsset.value=m.id;drawFleet()});tbody.append(tr)});
+document.getElementById("fleetEmpty").classList.toggle("hidden",selected.length!==0);document.getElementById("fleetCount").textContent=String(selected.length);
+document.getElementById("fleetAvailability").textContent=selected.length?Math.round(selected.reduce((sum,m)=>sum+m.a,0)/selected.length)+"%":"—";
+document.getElementById("fleetUtilisation").textContent=selected.length?Math.round(selected.reduce((sum,m)=>sum+m.u,0)/selected.length)+"%":"—";
+document.getElementById("fleetHours").textContent=selected.length?selected.reduce((sum,m)=>sum+m.hours,0).toLocaleString()+" h":"—";
+}
+function drawFleet(){const m=machines.find(x=>x.id===fAsset.value)||machines[0];const n=Number(fPeriod.value)===7?7:6;const chart=document.getElementById("fleetTrend");chart.replaceChildren();
+[40,60,80,100].forEach(v=>{const y=225-(v-40)*2.9;chart.append(el("line",{x1:43,y1:y,x2:635,y2:y,stroke:"#34556b","stroke-dasharray":"4 5"}));chart.append(el("text",{x:5,y:y+4,fill:"#a8c0d1","font-size":"12"},v+"%"))});
+[[m.a,"#f2b94b"],[m.u,"#52a4f5"]].forEach(([base,color],series)=>{const values=Array.from({length:n},(_,i)=>Math.max(40,Math.min(99,base+Math.round(Math.sin(i*1.6+m.hours/700+series)*4))));chart.append(el("polyline",{points:values.map((v,i)=>(43+i*590/(n-1))+","+(225-(v-40)*2.9)).join(" "),fill:"none",stroke:color,"stroke-width":"4","stroke-linecap":"round"}))});
+Array.from({length:n},(_,i)=>{chart.append(el("text",{x:43+i*590/(n-1),y:251,fill:"#b6cad8","text-anchor":"middle","font-size":"11"},fPeriod.value==="7"?"D"+(i+1):"P"+(i+1)))});
+const detail=document.getElementById("fleetDetail");detail.replaceChildren();[["Asset",m.id],["Manufacturer",m.oem],["Model",m.model],["Status",m.status],["Engine hours",m.hours.toLocaleString()+" h"],["Availability",m.a+"%"],["Utilisation",m.u+"%"],["Last update",m.updated]].forEach(([key,value])=>{const row=document.createElement("div");row.style.borderBottom="1px solid #28465b";const label=document.createElement("span");label.style.color="#9eb6c8";label.textContent=key+": ";const strong=document.createElement("strong");strong.textContent=value;row.append(label,strong);detail.append(row)})}
+[fSearch,fOEM,fStatus].forEach(input=>input.addEventListener(input===fSearch?"input":"change",fleetFilter));[fAsset,fPeriod].forEach(input=>input.addEventListener("change",drawFleet));fleetFilter();drawFleet();
+document.querySelectorAll("#nav button").forEach(button=>button.addEventListener("click",()=>{document.querySelectorAll("#nav button").forEach(b=>b.classList.toggle("active",b===button));const page=button.dataset.page;document.getElementById("pageTitle").textContent=page;document.getElementById("heroTitle").textContent=page==="Executive Overview"?"Fleet health at a glance":page;document.getElementById("overview").classList.toggle("hidden",page!=="Executive Overview");document.getElementById("fleet").classList.toggle("hidden",page!=="Fleet Intelligence");document.getElementById("module").classList.toggle("hidden",page==="Executive Overview"||page==="Fleet Intelligence");document.getElementById("moduleTitle").textContent=page}));
 })();
 </script></body></html>`;
       return new Response(html, {
