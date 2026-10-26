@@ -24,7 +24,7 @@ const PWA_PATHS = new Set([
 export default {
   async fetch(req:Request,env:Env,ctx:ExecutionContext):Promise<Response>{
     const path=new URL(req.url).pathname;
-    await ensureAccountRoles(env);
+    // The isolated industrial preview has no database reads or writes.\n    // Avoid global role-schema initialization on its requests; it can exhaust\n    // the Worker subrequest budget and unnecessarily touch the D1 binding.\n    if (path !== "/industrial-preview" && !path.startsWith("/industrial-preview/")) {\n      await ensureAccountRoles(env);\n    }
     if(path==="/contractor-login" || path==="/api/contractor/login") return loginApp.fetch(req,env as never,ctx as never);
     if(PWA_PATHS.has(path)) return pwaApp.fetch(req,env as never,ctx as never);
     return app.fetch(req,env as never,ctx as never);
