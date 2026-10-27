@@ -1,0 +1,45 @@
+name: Industrial Dashboard validation
+
+on:
+  push:
+    branches:
+      - design/modern-industrial-dashboard
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'worker/**'
+      - 'tests/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/industrial-dashboard-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: industrial-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Build and test (no deployment)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: TypeScript validation
+        run: npx tsc --noEmit
+      - name: Build application
+        run: npm run build
+      - name: Test rendered HTML
+        run: node --test tests/rendered-html.test.mjs
