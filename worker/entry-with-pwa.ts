@@ -55,7 +55,12 @@ export default {
         return Response.json({ok:true,source:"existing_tmm_d1",machines:rows.results||[],count:(rows.results||[]).length},{headers:{"Cache-Control":"private, no-store","X-Content-Type-Options":"nosniff"}});
       }catch{return denied(503,"Fleet data temporarily unavailable. No changes were made");}
     }
-    if (path === "/industrial-preview" || path === "/industrial-preview/") {
+    if (path === "/industrial-dashboard") {
+      const access = await this.fetch(new Request(new URL("/industrial-preview/api/fleet", req.url), {headers:req.headers,method:"GET"}), env, ctx);
+      if (access.status === 401) return Response.redirect(new URL("/contractor-login", req.url).toString(), 302);
+      if (!access.ok) return new Response("An active Admin or Engineer account is required. Status: "+access.status, {status:access.status,headers:{"content-type":"text/plain; charset=utf-8","cache-control":"no-store"}});
+    }
+    if (path === "/industrial-dashboard" || path === "/industrial-preview" || path === "/industrial-preview/") {
       const html = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow"><title>TMM Asset Health | Industrial Preview</title>
@@ -328,7 +333,8 @@ document.getElementById("oemProfile").addEventListener("change",renderOEM);docum
 
 })();
 </script></body></html>`;
-      return new Response(html, {
+      const dashboardHtml = path === "/industrial-dashboard" ? html.replace("</body>", '<script>window.addEventListener("DOMContentLoaded",function(){var b=document.getElementById("loadRealFleet");if(b)b.click()});</script></body>') : html;
+      return new Response(dashboardHtml, {
         headers: {
           "Content-Type": "text/html; charset=utf-8",
           "Cache-Control": "no-store",
@@ -339,6 +345,13 @@ document.getElementById("oemProfile").addEventListener("change",renderOEM);docum
     // The isolated industrial preview has no database reads or writes.\n    // Avoid global role-schema initialization on its requests; it can exhaust\n    // the Worker subrequest budget and unnecessarily touch the D1 binding.\n    if (path !== "/industrial-preview" && !path.startsWith("/industrial-preview/")) {\n      await ensureAccountRoles(env);\n    }
     if(path==="/contractor-login" || path==="/api/contractor/login") return loginApp.fetch(req,env as never,ctx as never);
     if(PWA_PATHS.has(path)) return pwaApp.fetch(req,env as never,ctx as never);
+    if (path === "/contractor") {
+      const response = await app.fetch(req,env as never,ctx as never);
+      if (!response.ok || !(response.headers.get("content-type")||"").includes("text/html")) return response;
+      return new HTMLRewriter().on("body", {element(element) {
+        element.append('<a href="/industrial-dashboard" style="position:fixed;right:16px;bottom:16px;z-index:9999;background:#103149;color:#fff;padding:12px 18px;border-radius:10px;text-decoration:none;font:600 14px Arial,sans-serif">Industrial Dashboard (beta)</a>', {html:true});
+      }}).transform(response);
+    }
     return app.fetch(req,env as never,ctx as never);
   },
   async scheduled(c:ScheduledController,env:Env,ctx:ExecutionContext){
