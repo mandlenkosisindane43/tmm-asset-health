@@ -34,8 +34,12 @@ jobs:
           if(c.r2_buckets?.[0]?.bucket_name !== 'tmm-asset-health-preview-files') throw Error('Unsafe R2 bucket');
           if(c.routes || c.route || c.triggers) throw Error('Staging cannot use production routes or cron');
           EOF
-      - name: Deploy staging only
-        run: npx wrangler deploy --config wrangler.industrial-staging.jsonc
+      - name: Verify generated Worker entry
+        run: |
+          test -s dist/server/index.js || { echo "::error::Vinext Worker bundle missing at dist/server/index.js"; exit 1; }
+          test -d dist/client || { echo "::error::Client assets missing at dist/client"; exit 1; }
+      - name: Deploy staging only (compiled Vinext Worker)
+        run: npx wrangler deploy dist/server/index.js --config wrangler.industrial-staging.jsonc
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
