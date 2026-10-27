@@ -52,7 +52,7 @@ function calc(d:Awaited<ReturnType<typeof data>>){
 function pareto(events:Row[]){const map=new Map<string,number>();for(const e of events){const k=String(e.system||"Other");map.set(k,(map.get(k)||0)+num(e.downtime))}return [...map.entries()].sort((a,b)=>b[1]-a[1]).slice(0,6)}
 function nav(active:string,s:AdminSession){
  const items=[
-  ["dashboard","⌂","Dashboard"],["breakdowns","⚙","Breakdowns"],["maintenance","▦","Maintenance"],["production","▥","Production"],["reports-live","▤","Reports"],
+  ["dashboard","⌂","Dashboard"],["industrial","▣","Industrial Dashboard"],["breakdowns","⚙","Breakdowns"],["maintenance","▦","Maintenance"],["production","▥","Production"],["reports-live","▤","Reports"],
   ["fleet","▣","Fleet"],["daily","⇧","Daily Reports"],["users","♙","Users & Roles"],["alerts","!","Alerts"],["approvals","✓","Approvals"],["reports-admin","▤","Reports Centre"],["trial-demo","◈","Previous Month Trial"],["documents","▱","Documents"],["setup","⚙","Company Setup"],["settings","⚙","Settings"],["subscription-request","◇","Subscription Request"]
  ];
  return `<aside class="side"><div class="brand"><img src="/sindane-logo.png" alt="Sindane Asset Solutions"><div><b>TMM Asset Health</b><small>Company Admin</small></div></div><nav>${items.map(([id,ic,label])=>{const href=id==="trial-demo"?"/trial-demo":id==="reports-admin"?"/contractor?view=reports-admin":`/contractor?view=${id}`;return `<a class="${active===id?"active":""}" href="${href}"><span>${ic}</span>${label}</a>`}).join("")}</nav><div class="companybox"><small>COMPANY ADMIN</small><b>${esc(s.companyName)}</b><span>${esc(s.licenceStatus)} licence</span></div><div class="userbox"><b>${esc(s.fullName)}</b><small>${esc(s.email)}</small><a href="/contractor-logout">Log out</a></div></aside>`;
@@ -191,6 +191,10 @@ export default {
    const s=await session(req,env);
    if(s&&canViewCompanyPage(low(s.role),url.searchParams.get("view")||"dashboard")){
     const view=url.searchParams.get("view")||"dashboard";
+    if(view==="industrial"&&req.method==="GET"){
+      const frame='<section class="panel" style="padding:16px"><h2>Industrial Dashboard</h2><p>Modern industrial reporting preview within your existing TMM account. Your current Admin Dashboard remains unchanged. Figures in the industrial charts are demonstration data until verified against your company records.</p><iframe title="TMM Industrial Dashboard" src="/industrial-preview" loading="lazy" style="display:block;width:100%;height:85vh;min-height:650px;border:1px solid #cbd5e1;border-radius:12px;background:#081521"></iframe><p>Existing company records remain in the original Dashboard, Fleet and Reports pages. OEM integrations are not live.</p></section>';
+      return html(shell("industrial","Industrial Dashboard",s,frame));
+    }
     if(view==="machine-history"&&req.method==="GET")return machineHistory(req,env,s);
     if(view==="data-quality"&&req.method==="GET")return qualityPage(req,env,s);
     if(view==="management-presentation"&&req.method==="GET"){const d=await data(env,s),rows=await recommendationRows(env,s),rate=await analyticsRate(env,s);return html(shell(view,"Management Presentation",s,managementHtml(req,d,rows,rate,s.companyName,todayLocal())));}
