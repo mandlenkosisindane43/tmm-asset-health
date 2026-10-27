@@ -1,0 +1,56 @@
+name: Deploy isolated Industrial staging
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  staging:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: industrial-staging
+    steps:
+      - name: Check out development branch only
+        uses: actions/checkout@v4
+        with:
+          ref: design/modern-industrial-dashboard
+          persist-credentials: false
+      - name: Confirm development branch
+        run: |
+          test "$(git branch --show-current)" = "design/modern-industrial-dashboard"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Build
+        run: npm run build
+      - name: Validate integration
+        run: node --test tests/industrial-dashboard-validation.test.mjs
+      - name: Verify staging isolation
+        run: |
+          node --input-type=module <<'EOF'
+          import fs from 'node:fs';
+          const c = JSON.parse(fs.readFileSync('wrangler.industrial-staging.jsonc','utf8'));
+          if(c.name !== 'tmm-asset-health-industrial-staging') throw Error('Unexpected Worker name');
+          if(c.d1_databases?.[0]?.database_name !== 'tmm-asset-health-preview-db') throw Error('Unsafe D1 database');
+          if(c.r2_buckets?.[0]?.bucket_name !== 'tmm-asset-health-preview-files') throw Error('Unsafe R2 bucket');
+          if(c.routes || c.route || c.triggers || c.zone_id) throw Error('Staging cannot use production routes or cron');
+          if(c.workers_dev !== true) throw Error('Staging workers.dev must be enabled');
+          EOF
+      - name: Check Cloudflare deployment credentials
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::error::Set CLOUDFLARE_API_TOKEN in the industrial-staging environment or repository secrets."
+            exit 1
+          fi
+      - name: Deploy isolated staging Worker
+        run: npx wrangler deploy --config wrangler.industrial-staging.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
