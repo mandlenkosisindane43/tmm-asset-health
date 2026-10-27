@@ -24,6 +24,15 @@ const PWA_PATHS = new Set([
 export default {
   async fetch(req:Request,env:Env,ctx:ExecutionContext):Promise<Response>{
     const path=new URL(req.url).pathname;
+    if (path === "/industrial-preview/api/test-fleet") {
+      if(req.method!=="GET")return Response.json({ok:false,error:"Method not allowed"},{status:405});
+      try{
+        const rows=await env.DB.prepare("SELECT m.fleet_number fleet,m.category,m.site,m.status,m.operating_hours hours,m.next_service_hours nextService FROM machines m JOIN companies c ON c.id=m.company_id WHERE c.licence_key=? ORDER BY m.fleet_number LIMIT 30").bind("TMM-PREVIEW-TEST-ONLY-2026").all<Record<string,unknown>>();
+        return Response.json({ok:true,source:"preview_test_company_only",machines:rows.results||[],count:(rows.results||[]).length},{headers:{"Cache-Control":"no-store","X-Content-Type-Options":"nosniff"}});
+      }catch(error){
+        return Response.json({ok:false,error:"Preview test fleet is not ready. Create the preview-only test machines first."},{status:503,headers:{"Cache-Control":"no-store"}});
+      }
+    }
     if (path === "/industrial-preview/api/fleet") {
       const denied=(status:number,message:string)=>Response.json({ok:false,error:message},{status,headers:{"Cache-Control":"private, no-store"}});
       if(req.method!=="GET")return denied(405,"Method not allowed");
@@ -112,7 +121,7 @@ body:has(#fleet:target) #overview,body:has(#health:target) #overview,body:has(#m
 <div class="status"><div><span><i class="dot green"></i>Operating</span><b>20</b></div><div><span><i class="dot gold"></i>Idle</span><b>2</b></div><div><span><i class="dot red"></i>Unavailable</span><b>2</b></div></div><p>Illustrative distribution</p></section></div>
 <div class="grid"><section class="panel"><h3>Downtime Pareto analysis</h3><div id="pareto" class="pareto"></div><p>Illustrative downtime hours by fault category</p></section>
 <section class="panel"><h3>Engineering intelligence</h3><p>Machine diagnostic codes, service-meter hours, recurring failures, condition alerts and maintenance recommendations will appear here once authorised sources are connected.</p><h3>OEM connectivity</h3><p>Planned: CAT, Volvo and mixed-fleet connector support, subject to customer permission and available APIs.</p></section></div></div>
-<section id="fleet" class="hidden"><div class="panel" style="margin-top:15px"><h3>Existing TMM fleet · Read-only connection</h3><p>This securely reads fleet records from your existing company workspace after login. It does not modify machines or replace the demonstration dashboard.</p><button id="loadRealFleet" type="button" style="padding:11px 16px;border:1px solid #4d7087;background:#173a52;color:white;border-radius:8px;cursor:pointer">Load my existing TMM fleet</button><p id="realFleetStatus" role="status">Not connected. Demonstration data is shown below.</p><div id="realFleetTable" style="overflow-x:auto"></div></div>
+<section id="fleet" class="hidden"><div class="panel" style="margin-top:15px"><h3>Existing TMM fleet · Read-only connection</h3><p>This securely reads fleet records from your existing company workspace after login. It does not modify machines or replace the demonstration dashboard.</p><button id="loadPreviewFleet" type="button" style="padding:11px 16px;border:1px solid #947a3e;background:#44371f;color:#ffdc8b;border-radius:8px;cursor:pointer;margin-right:10px">Load preview test fleet (no login)</button> <button id="loadRealFleet" type="button" style="padding:11px 16px;border:1px solid #4d7087;background:#173a52;color:white;border-radius:8px;cursor:pointer">Load my existing TMM fleet</button><p id="realFleetStatus" role="status">Not connected. Demonstration data is shown below.</p><div id="realFleetTable" style="overflow-x:auto"></div></div>
 <div class="kpis">
 <div class="kpi"><small>Tracked machines</small><strong id="fleetCount">8</strong><div class="foot">Demonstration fleet</div></div>
 <div class="kpi"><small>Average availability</small><strong id="fleetAvailability">—</strong><div class="foot">Selected machines</div></div>
@@ -184,11 +193,11 @@ body:has(#fleet:target) #overview,body:has(#health:target) #overview,body:has(#m
 
 <script>
 document.addEventListener("click",async function(event){
-  if(event.target.id!=="loadRealFleet")return;
-  const button=event.target,status=document.getElementById("realFleetStatus"),container=document.getElementById("realFleetTable");
-  button.disabled=true;status.textContent="Checking your company session and reading fleet records…";
+  if(event.target.id!=="loadRealFleet"&&event.target.id!=="loadPreviewFleet")return;
+  const button=event.target,isDemo=button.id==="loadPreviewFleet",status=document.getElementById("realFleetStatus"),container=document.getElementById("realFleetTable");
+  button.disabled=true;status.textContent=isDemo?"Reading isolated preview test fleet…":"Checking your company session and reading fleet records…";
   try{
-    const res=await fetch("/industrial-preview/api/fleet",{credentials:"same-origin",cache:"no-store"});
+    const res=await fetch(isDemo?"/industrial-preview/api/test-fleet":"/industrial-preview/api/fleet",{credentials:"same-origin",cache:"no-store"});
     const data=await res.json();
     if(!res.ok||!data.ok)throw Error(data.error||"Unable to load fleet");
     container.replaceChildren();
@@ -197,8 +206,8 @@ document.addEventListener("click",async function(event){
     ["Fleet number","Category","Site","Status","Operating hours","Next service hours"].forEach(x=>{const th=document.createElement("th");th.textContent=x;th.style.padding="10px";head.append(th)});
     table.append(head);
     data.machines.forEach(m=>{const tr=document.createElement("tr");tr.style.borderTop="1px solid #34556b";[m.fleet,m.category,m.site,m.status,m.hours,m.nextService].forEach(v=>{const td=document.createElement("td");td.textContent=v==null?"—":String(v);td.style.padding="10px";tr.append(td)});table.append(tr)});
-    container.append(table);status.textContent="Connected to existing TMM · "+data.count+" fleet records · Read-only. Demo metrics below remain synthetic.";
-  }catch(error){status.textContent="Not connected: "+error.message+". Sign in through your existing TMM company login on this same preview domain, then retry.";container.replaceChildren();}
+    container.append(table);status.textContent=(isDemo?"Connected to isolated preview test database · ":"Connected to existing TMM · ")+data.count+" fleet records · Read-only. Dashboard metrics below remain synthetic.";
+  }catch(error){status.textContent="Not connected: "+error.message+(isDemo?" The preview test company may not have machine records yet.":" The preview uses a separate database and cannot authenticate your production account.");container.replaceChildren();}
   finally{button.disabled=false;}
 });
 </script>
