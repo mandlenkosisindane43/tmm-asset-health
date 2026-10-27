@@ -1,0 +1,48 @@
+name: Industrial Dashboard validation
+
+on:
+  push:
+    branches:
+      - design/modern-industrial-dashboard
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'worker/**'
+      - 'tests/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/industrial-dashboard-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: industrial-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Build and test (no deployment)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts
+      - name: Repository-wide TypeScript diagnostics (existing errors tracked separately)
+        continue-on-error: true
+        run: npx tsc --noEmit
+      - name: Explain TypeScript diagnostic scope
+        run: echo 'Repository-wide TypeScript diagnostics are informational until legacy Worker types and strictness issues are resolved. Build and rendered HTML tests remain required.'
+      - name: Build application
+        run: npm run build
+      - name: Validate industrial integration and built bundle
+        run: node --test tests/industrial-dashboard-validation.test.mjs

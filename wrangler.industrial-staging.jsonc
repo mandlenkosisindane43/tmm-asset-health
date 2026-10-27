@@ -1,0 +1,24 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "tmm-asset-health-industrial-staging",
+  "account_id": "ba53c9a85c6f300723d5d58f899722f9",
+  "main": "./worker/entry-with-pwa.ts",
+  "compatibility_date": "2026-08-28",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "assets": {
+    "directory": "./dist/client",
+    "binding": "ASSETS",
+    "not_found_handling": "none"
+  },
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "tmm-asset-health-preview-db",
+    "database_id": "eb1c1fda-cc2f-44f3-9638-bc5cfd72465d"
+  }],
+  "r2_buckets": [{
+    "binding": "BUCKET",
+    "bucket_name": "tmm-asset-health-preview-files"
+  }],
+  "observability": { "enabled": true }
+}

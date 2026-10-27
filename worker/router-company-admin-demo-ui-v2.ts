@@ -52,7 +52,7 @@ function calc(d:Awaited<ReturnType<typeof data>>){
 function pareto(events:Row[]){const map=new Map<string,number>();for(const e of events){const k=String(e.system||"Other");map.set(k,(map.get(k)||0)+num(e.downtime))}return [...map.entries()].sort((a,b)=>b[1]-a[1]).slice(0,6)}
 function nav(active:string,s:AdminSession){
  const items=[
-  ["dashboard","⌂","Dashboard"],["breakdowns","⚙","Breakdowns"],["maintenance","▦","Maintenance"],["production","▥","Production"],["reports-live","▤","Reports"],
+  ["dashboard","⌂","Dashboard"],["industrial","▣","Industrial Dashboard"],["breakdowns","⚙","Breakdowns"],["maintenance","▦","Maintenance"],["production","▥","Production"],["reports-live","▤","Reports"],
   ["fleet","▣","Fleet"],["daily","⇧","Daily Reports"],["users","♙","Users & Roles"],["alerts","!","Alerts"],["approvals","✓","Approvals"],["reports-admin","▤","Reports Centre"],["trial-demo","◈","Previous Month Trial"],["documents","▱","Documents"],["setup","⚙","Company Setup"],["settings","⚙","Settings"],["subscription-request","◇","Subscription Request"]
  ];
  return `<aside class="side"><div class="brand"><img src="/sindane-logo.png" alt="Sindane Asset Solutions"><div><b>TMM Asset Health</b><small>Company Admin</small></div></div><nav>${items.map(([id,ic,label])=>{const href=id==="trial-demo"?"/trial-demo":id==="reports-admin"?"/contractor?view=reports-admin":`/contractor?view=${id}`;return `<a class="${active===id?"active":""}" href="${href}"><span>${ic}</span>${label}</a>`}).join("")}</nav><div class="companybox"><small>COMPANY ADMIN</small><b>${esc(s.companyName)}</b><span>${esc(s.licenceStatus)} licence</span></div><div class="userbox"><b>${esc(s.fullName)}</b><small>${esc(s.email)}</small><a href="/contractor-logout">Log out</a></div></aside>`;
@@ -191,6 +191,26 @@ export default {
    const s=await session(req,env);
    if(s&&canViewCompanyPage(low(s.role),url.searchParams.get("view")||"dashboard")){
     const view=url.searchParams.get("view")||"dashboard";
+    if(view==="industrial"&&req.method==="GET"){
+      const d=await data(env,s),c=calc(d);
+      const validDay=Boolean(c.latest&&c.scheduled>0);
+      const metric=(label:string,value:string,note:string)=>'<article style="padding:18px;background:#122c40;border:1px solid #31536a;border-radius:12px"><small style="color:#a9c5d6">'+esc(label)+'</small><h2 style="color:#f3f7fb;margin:10px 0;font-size:27px">'+esc(value)+'</h2><small style="color:#a9c5d6">'+esc(note)+'</small></article>';
+      const rows=d.machines.slice(0,250).map(m=>'<tr>'+[m.fleet,m.category,m.site,m.status,m.hours,m.nextService].map(v=>'<td style="padding:11px;border-bottom:1px solid #30495b">'+esc(v??"—")+'</td>').join('')+'</tr>').join('');
+      const panel='<div style="background:#091a29;color:#edf5fb;border-radius:15px;padding:24px;margin-top:16px">'+
+      '<h2 style="color:#f2b94b">Industrial Dashboard · Live company data</h2>'+
+      '<p style="color:#a9c5d6">Read-only figures for '+esc(s.companyName)+'. Sourced from your existing company database. No OEM telemetry connection is active.</p>'+
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:18px 0">'+
+      metric('Machines in fleet',String(d.machines.length),'Existing company fleet')+
+      metric('Availability',validDay?pct(c.availability):'No data',validDay?'Latest report: '+c.latest:'No valid scheduled hours')+
+      metric('Utilisation',validDay&&c.available>0?pct(c.utilisation):'No data','Latest available production records')+
+      metric('Production',c.latest?fmt(c.tonnes,1)+' t':'No data',c.latest?'Latest report: '+c.latest:'No daily production reports')+
+      metric('Open fault events',String(c.open.length),'Recorded events')+
+      metric('Machines operating',String(c.opMachines),'Current stored status')+
+      '</div><h3 style="color:#f2b94b">Company fleet register</h3><div style="overflow:auto"><table style="width:100%;min-width:670px;text-align:left;border-collapse:collapse"><thead><tr>'+['Fleet number','Category','Site','Status','Engine hours','Next service hours'].map(h=>'<th style="padding:11px;color:#f2b94b">'+h+'</th>').join('')+'</tr></thead><tbody>'+rows+'</tbody></table></div>'+
+      '<p style="color:#a9c5d6">Real fleet records above. The design prototype below still contains synthetic charts and must not be used for operational decisions.</p></div>';
+      const frame='<section class="panel" style="padding:16px"><h2>Industrial Dashboard</h2><p>Modern industrial interface within your existing company login. Existing Admin Dashboard and management functions remain unchanged.</p>'+panel+'<details style="margin-top:18px"><summary style="cursor:pointer;font-weight:700">Open experimental dark dashboard design (demo charts)</summary><iframe title="Industrial Dashboard visual prototype with demonstration data" src="/industrial-preview" loading="lazy" style="display:block;width:100%;height:85vh;min-height:650px;border:1px solid #cbd5e1;border-radius:12px;background:#081521;margin-top:12px"></iframe></details></section>';
+      return html(shell("industrial","Industrial Dashboard",s,frame));
+    }
     if(view==="machine-history"&&req.method==="GET")return machineHistory(req,env,s);
     if(view==="data-quality"&&req.method==="GET")return qualityPage(req,env,s);
     if(view==="management-presentation"&&req.method==="GET"){const d=await data(env,s),rows=await recommendationRows(env,s),rate=await analyticsRate(env,s);return html(shell(view,"Management Presentation",s,managementHtml(req,d,rows,rate,s.companyName,todayLocal())));}
