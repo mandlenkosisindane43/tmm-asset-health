@@ -44,5 +44,5 @@ jobs:
         run: echo 'Repository-wide TypeScript diagnostics are informational until legacy Worker types and strictness issues are resolved. Build and rendered HTML tests remain required.'
       - name: Build application
         run: npm run build
-      - name: Test rendered HTML
-        run: node --test tests/rendered-html.test.mjs
+      - name: Validate industrial integration and built bundle
+        run: node --test tests/industrial-dashboard-validation.test.mjs
