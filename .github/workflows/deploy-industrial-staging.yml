@@ -1,0 +1,41 @@
+name: Deploy isolated Industrial staging
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  staging:
+    if: github.ref == 'refs/heads/design/modern-industrial-dashboard'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: industrial-staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Build
+        run: npm run build
+      - name: Validate integration
+        run: node --test tests/industrial-dashboard-validation.test.mjs
+      - name: Verify staging isolation
+        run: |
+          node --input-type=module <<'EOF'
+          import fs from 'node:fs';
+          const c = JSON.parse(fs.readFileSync('wrangler.industrial-staging.jsonc','utf8'));
+          if(c.name !== 'tmm-asset-health-industrial-staging') throw Error('Unexpected Worker name');
+          if(c.d1_databases?.[0]?.database_name !== 'tmm-asset-health-preview-db') throw Error('Unsafe D1 database');
+          if(c.r2_buckets?.[0]?.bucket_name !== 'tmm-asset-health-preview-files') throw Error('Unsafe R2 bucket');
+          if(c.routes || c.route || c.triggers) throw Error('Staging cannot use production routes or cron');
+          EOF
+      - name: Deploy staging only
+        run: npx wrangler deploy --config wrangler.industrial-staging.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
