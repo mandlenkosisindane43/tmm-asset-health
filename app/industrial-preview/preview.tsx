@@ -30,7 +30,7 @@ export default function IndustrialPreview() {
   const [loadedCompanyId, setLoadedCompanyId] = useState<number | null>(null);
   async function loadCompany() {
     const id = Number(companyId);
-    if (!/^\\d+$/.test(companyId.trim()) || !Number.isSafeInteger(id) || id <= 0) {
+    if (!/^\d+$/.test(companyId.trim()) || !Number.isSafeInteger(id) || id <= 0) {
       setError("Enter a valid company ID."); setData(null); setLoadedCompanyId(null); return;
     }
     setLoading(true); setError(""); setData(null); setLoadedCompanyId(null);
