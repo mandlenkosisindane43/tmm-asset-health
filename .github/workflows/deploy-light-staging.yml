@@ -31,6 +31,28 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Build
         run: npm run build
+      - name: Isolate staging root from application request chain
+        run: |
+          node --input-type=module <<'EOF'
+          import fs from 'node:fs';
+          const entry = 'dist/server/light-staging-entry.js';
+          fs.writeFileSync(entry, `import app from './index.js';
+          export default {
+            async fetch(request, env, ctx) {
+              const url = new URL(request.url);
+              if ((request.method === 'GET' || request.method === 'HEAD') && url.pathname === '/') {
+                const html = '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>TMM Asset Health — Light Staging</title></head><body style="font-family:system-ui,sans-serif;max-width:760px;margin:12vh auto;padding:24px;color:#172033"><h1>TMM Asset Health — Light Staging</h1><p>Isolated staging deployment. The main production dashboard has not been changed.</p><p><a href="/operations">Open operations</a> · <a href="/contractor-login">Contractor login</a></p></body></html>';
+                return new Response(request.method === 'HEAD' ? null : html, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
+              }
+              return app.fetch(request, env, ctx);
+            }
+          };`);
+          const configPath = 'wrangler.light-staging.jsonc';
+          const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+          if (cfg.main !== './dist/server/index.js') throw Error('Unexpected original staging entry');
+          cfg.main = './dist/server/light-staging-entry.js';
+          fs.writeFileSync(configPath, JSON.stringify(cfg, null, 2) + '\\n');
+          EOF
       - name: Verify isolated configuration and bindings
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
