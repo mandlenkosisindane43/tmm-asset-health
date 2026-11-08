@@ -41,6 +41,13 @@ jobs:
             </main>;
           }
           EOF
+      - name: Stage 2 diagnostic - isolate global app layout and client registration
+        run: |
+          cat > app/layout.tsx <<'EOF'
+          export default function RootLayout({ children }: { children: React.ReactNode }) {
+            return <html lang="en"><body>{children}</body></html>;
+          }
+          EOF
       - name: Build
         run: npm run build
       - name: Isolate staging root from application request chain
