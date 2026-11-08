@@ -63,7 +63,16 @@ jobs:
                 const html = '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>TMM Asset Health — Light Staging</title></head><body style="font-family:system-ui,sans-serif;max-width:760px;margin:12vh auto;padding:24px;color:#172033"><h1>TMM Asset Health — Light Staging</h1><p>Isolated staging deployment. The main production dashboard has not been changed.</p><p><a href="/operations">Open operations</a> · <a href="/contractor-login">Contractor login</a></p></body></html>';
                 return new Response(request.method === 'HEAD' ? null : html, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
               }
-              return app.fetch(request, env, ctx);
+              const started = Date.now();
+              console.log('[light-staging-diagnostic] app.fetch start', { path: url.pathname, method: request.method });
+              try {
+                const response = await app.fetch(request, env, ctx);
+                console.log('[light-staging-diagnostic] app.fetch completed', { path: url.pathname, status: response.status, elapsedMs: Date.now() - started });
+                return response;
+              } catch (error) {
+                console.error('[light-staging-diagnostic] app.fetch threw', { path: url.pathname, elapsedMs: Date.now() - started, message: error instanceof Error ? error.message : String(error), stack: error instanceof Error ? error.stack : undefined });
+                throw error;
+              }
             }
           };`);
           const configPath = 'wrangler.light-staging.jsonc';
