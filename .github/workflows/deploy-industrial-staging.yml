@@ -38,8 +38,32 @@ jobs:
         run: |
           test -s dist/server/index.js || { echo "::error::Vinext Worker bundle missing at dist/server/index.js"; exit 1; }
           test -d dist/client || { echo "::error::Client assets missing at dist/client"; exit 1; }
+      - name: Add staging-only lightweight homepage routing
+        run: |
+          cat > dist/server/industrial-staging-entry.js <<'EOF'
+          import application from "./index.js";
+
+          export default {
+            async fetch(request, env, ctx) {
+              const url = new URL(request.url);
+              // The isolated staging homepage must never traverse the legacy
+              // production marketing/operational router stack.
+              if ((request.method === "GET" || request.method === "HEAD") && url.pathname === "/") {
+                return new Response(null, {
+                  status: 302,
+                  headers: {
+                    Location: "/industrial-preview",
+                    "Cache-Control": "no-store",
+                    "X-Robots-Tag": "noindex, nofollow",
+                  },
+                });
+              }
+              return application.fetch(request, env, ctx);
+            },
+          };
+          EOF
       - name: Deploy staging only (compiled Vinext Worker)
-        run: npx wrangler deploy dist/server/index.js --config wrangler.industrial-staging.jsonc
+        run: npx wrangler deploy dist/server/industrial-staging-entry.js --config wrangler.industrial-staging.jsonc
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
