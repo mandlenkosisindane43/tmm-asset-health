@@ -29,6 +29,18 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci --ignore-scripts
+      - name: Stage 1 diagnostic - render operations through Vinext without auth or DB
+        run: |
+          cat > app/operations/page.tsx <<'EOF'
+          export const dynamic = "force-dynamic";
+          export default function OperationsPage() {
+            return <main style={{fontFamily:"system-ui,sans-serif",maxWidth:760,margin:"12vh auto",padding:24,color:"#172033"}}>
+              <h1>Operations Application Renderer Diagnostic</h1>
+              <p>Stage 1: the Vinext application rendered /operations without authentication, database queries, or the operations console.</p>
+              <p>This page exists only in the isolated staging build. Production code and data are unchanged.</p>
+            </main>;
+          }
+          EOF
       - name: Build
         run: npm run build
       - name: Isolate staging root from application request chain
@@ -43,10 +55,6 @@ jobs:
               if ((request.method === 'GET' || request.method === 'HEAD') && url.pathname === '/') {
                 const html = '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>TMM Asset Health — Light Staging</title></head><body style="font-family:system-ui,sans-serif;max-width:760px;margin:12vh auto;padding:24px;color:#172033"><h1>TMM Asset Health — Light Staging</h1><p>Isolated staging deployment. The main production dashboard has not been changed.</p><p><a href="/operations">Open operations</a> · <a href="/contractor-login">Contractor login</a></p></body></html>';
                 return new Response(request.method === 'HEAD' ? null : html, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
-              }
-              if ((request.method === 'GET' || request.method === 'HEAD') && url.pathname === '/operations') {
-                const html = '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Operations Routing Diagnostic</title></head><body style="font-family:system-ui,sans-serif;max-width:760px;margin:12vh auto;padding:24px;color:#172033"><h1>Operations Routing Diagnostic</h1><p>Staging Worker received /operations successfully without invoking the application renderer.</p><p>This is a temporary staging-only routing test. No production data or application files were changed.</p><p><a href="/">Back to staging home</a></p></body></html>';
-                return new Response(request.method === 'HEAD' ? null : html, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-tmm-staging-diagnostic': 'operations-bypass' } });
               }
               return app.fetch(request, env, ctx);
             }
