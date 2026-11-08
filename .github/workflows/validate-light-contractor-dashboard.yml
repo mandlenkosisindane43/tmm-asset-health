@@ -1,0 +1,41 @@
+name: Validate modern light contractor dashboard
+
+on:
+  push:
+    branches:
+      - design/modern-light-contractor-dashboard
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Validate light dashboard source
+        run: |
+          node --input-type=module <<'EOF'
+          import { readFileSync } from 'node:fs';
+          import assert from 'node:assert/strict';
+          const source = readFileSync('worker/router-company-admin-demo-ui-v2.ts', 'utf8');
+          assert.ok(source.includes('dashboard-modern'), 'Modern light styling missing');
+          assert.ok(source.includes('View full maintenance planner'), 'Maintenance drilldown missing');
+          assert.ok(source.includes('dashboardFilters'), 'Existing filtering must remain');
+          assert.ok(source.includes('recommendationSummary'), 'Existing recommendations must remain');
+          assert.ok(source.includes('companyId'), 'Company context must remain');
+          EOF
+      - name: TypeScript check
+        run: npx tsc --noEmit
+      - name: Build application
+        run: npm run build
+      - name: Check generated Worker
+        run: test -s dist/server/index.js
