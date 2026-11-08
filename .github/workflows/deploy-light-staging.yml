@@ -51,7 +51,7 @@ jobs:
           const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
           if (cfg.main !== './dist/server/index.js') throw Error('Unexpected original staging entry');
           cfg.main = './dist/server/light-staging-entry.js';
-          fs.writeFileSync(configPath, JSON.stringify(cfg, null, 2) + '\\n');
+          fs.writeFileSync(configPath, JSON.stringify(cfg, null, 2) + '\n');
           EOF
       - name: Verify isolated configuration and bindings
         env:
