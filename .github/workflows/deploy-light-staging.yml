@@ -1,0 +1,61 @@
+name: Deploy isolated light contractor staging
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: light-contractor-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: light-staging
+    steps:
+      - name: Check out approved light dashboard branch
+        uses: actions/checkout@v4
+        with:
+          ref: design/modern-light-contractor-dashboard
+          persist-credentials: false
+      - name: Verify branch
+        run: test "$(git branch --show-current)" = "design/modern-light-contractor-dashboard"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Build
+        run: npm run build
+      - name: Verify isolated configuration and bindings
+        env:
+          LIGHT_STAGING_D1_DATABASE_ID: ${{ secrets.LIGHT_STAGING_D1_DATABASE_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          node --input-type=module <<'EOF'
+          import fs from 'node:fs';
+          const path = 'wrangler.light-staging.jsonc';
+          const cfg = JSON.parse(fs.readFileSync(path, 'utf8'));
+          const id = process.env.LIGHT_STAGING_D1_DATABASE_ID;
+          if (!id || !/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(id)) throw Error('Set LIGHT_STAGING_D1_DATABASE_ID to a dedicated staging D1 UUID');
+          if (!process.env.CLOUDFLARE_API_TOKEN) throw Error('Missing CLOUDFLARE_API_TOKEN');
+          if (!process.env.CLOUDFLARE_ACCOUNT_ID) throw Error('Missing CLOUDFLARE_ACCOUNT_ID');
+          if (cfg.account_id !== process.env.CLOUDFLARE_ACCOUNT_ID) throw Error('Cloudflare account mismatch');
+          if (cfg.name !== 'tmm-asset-health-light-staging' || cfg.workers_dev !== true) throw Error('Unexpected Worker configuration');
+          if (cfg.routes || cfg.route || cfg.triggers || cfg.zone_id) throw Error('Production routes and scheduled triggers prohibited');
+          if (cfg.d1_databases?.length !== 1 || cfg.d1_databases[0].database_name !== 'tmm-asset-health-light-staging-db') throw Error('Unexpected D1 name');
+          if (id === '93fdd54e-404e-4fe0-ab59-dde7425575e6' || id === 'eb1c1fda-cc2f-44f3-9638-bc5cfd72465d') throw Error('Production or industrial-preview D1 forbidden');
+          if (cfg.r2_buckets?.length !== 1 || cfg.r2_buckets[0].bucket_name !== 'tmm-asset-health-light-staging-files') throw Error('Unexpected R2 bucket');
+          cfg.d1_databases[0].database_id = id;
+          fs.writeFileSync(path, JSON.stringify(cfg, null, 2));
+          EOF
+      - name: Deploy to dedicated workers.dev staging
+        run: npx wrangler deploy --config wrangler.light-staging.jsonc
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
