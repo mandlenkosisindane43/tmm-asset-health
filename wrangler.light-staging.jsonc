@@ -14,7 +14,7 @@
   "d1_databases": [{
     "binding": "DB",
     "database_name": "tmm-asset-health-light-staging-db",
-    "database_id": "STAGING_D1_DATABASE_ID"
+    "database_id": "b7f64035-831b-45ab-8a6c-036a67368bd7"
   }],
   "r2_buckets": [{
     "binding": "BUCKET",
