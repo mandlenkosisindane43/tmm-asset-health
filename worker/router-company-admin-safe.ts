@@ -38,6 +38,27 @@ const fullNav = `<nav>
 <a data-nav="install" href="/install-app"><span>⬇</span>Install App</a>
 </nav>`;
 
+const lightContractorRefresh = `<style id="tmm-light-contractor-refresh">
+/* Presentation-only refresh of the existing contractor application. */
+body{background:#f5f8fc!important;color:#18283b!important;font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif!important}
+.main{min-width:0}.content{max-width:1560px;margin:0 auto;padding:28px clamp(16px,3vw,42px)!important}
+.topbar{background:#fff!important;border-bottom:1px solid #e4eaf2!important;box-shadow:0 1px 8px #172b4d08}
+.side.full-admin-side{background:#fff!important;color:#23344c!important;border-right:1px solid #e1e9f2!important;box-shadow:3px 0 16px #1e385008}
+.side.full-admin-side nav a{color:#43566e!important;border-radius:10px!important;transition:background .15s,color .15s}
+.side.full-admin-side nav a:hover{background:#edf5fc!important;color:#145b91!important}
+.side.full-admin-side nav a.active{background:#e5f2fd!important;color:#075b98!important;font-weight:750!important;box-shadow:inset 3px 0 #0878bf}
+.side.full-admin-side .brand{border-color:#e4ebf2!important}
+.side.full-admin-side .companybox{background:#f1f7fc!important;color:#23344c!important;border:1px solid #dfebf5!important;border-radius:12px!important}
+.pagehead{margin-bottom:24px!important;align-items:center}.pagehead h1{font-size:clamp(24px,2.2vw,34px)!important;letter-spacing:-.035em;color:#142d48!important}.pagehead p{color:#65778e!important}
+.kpis{gap:14px!important}.kpi,.panel,.card,.metric{background:#fff!important;border:1px solid #e1e9f1!important;border-radius:15px!important;box-shadow:0 4px 20px #223f5c09!important}
+.kpi{padding:18px!important;min-height:112px!important}.kpi b{color:#172f4b!important;font-size:clamp(22px,2vw,30px)!important}.kpi small{color:#61748b!important;font-weight:650}
+.panel{padding:20px!important}.panel h2,.panel h3{color:#183653!important;letter-spacing:-.015em}
+a.action,.action,.btn{border-radius:10px!important}a.action{background:#f5f9fd!important;border:1px solid #e3edf5!important;color:#194b72!important}
+table{border-collapse:collapse}th{background:#f3f7fb!important;color:#50647d!important}td{border-color:#edf1f6!important}
+@media(max-width:1100px){.kpis{grid-template-columns:repeat(3,minmax(0,1fr))!important}.dashboard-grid{grid-template-columns:minmax(0,1fr)!important}}
+@media(max-width:700px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))!important}.content{padding:16px!important}.pagehead{align-items:flex-start;gap:12px;flex-wrap:wrap}.kpi{min-height:100px!important}}
+@media print{.side.full-admin-side,.topbar{display:none!important}.content{padding:0!important}.main{width:100%!important}}
+</style>`;
 const viewLabels:Record<string,string>={
  dashboard:"Company Admin Dashboard","machine-history":"Machine History","data-quality":"Data Quality","management-presentation":"Management Presentation",breakdowns:"Breakdowns Dashboard",maintenance:"Maintenance Dashboard",
  production:"Production Dashboard","reports-live":"Reports Dashboard",fleet:"Fleet Dashboard",
@@ -117,8 +138,8 @@ async function polish(req:Request,res:Response,env:Env){
   body=filterCompanyForms(body,String(a?.role||""));
   if(a?.role==="engineer"&&["fleet","daily","documents","reports-admin"].includes(view))body=body.replace(/(<h1[^>]*>[\s\S]*?<\/h1>)/,'$1<p>Engineer access: view records and exports. Use Recommendations to add findings or request corrections from the Admin.</p>');
   if(view==="daily"||view==="dashboard")body=addHourMeterPreview(body);
-  if(!body.includes('id="tmm-navy-company-theme"')&&body.includes("</head>"))body=body.replace("</head>",navyCompanyTheme+shellFix+"</head>");
-  else if(!body.includes('id="full-admin-shell-fix"')&&body.includes("</head>"))body=body.replace("</head>",shellFix+"</head>");
+  if(!body.includes('id="tmm-navy-company-theme"')&&body.includes("</head>"))body=body.replace("</head>",navyCompanyTheme+shellFix+lightContractorRefresh+"</head>");
+  else if(!body.includes('id="full-admin-shell-fix"')&&body.includes("</head>"))body=body.replace("</head>",shellFix+lightContractorRefresh+"</head>");
   const h=new Headers(res.headers);h.delete("content-length");h.set("cache-control","private, no-store");
   return new Response(body,{status:res.status,statusText:res.statusText,headers:h});
 }
