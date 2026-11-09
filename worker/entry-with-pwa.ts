@@ -24,7 +24,15 @@ const PWA_PATHS = new Set([
 
 export default {
   async fetch(req:Request,env:Env,ctx:ExecutionContext):Promise<Response>{
-    const path=new URL(req.url).pathname;
+    const url=new URL(req.url);
+    const path=url.pathname;
+    // Route the Machine History navigation to the company-isolated records workspace.
+    if(req.method==="GET" && path==="/contractor" && ["machine-history","history"].includes(url.searchParams.get("view")||"")){
+      const target=new URL("/fleet-history",url);
+      const machine=url.searchParams.get("machine");
+      if(machine)target.searchParams.set("machine",machine);
+      return Response.redirect(target,302);
+    }
     if(path==="/fleet-history") return machineHistory(req,env);
     // Role schema setup is not a per-request responsibility.
     // Role-aware operations invoke ensureAccountRoles only when required.
