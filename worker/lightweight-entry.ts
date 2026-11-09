@@ -105,7 +105,33 @@ function simplifyContractorNavigation(body:string):string{
  return body.includes("</body>")?body.replace("</body>",script+"</body>"):body;
 }
 
-    if(path==="/contractor"&&req.method==="GET"){if(!hasCompanySession(req))return redirect("/contractor-login");const res=await enhanceUsersPage(req,env,await classicCompanyAdminApp.fetch(req,env as never,ctx as never));const ct=res.headers.get("content-type")||"";if(!ct.includes("text/html"))return res;let body=simplifyContractorNavigation(await res.text());if(body.includes("</nav>")&&!body.includes('href="/tutorials"'))body=body.replace("</nav>",'<a href="/tutorials"><span>▶</span>Tutorial Centre</a></nav>');if(body.includes("</nav>")&&!body.includes('href="/tmm-assistant"'))body=body.replace("</nav>",'<a href="/tmm-assistant"><span>✦</span>Ask TMM Assistant</a></nav>');const h=new Headers(res.headers);h.delete("content-length");h.set("cache-control","private, no-store");return new Response(body,{status:res.status,statusText:res.statusText,headers:h});}
+
+// Staging-only: expose the existing automatic fleet report inside the main dashboard.
+// This is read-only; it does not create readings or change any company records.
+function addTelemetryOverview(body:string):string{
+ const script=`<script id="tmm-automatic-fleet-overview">
+ (function(){
+  function init(){
+   var params=new URLSearchParams(location.search);
+   if(params.get("view") && params.get("view")!=="dashboard")return;
+   var main=document.querySelector("main")||document.querySelector(".main-content")||document.querySelector(".content");
+   if(!main||document.getElementById("tmm-telemetry-overview"))return;
+   var section=document.createElement("section");
+   section.id="tmm-telemetry-overview";
+   section.style.cssText="margin:18px 0 24px;background:#fff;border:1px solid #dce5ef;border-radius:14px;padding:20px;box-shadow:0 4px 18px rgba(20,40,70,.04)";
+   section.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div><h2 style="margin:0 0 6px;font-size:21px;color:#102b4a">Automatic fleet monitoring</h2><p style="margin:0;color:#56708b">Live calculations from received machine readings. Unavailable values are not estimated.</p></div><a href="/fleet-performance" style="background:#132b4d;color:#fff;padding:10px 15px;border-radius:8px;text-decoration:none;font-weight:700">Open full fleet report</a></div><iframe title="Automatic fleet performance report" src="/fleet-performance" loading="lazy" style="display:block;width:100%;height:650px;margin-top:15px;border:1px solid #e1e8f0;border-radius:10px;background:#f3f6fa"></iframe>';
+   var heading=Array.from(main.querySelectorAll("h1")).find(function(e){return /Admin Dashboard|Dashboard/i.test(e.textContent||"")});
+   var banner=heading&&heading.closest("section");
+   if(banner&&banner.parentNode)banner.insertAdjacentElement("afterend",section);
+   else main.insertBefore(section,main.firstChild);
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);else init();
+ })();
+ </script>`;
+ return body.includes("</body>")?body.replace("</body>",script+"</body>"):body;
+}
+
+    if(path==="/contractor"&&req.method==="GET"){if(!hasCompanySession(req))return redirect("/contractor-login");const res=await enhanceUsersPage(req,env,await classicCompanyAdminApp.fetch(req,env as never,ctx as never));const ct=res.headers.get("content-type")||"";if(!ct.includes("text/html"))return res;let body=addTelemetryOverview(simplifyContractorNavigation(await res.text()));if(body.includes("</nav>")&&!body.includes('href="/tutorials"'))body=body.replace("</nav>",'<a href="/tutorials"><span>▶</span>Tutorial Centre</a></nav>');if(body.includes("</nav>")&&!body.includes('href="/tmm-assistant"'))body=body.replace("</nav>",'<a href="/tmm-assistant"><span>✦</span>Ask TMM Assistant</a></nav>');const h=new Headers(res.headers);h.delete("content-length");h.set("cache-control","private, no-store");return new Response(body,{status:res.status,statusText:res.statusText,headers:h});}
     if(path==="/company-admin/users/remove" && req.method==="POST") return removeUser(req,env);
     if(path.startsWith("/company-admin/")){const direct=await handleCompanyAdminV3(req,env as never);if(direct)return direct;}
     return coreApp.fetch(req,env as never,ctx as never);
