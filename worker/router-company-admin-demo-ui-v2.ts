@@ -186,7 +186,7 @@ body:has(.machine-history-page) .top{position:sticky!important;top:0!important;b
 @media(max-width:900px){body:has(.machine-history-page) .app{grid-template-columns:1fr!important}body:has(.machine-history-page) .side{position:relative!important;height:auto!important;grid-column:1!important;grid-row:1!important}body:has(.machine-history-page) .main{grid-column:1!important;grid-row:2!important}.machine-history-page .machine-history-modules{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
 @media(max-width:580px){.machine-history-page .machine-history-modules{grid-template-columns:1fr!important}.machine-history-page{padding:14px!important}}
 </style>`;
-function machineHistory(req:Request,env:Env,s:AdminSession){
+async function machineHistory(req:Request,env:Env,s:AdminSession){
  const d=await data(env,s),url=new URL(req.url),fleet=url.searchParams.get('fleet')||'',machine=d.machines.find(m=>m.fleet===fleet);
  const select=`<form method="get" class="panel dashboard-filters" action="/contractor"><input type="hidden" name="view" value="machine-history"><label>Equipment<select name="fleet" required><option value="">Select equipment</option>${d.machines.map(m=>`<option value="${esc(m.fleet)}" ${m.fleet===fleet?'selected':''}>${esc(m.fleet)} · ${esc(m.site)}</option>`).join('')}</select></label><button class="primary">Open history</button></form>`;
  if(fleet&&!machine)return html('Equipment not found in this company.',404);
