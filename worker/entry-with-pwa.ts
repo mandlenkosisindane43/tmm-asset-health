@@ -1,6 +1,7 @@
 import app from "./mobile-install-email";
 import pwaApp from "./router-pwa";
 import loginApp from "./router-login-recovery";
+import vinextBase from "./vinext-base";
 
 interface ExecutionContext { waitUntil(promise: Promise<unknown>): void; passThroughOnException(): void; }
 interface ScheduledController { scheduledTime:number; cron:string; noRetry():void; }
@@ -25,6 +26,9 @@ export default {
     const path=new URL(req.url).pathname;
     // Role schema setup is not a per-request responsibility.
     // Role-aware operations invoke ensureAccountRoles only when required.
+    // Next.js operations has its own authentication and data access.
+    // Bypass the legacy Worker wrapper chain, whose global handlers perform D1 work.
+    if(path==="/operations" || path.startsWith("/operations/")) return vinextBase.fetch(req,env as never,ctx as never);
     if(path==="/contractor-login" || path==="/api/contractor/login") return loginApp.fetch(req,env as never,ctx as never);
     if(PWA_PATHS.has(path)) return pwaApp.fetch(req,env as never,ctx as never);
     return app.fetch(req,env as never,ctx as never);
