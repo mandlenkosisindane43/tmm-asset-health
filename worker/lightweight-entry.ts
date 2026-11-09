@@ -109,6 +109,8 @@ function simplifyContractorNavigation(body:string):string{
 // Staging-only: expose the existing automatic fleet report inside the main dashboard.
 // This is read-only; it does not create readings or change any company records.
 function addTelemetryOverview(body:string):string{
+ // Keep the dashboard usable without embedding another authenticated page.
+ // An iframe can be blocked by frame security headers and produces a blank panel.
  const script=`<script id="tmm-automatic-fleet-overview">
  (function(){
   function init(){
@@ -118,11 +120,11 @@ function addTelemetryOverview(body:string):string{
    if(!main||document.getElementById("tmm-telemetry-overview"))return;
    var section=document.createElement("section");
    section.id="tmm-telemetry-overview";
-   section.style.cssText="margin:18px 0 24px;background:#fff;border:1px solid #dce5ef;border-radius:14px;padding:20px;box-shadow:0 4px 18px rgba(20,40,70,.04)";
-   section.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div><h2 style="margin:0 0 6px;font-size:21px;color:#102b4a">Automatic fleet monitoring</h2><p style="margin:0;color:#56708b">Live calculations from received machine readings. Unavailable values are not estimated.</p></div><a href="/fleet-performance" style="background:#132b4d;color:#fff;padding:10px 15px;border-radius:8px;text-decoration:none;font-weight:700">Open full fleet report</a></div><iframe title="Automatic fleet performance report" src="/fleet-performance" loading="lazy" style="display:block;width:100%;height:650px;margin-top:15px;border:1px solid #e1e8f0;border-radius:10px;background:#f3f6fa"></iframe>';
-   var heading=Array.from(main.querySelectorAll("h1")).find(function(e){return /Admin Dashboard|Dashboard/i.test(e.textContent||"")});
-   var banner=heading&&heading.closest("section");
-   if(banner&&banner.parentNode)banner.insertAdjacentElement("afterend",section);
+   section.style.cssText="margin:16px 0 20px;background:#fff;border:1px solid #dce5ef;border-radius:14px;padding:22px;box-shadow:0 4px 18px rgba(20,40,70,.04)";
+   section.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div><div style="font-size:11px;letter-spacing:.08em;font-weight:800;color:#008b85;margin-bottom:7px">AUTOMATIC MACHINE DATA</div><h2 style="margin:0 0 8px;font-size:22px;color:#102b4a">Fleet performance &amp; machine health</h2><p style="margin:0;color:#56708b;max-width:650px">Engine-hour trends, utilisation estimates, service thresholds and received alerts are calculated from valid telemetry. Missing data stays unavailable.</p></div><a href="/fleet-performance" style="background:#132b4d;color:#fff;padding:12px 16px;border-radius:8px;text-decoration:none;font-weight:700">View live fleet performance</a></div><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px"><a href="/telemetry" style="color:#12446f;font-weight:700;text-decoration:underline">Machine readings &amp; alerts</a><a href="/telemetry/connections" style="color:#12446f;font-weight:700;text-decoration:underline">Connect machine data</a></div>';
+   var banner=Array.from(main.querySelectorAll("h1,h2")).find(function(e){return /Fleet performance overview/i.test(e.textContent||"")});
+   var target=banner&&banner.closest("section");
+   if(target&&target.parentNode)target.insertAdjacentElement("afterend",section);
    else main.insertBefore(section,main.firstChild);
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",init);else init();
