@@ -175,7 +175,11 @@ const machineHistoryLayoutStyle=`<style>
 body:has(.machine-history-page) .app{display:grid!important;grid-template-columns:255px minmax(0,1fr)!important;align-items:start!important}
 body:has(.machine-history-page) .side{position:sticky!important;top:0!important;left:auto!important;bottom:auto!important;height:100vh!important;grid-column:1!important;grid-row:1!important;overflow-y:auto!important}
 body:has(.machine-history-page) .main{grid-column:2!important;grid-row:1!important;min-width:0!important}
-body:has(.machine-history-page) .top{position:sticky!important;top:0!important;bottom:auto!important;left:auto!important;right:auto!important;width:100%!important;height:68px!important}
+body:has(.machine-history-page){margin:0!important;padding:0!important}
+body:has(.machine-history-page) .app{margin:0!important;padding:0!important;position:relative!important;top:auto!important;transform:none!important}
+body:has(.machine-history-page) .main{margin:0!important;padding:0!important;position:relative!important;top:auto!important;overflow:visible!important}
+body:has(.machine-history-page) .top{position:relative!important;top:auto!important;bottom:auto!important;left:auto!important;right:auto!important;width:100%!important;height:68px!important;z-index:1!important}
+body:has(.machine-history-page) .content.machine-history-page{position:relative!important;top:auto!important;margin:0 auto!important;padding:28px 24px!important;clear:both!important}
 .machine-history-page{max-width:1260px;margin:0 auto;padding:24px!important}
 .machine-history-page .machine-history-modules{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:14px;margin:16px 0}
 .machine-history-page .machine-history-module{min-height:0!important;padding:18px!important;border:1px solid #dfe6ef;border-radius:12px;background:#fff}
