@@ -47,7 +47,7 @@ def normalize(record):
 
 
 def send(endpoint, source, token, readings):
-    payload = json.dumps({"readings": readings}).encode("utf-8")
+    payload = json.dumps(readings).encode("utf-8")
     req = urllib.request.Request(
         endpoint, data=payload, method="POST",
         headers={"Content-Type": "application/json", "x-telemetry-source": source,
