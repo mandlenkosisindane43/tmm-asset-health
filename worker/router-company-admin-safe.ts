@@ -15,6 +15,7 @@ const SERVICE_INTERVAL_HOURS=250;
 const fullNav = `<nav class="tmm-six-nav">
 <a data-nav="dashboard" href="/contractor"><span>⌂</span>Overview</a>
 <details><summary><span>▣</span>Fleet &amp; Operations</summary><div class="tmm-subnav">
+<a data-nav="machine-monitoring" href="/contractor?view=machine-monitoring">Machine Monitoring</a>
 <a data-nav="fleet" href="/contractor?view=fleet">Fleet</a>
 <a data-nav="daily" href="/contractor?view=daily">Daily Reports</a>
 <a data-nav="production" href="/contractor?view=production">Production</a>
@@ -89,7 +90,7 @@ table{border-collapse:collapse}th{background:#f3f7fb!important;color:#50647d!imp
 @media print{.side.full-admin-side,.topbar{display:none!important}.content{padding:0!important}.main{width:100%!important}}
 </style>`;
 const viewLabels:Record<string,string>={
- dashboard:"Company Admin Dashboard","machine-history":"Machine History","data-quality":"Data Quality","management-presentation":"Management Presentation",breakdowns:"Breakdowns Dashboard",maintenance:"Maintenance Dashboard",
+ dashboard:"Company Admin Dashboard","machine-monitoring":"Machine Monitoring","machine-history":"Machine History","data-quality":"Data Quality","management-presentation":"Management Presentation",breakdowns:"Breakdowns Dashboard",maintenance:"Maintenance Dashboard",
  production:"Production Dashboard","reports-live":"Reports Dashboard",fleet:"Fleet Dashboard",
  daily:"Daily Reports Dashboard",users:"Users & Roles Dashboard",alerts:"Alerts Dashboard",
  approvals:"Approvals Dashboard","reports-admin":"Reports Centre",previous:"Previous Month Dashboard",
@@ -114,7 +115,7 @@ function fullSidebar(view:string,a:Row|null){
  const active=view==="reports"?"reports-live":view;
  const role=String(a?.role||"");
  const permittedNav=fullNav.replace(/<a data-nav="([^"]+)"[^>]*>[\s\S]*?<\/a>/g,(link, key)=>canViewCompanyPage(role,key)?link:"");
- const activeGroups:Record<string,string>={fleet:"fleet",daily:"fleet",production:"fleet",previous:"fleet","machine-history":"fleet",maintenance:"maintenance",breakdowns:"maintenance",alerts:"maintenance",recommendations:"engineering","data-quality":"engineering","management-presentation":"engineering","reports-live":"reports","reports-admin":"reports",documents:"reports",users:"admin",approvals:"admin",setup:"admin",settings:"admin",licence:"admin"};
+ const activeGroups:Record<string,string>={"machine-monitoring":"fleet",fleet:"fleet",daily:"fleet",production:"fleet",previous:"fleet","machine-history":"fleet",maintenance:"maintenance",breakdowns:"maintenance",alerts:"maintenance",recommendations:"engineering","data-quality":"engineering","management-presentation":"engineering","reports-live":"reports","reports-admin":"reports",documents:"reports",users:"admin",approvals:"admin",setup:"admin",settings:"admin",licence:"admin"};
  const selectedGroup=activeGroups[active]||"";
  const groupKeys=["fleet","maintenance","engineering","reports","admin"];
  let nav=permittedNav.replace(`data-nav="${active}"`,`data-nav="${active}" class="active"`);
@@ -122,6 +123,53 @@ function fullSidebar(view:string,a:Row|null){
  nav=nav.replace(/<details>/g,()=>`<details${groupKeys[groupIndex++]===selectedGroup?" open":""}>`);
  const label=active==="dashboard"?(isCompanyAdmin(role)?"Admin Dashboard":"Engineer Dashboard"):active==="recommendations"?"Recommendations":viewLabels[active]||"Company Workspace";
  return `<aside class="side full-admin-side"><div class="brand compact-brand"><img src="/sindane-logo.png" alt="Sindane Asset Solutions"><div><b>TMM Asset Health</b><small>${esc(label)}</small></div></div>${nav}<div class="companybox"><small>${esc(isCompanyAdmin(role)?"COMPANY ADMIN":"COMPANY WORKSPACE")}</small><b>${esc(a?.companyName||"Company Workspace")}</b><span>${esc(a?.licenceStatus||"active")} licence</span></div><div class="userbox full-user"><div><b>${esc(a?.fullName||"Company Admin")}</b><small>${esc(a?.email||"")}</small><span>${esc(a?.role||"company_admin")}</span></div><form method="post" action="/api/contractor/logout"><button type="submit">Sign out</button></form></div></aside>`;
+}
+
+const monitoringCategories=[
+ ["Machine identification","Model, serial number, equipment ID and location","asset"],
+ ["Operating hours","Engine, working and idle hours","hours"],
+ ["Machine utilisation","Working, idle and available time","utilisation"],
+ ["Fuel consumption","Fuel level, consumption and burn rate","fuel"],
+ ["Engine performance","RPM, coolant temperature, oil pressure and sensors","engine"],
+ ["Fault codes","Diagnostic and event codes, severity and timestamps","faults"],
+ ["Machine health","Warnings and abnormal operating conditions","health"],
+ ["Maintenance","Service intervals and remaining hours","maintenance"],
+ ["Machine location","GPS, movement history and geofencing","location"],
+ ["Production","Payload, cycles and material moved","production"],
+ ["Historical trends","Operating, fuel and failure history","history"],
+ ["Reports","Automatically generated daily, weekly and monthly summaries","reports"]
+] as const;
+
+async function machineMonitoringPage(req:Request,env:Env):Promise<Response>{
+ const a=await account(req,env);
+ if(!a)return Response.redirect(new URL("/contractor-login",req.url).toString(),303);
+ const companyId=num(a.companyId);
+ let machines:Row[]=[];
+ let machineError="";
+ try{
+   const rows=await env.DB.prepare("SELECT fleet_number,operating_hours,next_service_hours FROM machines WHERE company_id=? ORDER BY fleet_number LIMIT 100").bind(companyId).all<Row>();
+   machines=rows.results||[];
+ }catch{machineError="Machine register is not yet available in this staging database.";}
+ const url=new URL(req.url);
+ const selected=url.searchParams.get("machine")||"";
+ const chosen=machines.find(m=>String(m.fleet_number)===selected)||machines[0];
+ const selectedFleet=String(chosen?.fleet_number||"");
+ const hourMeter=chosen?.operating_hours==null?null:num(chosen.operating_hours);
+ const nextService=chosen?.next_service_hours==null?null:num(chosen.next_service_hours);
+ const value=(v:unknown,unit="")=>v==null?"Not available":esc(v)+unit;
+ const cards=monitoringCategories.map(([title,desc,key],i)=>{
+   let detail="";
+   if(key==="asset")detail=selectedFleet?"Fleet ID: "+esc(selectedFleet):"No machine selected";
+   else if(key==="hours")detail="Total hour meter: "+value(hourMeter," h")+"; daily working and idle hours: awaiting OEM feed";
+   else if(key==="maintenance")detail="Next service meter: "+value(nextService," h")+(nextService!=null&&hourMeter!=null?"; remaining: "+(nextService-hourMeter).toFixed(1)+" h":"");
+   else detail="Awaiting authorised OEM data connection";
+   return `<article class="monitor-card"><div class="monitor-card-num">${String(i+1).padStart(2,"0")}</div><h2>${esc(title)}</h2><p>${esc(desc)}</p><div class="monitor-detail">${detail}</div></article>`;
+ }).join("");
+ const options=machines.map(m=>`<option value="${esc(m.fleet_number)}" ${String(m.fleet_number)===selectedFleet?"selected":""}>${esc(m.fleet_number)}</option>`).join("");
+ const html=`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Machine Monitoring | TMM Asset Health</title><style>
+*{box-sizing:border-box}body{margin:0;background:#f3f7fb;color:#17304b;font:15px system-ui,-apple-system,Segoe UI,sans-serif}header{background:#fff;border-bottom:1px solid #dde7f1;padding:18px clamp(18px,4vw,55px);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}header b{font-size:18px}a{color:#11618f;text-decoration:none;font-weight:650}main{max-width:1370px;margin:0 auto;padding:28px 22px 55px}.eyebrow{color:#197a79;font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}h1{font-size:clamp(26px,3vw,39px);margin:8px 0}p{color:#65768b;line-height:1.5}.notice{border:1px solid #d9e7f2;border-radius:12px;background:#eaf3fa;padding:15px 18px;margin:22px 0}.toolbar{display:flex;align-items:center;gap:15px;flex-wrap:wrap;margin:22px 0}.toolbar select{padding:11px 14px;border:1px solid #c9d7e4;border-radius:9px;min-width:210px;background:#fff}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px}.monitor-card{background:#fff;border:1px solid #e0e8f1;border-radius:15px;padding:21px;min-height:205px;box-shadow:0 4px 18px #233e5a08}.monitor-card-num{font-size:12px;color:#168a83;font-weight:800}.monitor-card h2{font-size:18px;margin:10px 0 7px}.monitor-card p{font-size:13px;margin:0 0 15px}.monitor-detail{border-top:1px solid #e9eef4;padding-top:13px;font-size:12px;font-weight:700;color:#37526b}@media(max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:590px){.grid{grid-template-columns:1fr}main{padding:20px 15px}header{padding:16px}}
+</style></head><body><header><b>TMM Asset Health · ${esc(a.companyName)}</b><a href="/contractor?view=fleet">← Back to Fleet &amp; Operations</a></header><main><div class="eyebrow">Fleet &amp; Operations / Equipment intelligence</div><h1>Machine Monitoring</h1><p>CAT-style equipment monitoring across 12 categories. All data is scoped to your company.</p><div class="notice"><b>OEM connection status: Not configured.</b> Current machine-register readings are shown where available. Live diagnostics, fuel, production and daily operating data require authorised OEM integration; no readings are simulated.</div>${machineError?`<div class="notice">${esc(machineError)}</div>`:""}<form class="toolbar" method="get" action="/contractor"><input type="hidden" name="view" value="machine-monitoring"><label for="machine">Machine</label><select id="machine" name="machine" onchange="this.form.submit()"><option value="">${machines.length?"Choose equipment":"No equipment registered"}</option>${options}</select><noscript><button type="submit">View</button></noscript></form><div class="grid">${cards}</div></main></body></html>`;
+ return new Response(html,{headers:{"content-type":"text/html; charset=utf-8","cache-control":"private, no-store","x-content-type-options":"nosniff"}});
 }
 
 async function fleetUpgrade(body:string,env:Env,a:Row|null){
@@ -183,6 +231,7 @@ export default {
     const url=new URL(req.url);
     if(url.pathname==="/contractor"&&req.method==="GET"){
       const view=url.searchParams.get("view")||"dashboard";
+      if(view==="machine-monitoring")return machineMonitoringPage(req,env);
       if(view==="demo"){url.searchParams.set("view","management-presentation");url.searchParams.delete("download");return new Response(null,{status:303,headers:{location:url.pathname+url.search,"cache-control":"private, no-store"}});}
       if(view==="previous"){
         const a=await account(req,env);
