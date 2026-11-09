@@ -125,6 +125,36 @@ function fullSidebar(view:string,a:Row|null){
  return `<aside class="side full-admin-side"><div class="brand compact-brand"><img src="/sindane-logo.png" alt="Sindane Asset Solutions"><div><b>TMM Asset Health</b><small>${esc(label)}</small></div></div>${nav}<div class="companybox"><small>${esc(isCompanyAdmin(role)?"COMPANY ADMIN":"COMPANY WORKSPACE")}</small><b>${esc(a?.companyName||"Company Workspace")}</b><span>${esc(a?.licenceStatus||"active")} licence</span></div><div class="userbox full-user"><div><b>${esc(a?.fullName||"Company Admin")}</b><small>${esc(a?.email||"")}</small><span>${esc(a?.role||"company_admin")}</span></div><form method="post" action="/api/contractor/logout"><button type="submit">Sign out</button></form></div></aside>`;
 }
 
+// Unified central telemetry intake. Protected by a staging-only bearer secret.
+async function ingestMachineTelemetry(req:Request,env:Env):Promise<Response>{
+ const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{"content-type":"application/json","cache-control":"no-store"}});
+ const configured=String(env.TMM_INGEST_TOKEN||"");
+ const provided=(req.headers.get("authorization")||"").replace(/^Bearer\s+/i,"");
+ if(!configured||!provided||configured.length!==provided.length)return json({error:"Not authorised"},401);
+ let different=0;for(let i=0;i<configured.length;i++)different|=configured.charCodeAt(i)^provided.charCodeAt(i);
+ if(different)return json({error:"Not authorised"},401);
+ let body:Record<string,unknown>;
+ try{body=await req.json() as Record<string,unknown>;}catch{return json({error:"Invalid JSON"},400);}
+ const companyId=Number(body.company_id),machineId=String(body.machine_id||"").trim(),source=String(body.source||"").trim();
+ const recordedAt=String(body.recorded_at||"");
+ if(!Number.isSafeInteger(companyId)||companyId<=0||!machineId||machineId.length>100||!source||source.length>60||!/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d/.test(recordedAt)||!Number.isFinite(Date.parse(recordedAt)))return json({error:"company_id, machine_id, source and ISO recorded_at are required"},400);
+ const numeric=["engine_hours","working_hours","idle_hours","fuel_litres","hydraulic_pressure_bar","hydraulic_oil_temp_c","coolant_temp_c","payload_tonnes","latitude","longitude"];
+ const values:Record<string,number|null>={};
+ for(const key of numeric){const v=body[key];if(v===undefined||v===null||v===""){values[key]=null;continue;}if(typeof v!=="number"||!Number.isFinite(v))return json({error:"Invalid numeric field: "+key},400);values[key]=v;}
+ if((values.latitude!=null&&(values.latitude < -90||values.latitude>90))||(values.longitude!=null&&(values.longitude < -180||values.longitude>180)))return json({error:"Invalid coordinates"},400);
+ const code=body.fault_code==null?null:String(body.fault_code).slice(0,100);
+ const description=body.fault_description==null?null:String(body.fault_description).slice(0,500);
+ const severity=body.severity==null?null:String(body.severity).toLowerCase();
+ if(severity&&!["info","warning","critical"].includes(severity))return json({error:"severity must be info, warning or critical"},400);
+ try{
+  const exists=await env.DB.prepare("SELECT id FROM companies WHERE id=?").bind(companyId).first<Row>();
+  if(!exists)return json({error:"Company does not exist"},404);
+  await env.DB.prepare(`INSERT OR IGNORE INTO tmm_telemetry_v1(company_id,machine_id,source,recorded_at,engine_hours,working_hours,idle_hours,fuel_litres,hydraulic_pressure_bar,hydraulic_oil_temp_c,coolant_temp_c,payload_tonnes,latitude,longitude,fault_code,fault_description,severity,raw_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+  .bind(companyId,machineId,source,new Date(recordedAt).toISOString(),...numeric.map(k=>values[k]),code,description,severity,JSON.stringify(body)).run();
+  return json({ok:true,machine_id:machineId});
+ }catch(e){console.error("TMM_TELEMETRY_INGEST_ERROR",e instanceof Error?e.message:String(e));return json({error:"Telemetry storage unavailable; check migration"},503);}
+}
+
 const monitoringCategories=[
  ["Machine identification","Model, serial number, equipment ID and location","asset"],
  ["Operating hours","Engine, working and idle hours","hours"],
@@ -143,32 +173,49 @@ const monitoringCategories=[
 async function machineMonitoringPage(req:Request,env:Env):Promise<Response>{
  const a=await account(req,env);
  if(!a)return Response.redirect(new URL("/contractor-login",req.url).toString(),303);
- const companyId=num(a.companyId);
- let machines:Row[]=[];
- let machineError="";
+ const companyId=num(a.companyId),url=new URL(req.url);
+ let machines:Row[]=[],events:Row[]=[],telemetryReady=true;
  try{
-   const rows=await env.DB.prepare("SELECT fleet_number,operating_hours,next_service_hours FROM machines WHERE company_id=? ORDER BY fleet_number LIMIT 100").bind(companyId).all<Row>();
+   const rows=await env.DB.prepare("SELECT DISTINCT machine_id FROM tmm_telemetry_v1 WHERE company_id=? ORDER BY machine_id LIMIT 150").bind(companyId).all<Row>();
    machines=rows.results||[];
- }catch{machineError="Machine register is not yet available in this staging database.";}
- const url=new URL(req.url);
- const selected=url.searchParams.get("machine")||"";
- const chosen=machines.find(m=>String(m.fleet_number)===selected)||machines[0];
- const selectedFleet=String(chosen?.fleet_number||"");
- const hourMeter=chosen?.operating_hours==null?null:num(chosen.operating_hours);
- const nextService=chosen?.next_service_hours==null?null:num(chosen.next_service_hours);
- const value=(v:unknown,unit="")=>v==null?"Not available":esc(v)+unit;
- const cards=monitoringCategories.map(([title,desc,key],i)=>{
-   let detail="";
-   if(key==="asset")detail=selectedFleet?"Fleet ID: "+esc(selectedFleet):"No machine selected";
-   else if(key==="hours")detail="Total hour meter: "+value(hourMeter," h")+"; daily working and idle hours: awaiting OEM feed";
-   else if(key==="maintenance")detail="Next service meter: "+value(nextService," h")+(nextService!=null&&hourMeter!=null?"; remaining: "+(nextService-hourMeter).toFixed(1)+" h":"");
-   else detail="Awaiting authorised OEM data connection";
-   return `<article class="monitor-card"><div class="monitor-card-num">${String(i+1).padStart(2,"0")}</div><h2>${esc(title)}</h2><p>${esc(desc)}</p><div class="monitor-detail">${detail}</div></article>`;
- }).join("");
- const options=machines.map(m=>`<option value="${esc(m.fleet_number)}" ${String(m.fleet_number)===selectedFleet?"selected":""}>${esc(m.fleet_number)}</option>`).join("");
+ }catch{telemetryReady=false;}
+ const selected=url.searchParams.get("machine")||String(machines[0]?.machine_id||"");
+ if(selected&&machines.some(m=>String(m.machine_id)===selected)){
+   try{const rows=await env.DB.prepare("SELECT * FROM tmm_telemetry_v1 WHERE company_id=? AND machine_id=? ORDER BY recorded_at DESC LIMIT 250").bind(companyId,selected).all<Row>();events=rows.results||[];}catch{telemetryReady=false;}
+ }
+ const latest=events[0]||{};
+ const newest=(key:string)=>events.find(e=>e[key]!=null)?.[key]??null;
+ const n=(v:unknown,digits=1)=>v==null?"—":Number(v).toFixed(digits);
+ const hours=newest("engine_hours"),working=newest("working_hours"),idle=newest("idle_hours"),fuel=newest("fuel_litres");
+ const utilisation=working!=null&&idle!=null&&(Number(working)+Number(idle))>0?100*Number(working)/(Number(working)+Number(idle)):null;
+ const faults=events.filter(e=>e.fault_code!=null);
+ const serious=faults.filter(e=>e.severity==="critical").length;
+ const rows=events.slice(0,60).map(e=>`<tr><td>${esc(String(e.recorded_at||""))}</td><td>${esc(String(e.source||""))}</td><td>${e.fault_code?esc(e.fault_code):"—"}</td><td>${e.fault_description?esc(e.fault_description):"—"}</td><td>${esc(String(e.severity||"—"))}</td></tr>`).join("");
+ const options=machines.map(m=>`<option value="${esc(m.machine_id)}" ${String(m.machine_id)===selected?"selected":""}>${esc(m.machine_id)}</option>`).join("");
+ const series=events.filter(e=>e.engine_hours!=null).slice(0,40).reverse().map(e=>({t:String(e.recorded_at).slice(5,16).replace("T"," "),v:Number(e.engine_hours)}));
+ const chartJson=JSON.stringify(series).replace(/</g,"\\u003c");
+ const cards=[
+  ["Engine hour meter",hours==null?"—":n(hours)+" h","Actual recorded hour-meter reading"],
+  ["Working hours",working==null?"—":n(working)+" h","From connected data source"],
+  ["Idle hours",idle==null?"—":n(idle)+" h","From connected data source"],
+  ["Utilisation",utilisation==null?"—":n(utilisation)+"%","Working ÷ (working + idle)"],
+  ["Fuel",fuel==null?"—":n(fuel)+" L","Meaning depends on source mapping"],
+  ["Hydraulic oil temperature",newest("hydraulic_oil_temp_c")==null?"—":n(newest("hydraulic_oil_temp_c"))+" °C","Sensor reading, not oil level"],
+  ["Hydraulic pressure",newest("hydraulic_pressure_bar")==null?"—":n(newest("hydraulic_pressure_bar"))+" bar","Sensor reading"],
+  ["Coolant temperature",newest("coolant_temp_c")==null?"—":n(newest("coolant_temp_c"))+" °C","Sensor reading"],
+  ["Payload",newest("payload_tonnes")==null?"—":n(newest("payload_tonnes"))+" t","Only if OEM provides payload"],
+  ["Fault events",String(faults.length),serious+" critical event(s) in latest 250 readings"],
+  ["Data source",latest.source?String(latest.source):"—","Most recent machine observation"],
+  ["Last update",latest.recorded_at?String(latest.recorded_at).replace("T"," ").slice(0,19)+" UTC":"—","Machine-reported timestamp"]
+ ];
+ const tiles=cards.map(([label,value,detail])=>`<article class="tile"><small>${esc(label)}</small><strong>${esc(value)}</strong><span>${esc(detail)}</span></article>`).join("");
  const html=`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Machine Monitoring | TMM Asset Health</title><style>
-*{box-sizing:border-box}body{margin:0;background:#f3f7fb;color:#17304b;font:15px system-ui,-apple-system,Segoe UI,sans-serif}header{background:#fff;border-bottom:1px solid #dde7f1;padding:18px clamp(18px,4vw,55px);display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}header b{font-size:18px}a{color:#11618f;text-decoration:none;font-weight:650}main{max-width:1370px;margin:0 auto;padding:28px 22px 55px}.eyebrow{color:#197a79;font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase}h1{font-size:clamp(26px,3vw,39px);margin:8px 0}p{color:#65768b;line-height:1.5}.notice{border:1px solid #d9e7f2;border-radius:12px;background:#eaf3fa;padding:15px 18px;margin:22px 0}.toolbar{display:flex;align-items:center;gap:15px;flex-wrap:wrap;margin:22px 0}.toolbar select{padding:11px 14px;border:1px solid #c9d7e4;border-radius:9px;min-width:210px;background:#fff}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px}.monitor-card{background:#fff;border:1px solid #e0e8f1;border-radius:15px;padding:21px;min-height:205px;box-shadow:0 4px 18px #233e5a08}.monitor-card-num{font-size:12px;color:#168a83;font-weight:800}.monitor-card h2{font-size:18px;margin:10px 0 7px}.monitor-card p{font-size:13px;margin:0 0 15px}.monitor-detail{border-top:1px solid #e9eef4;padding-top:13px;font-size:12px;font-weight:700;color:#37526b}@media(max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:590px){.grid{grid-template-columns:1fr}main{padding:20px 15px}header{padding:16px}}
-</style></head><body><header><b>TMM Asset Health · ${esc(a.companyName)}</b><a href="/contractor?view=fleet">← Back to Fleet &amp; Operations</a></header><main><div class="eyebrow">Fleet &amp; Operations / Equipment intelligence</div><h1>Machine Monitoring</h1><p>CAT-style equipment monitoring across 12 categories. All data is scoped to your company.</p><div class="notice"><b>OEM connection status: Not configured.</b> Current machine-register readings are shown where available. Live diagnostics, fuel, production and daily operating data require authorised OEM integration; no readings are simulated.</div>${machineError?`<div class="notice">${esc(machineError)}</div>`:""}<form class="toolbar" method="get" action="/contractor"><input type="hidden" name="view" value="machine-monitoring"><label for="machine">Machine</label><select id="machine" name="machine" onchange="this.form.submit()"><option value="">${machines.length?"Choose equipment":"No equipment registered"}</option>${options}</select><noscript><button type="submit">View</button></noscript></form><div class="grid">${cards}</div></main></body></html>`;
+*{box-sizing:border-box}body{margin:0;background:#f1f5f9;color:#132f47;font:15px system-ui,-apple-system,Segoe UI,sans-serif}header{background:white;border-bottom:1px solid #dce5ee;padding:18px max(20px,calc((100vw - 1300px)/2));display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap}a{color:#0c6686;text-decoration:none;font-weight:700}main{max-width:1300px;margin:auto;padding:26px 20px 60px}h1{font-size:clamp(28px,4vw,42px);margin:7px 0}h2{font-size:20px}p,small{color:#65778a}.eyebrow{font-size:12px;letter-spacing:.1em;color:#008678;font-weight:800;text-transform:uppercase}.toolbar{display:flex;align-items:center;gap:15px;flex-wrap:wrap;margin:25px 0}select{padding:12px 15px;border:1px solid #cbd8e4;border-radius:10px;min-width:230px;background:white}.notice{background:#e7f1f8;border:1px solid #d4e5f2;padding:16px;border-radius:12px;margin:20px 0}.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px}.tile,.panel{background:#fff;border:1px solid #e1e9f1;border-radius:15px;padding:20px;box-shadow:0 4px 15px #142d4608}.tile small{display:block;font-weight:700}.tile strong{display:block;font-size:27px;margin:11px 0;overflow-wrap:anywhere}.tile span{font-size:12px;color:#687b8c}.panel{margin-top:20px}canvas{width:100%;height:250px;display:block}table{border-collapse:collapse;width:100%;font-size:13px}td,th{padding:12px;text-align:left;border-bottom:1px solid #e5edf4}th{background:#f6f9fc}.scroll{overflow-x:auto}.status{display:inline-block;padding:5px 9px;border-radius:20px;background:#e3f5eb;color:#13714b;font-size:12px;font-weight:700}@media(max-width:900px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:520px){.stats{grid-template-columns:1fr}header{padding:15px 20px}}
+</style></head><body><header><b>TMM Asset Health · ${esc(a.companyName)}</b><a href="/contractor?view=fleet">← Fleet &amp; Operations</a></header><main><div class="eyebrow">Fleet &amp; Operations / Live machine history</div><h1>Machine Monitoring</h1><p>One place for OEM, telematics and sensor readings. Only received measurements are shown.</p><div class="notice"><b>${telemetryReady?"Central telemetry hub ready":"Telemetry tables not installed yet"}.</b> ${telemetryReady?"Connect an authorised OEM API or device relay to start receiving data.":"Run the staging-only telemetry SQL migration before ingesting readings."} Data remains separated by company.</div><form class="toolbar" method="get" action="/contractor"><input type="hidden" name="view" value="machine-monitoring"><label for="machine"><b>Choose machine</b></label><select name="machine" id="machine" onchange="this.form.submit()"><option value="">${machines.length?"Select a machine":"No telemetry received yet"}</option>${options}</select><noscript><button>Open machine</button></noscript></form><section class="stats">${tiles}</section><section class="panel"><h2>Engine hours over time</h2><p>Actual received readings; no sample values.</p><canvas id="hoursChart" role="img" aria-label="Engine hour meter history"></canvas><p id="chartEmpty" hidden>No engine-hour history received yet.</p></section><section class="panel"><h2>Fault &amp; event history</h2><p>${faults.length} fault event(s) in the latest ${events.length} readings. Event codes are not automatically confirmed breakdowns.</p><div class="scroll"><table><thead><tr><th>Recorded (UTC)</th><th>Source</th><th>Fault code</th><th>Description</th><th>Severity</th></tr></thead><tbody>${rows||'<tr><td colspan="5">No machine history received yet.</td></tr>'}</tbody></table></div></section><section class="panel"><h2>Automated reporting</h2><p>Operating-hour and fault trends are derived from incoming machine readings. Accurate breakdown duration, fuel efficiency, oil level and production require the corresponding events or sensors. No unverified root causes are generated.</p><button onclick="window.print()" style="border:0;border-radius:9px;background:#102e45;color:#fff;padding:12px 20px;cursor:pointer">Print machine report</button></section></main><script>
+const series=${chartJson};const canvas=document.getElementById("hoursChart");const empty=document.getElementById("chartEmpty");
+function draw(){const box=canvas.getBoundingClientRect(),w=Math.max(300,box.width),h=250,dpr=devicePixelRatio||1;canvas.width=w*dpr;canvas.height=h*dpr;const ctx=canvas.getContext("2d");ctx.scale(dpr,dpr);ctx.clearRect(0,0,w,h);if(series.length<2){empty.hidden=false;return;}empty.hidden=true;const vals=series.map(p=>p.v),lo=Math.min(...vals),hi=Math.max(...vals),range=Math.max(1,hi-lo),pad=38;ctx.strokeStyle="#e2eaf1";ctx.fillStyle="#65778a";ctx.font="12px system-ui";for(let i=0;i<=4;i++){const y=15+i*(h-55)/4;ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(w-12,y);ctx.stroke();ctx.fillText((hi-range*i/4).toFixed(1),2,y+4);}ctx.strokeStyle="#0a8d82";ctx.lineWidth=3;ctx.beginPath();series.forEach((p,i)=>{const x=pad+i*(w-pad-15)/(series.length-1),y=15+(hi-p.v)/range*(h-55);i?ctx.lineTo(x,y):ctx.moveTo(x,y);});ctx.stroke();ctx.fillStyle="#65778a";ctx.fillText(series[0].t,pad,h-12);ctx.fillText(series[series.length-1].t,Math.max(pad,w-145),h-12);}
+window.addEventListener("resize",draw);draw();
+</script></body></html>`;
  return new Response(html,{headers:{"content-type":"text/html; charset=utf-8","cache-control":"private, no-store","x-content-type-options":"nosniff"}});
 }
 
@@ -229,6 +276,7 @@ async function polish(req:Request,res:Response,env:Env){
 export default {
   async fetch(req:Request,env:Env,ctx:ExecutionContext):Promise<Response>{
     const url=new URL(req.url);
+    if(url.pathname==="/api/telemetry/ingest"&&req.method==="POST")return ingestMachineTelemetry(req,env);
     if(url.pathname==="/contractor"&&req.method==="GET"){
       const view=url.searchParams.get("view")||"dashboard";
       if(view==="machine-monitoring")return machineMonitoringPage(req,env);
