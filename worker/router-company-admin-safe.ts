@@ -12,34 +12,42 @@ const SAFE_V3_VIEWS = new Set(["fleet","daily","users","alerts","approvals","rep
 const enc=new TextEncoder();
 const SERVICE_INTERVAL_HOURS=250;
 
-const fullNav = `<nav>
-<a data-nav="dashboard" href="/contractor"><span>⌂</span>Dashboard</a>
-<a data-nav="recommendations" href="/contractor?view=recommendations"><span>✎</span>Recommendations</a>
-<a data-nav="machine-history" href="/contractor?view=machine-history"><span>◷</span>Machine History</a>
-<a data-nav="data-quality" href="/contractor?view=data-quality"><span>✓</span>Data Quality</a>
-<a data-nav="management-presentation" href="/contractor?view=management-presentation"><span>▶</span>Management Presentation</a>
-<a data-nav="fleet" href="/contractor?view=fleet"><span>▣</span>Fleet</a>
-<a data-nav="daily" href="/contractor?view=daily"><span>⇧</span>Daily Reports</a>
-<a data-nav="previous" href="/contractor?view=previous"><span>◈</span>Previous Month</a>
-<a data-nav="breakdowns" href="/contractor?view=breakdowns"><span>⚙</span>Breakdowns</a>
-<a data-nav="maintenance" href="/contractor?view=maintenance"><span>▦</span>Maintenance</a>
-<a data-nav="production" href="/contractor?view=production"><span>▥</span>Production</a>
-<a data-nav="reports-live" href="/contractor?view=reports-live"><span>▤</span>Reports</a>
-<a data-nav="users" href="/contractor?view=users"><span>♙</span>Users & Roles</a>
-<a data-nav="alerts" href="/contractor?view=alerts"><span>!</span>Alerts</a>
-<a data-nav="approvals" href="/contractor?view=approvals"><span>✓</span>Approvals</a>
-<a data-nav="reports-admin" href="/contractor?view=reports-admin"><span>▤</span>Reports Centre</a>
-<a data-nav="documents" href="/contractor?view=documents"><span>▱</span>Documents</a>
-<a data-nav="setup" href="/contractor?view=setup"><span>⚙</span>Company Setup</a>
-<a data-nav="licence" href="/company-licence"><span>▧</span>Licence</a>
-<a data-nav="telematics" href="/telemetry"><span>⌁</span>Telematics</a>
-<a data-nav="oem-connections" href="/telemetry/connections"><span>↔</span>OEM Connections</a>
-<a data-nav="settings" href="/contractor?view=settings"><span>⚙</span>Settings</a>
-<a data-nav="install" href="/install-app"><span>⬇</span>Install App</a>
+const fullNav = `<nav class="tmm-six-nav">
+<a data-nav="dashboard" href="/contractor"><span>⌂</span>Overview</a>
+<details><summary><span>▣</span>Fleet &amp; Operations</summary><div class="tmm-subnav">
+<a data-nav="fleet" href="/contractor?view=fleet">Fleet</a>
+<a data-nav="daily" href="/contractor?view=daily">Daily Reports</a>
+<a data-nav="production" href="/contractor?view=production">Production</a>
+<a data-nav="previous" href="/contractor?view=previous">Previous Month</a>
+<a data-nav="machine-history" href="/contractor?view=machine-history">Machine History</a>
+</div></details>
+<details><summary><span>⚙</span>Maintenance</summary><div class="tmm-subnav">
+<a data-nav="maintenance" href="/contractor?view=maintenance">Maintenance Dashboard</a>
+<a data-nav="breakdowns" href="/contractor?view=breakdowns">Breakdowns</a>
+<a data-nav="alerts" href="/contractor?view=alerts">Alerts</a>
+</div></details>
+<details><summary><span>◈</span>Engineering Intelligence</summary><div class="tmm-subnav">
+<a data-nav="recommendations" href="/contractor?view=recommendations">Recommendations</a>
+<a data-nav="data-quality" href="/contractor?view=data-quality">Data Quality</a>
+<a data-nav="management-presentation" href="/contractor?view=management-presentation">Management Presentation</a>
+</div></details>
+<details><summary><span>▤</span>Reports</summary><div class="tmm-subnav">
+<a data-nav="reports-live" href="/contractor?view=reports-live">Reports Dashboard</a>
+<a data-nav="reports-admin" href="/contractor?view=reports-admin">Reports Centre</a>
+<a data-nav="documents" href="/contractor?view=documents">Documents</a>
+</div></details>
+<details><summary><span>☷</span>Administration</summary><div class="tmm-subnav">
+<a data-nav="users" href="/contractor?view=users">Users &amp; Roles</a>
+<a data-nav="approvals" href="/contractor?view=approvals">Approvals</a>
+<a data-nav="setup" href="/contractor?view=setup">Company Setup</a>
+<a data-nav="settings" href="/contractor?view=settings">Settings</a>
+<a data-nav="licence" href="/company-licence">Licence</a>
+</div></details>
 </nav>`;
 
 const lightContractorRefresh = `<style id="tmm-light-contractor-refresh">
 /* Presentation-only refresh of the existing contractor application. */
+.tmm-six-nav{display:grid;gap:7px}.tmm-six-nav>details{margin:0}.tmm-six-nav>details>summary{display:flex;align-items:center;gap:12px;cursor:pointer;list-style:none;padding:12px 14px;border-radius:10px;font-weight:700;color:#43566e}.tmm-six-nav>details>summary::-webkit-details-marker{display:none}.tmm-six-nav>details>summary>span{display:inline-block;width:23px;text-align:center;font-size:19px}.tmm-six-nav>details>summary:hover,.tmm-six-nav>details[open]>summary{background:#e5f2fd;color:#075b98}.tmm-six-nav .tmm-subnav{display:grid;gap:3px;margin:3px 0 10px 35px;border-left:2px solid #e1eaf3;padding-left:9px}.tmm-six-nav .tmm-subnav a{font-size:12px!important;padding:8px 10px!important}.tmm-six-nav> a{font-weight:700}
 body{background:#f5f8fc!important;color:#18283b!important;font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif!important}
 .main{min-width:0}.content{max-width:1560px;margin:0 auto;padding:28px clamp(16px,3vw,42px)!important}
 .topbar{background:#fff!important;border-bottom:1px solid #e4eaf2!important;box-shadow:0 1px 8px #172b4d08}
