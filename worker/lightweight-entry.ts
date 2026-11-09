@@ -78,21 +78,21 @@ function simplifyContractorNavigation(body:string):string{
  const script=`<script id="tmm-six-section-navigation">
  (function(){
   function update(){
-   var nav=Array.from(document.querySelectorAll("aside nav,.sidebar nav,.side nav")).find(function(el){return /Fleet\\s*&\\s*Operations/i.test(el.textContent||"");});
-   if(!nav||nav.dataset.tmmSixSections==="1")return;
-   nav.dataset.tmmSixSections="1";
+   var nav=Array.from(document.querySelectorAll("aside nav,.sidebar nav,.side nav")).find(function(el){return /Fleet\\s*&\\s*(Operations|Machines)|Machine Monitoring|Reports\\s*&\\s*Analytics/i.test(el.textContent||"");});
+   if(!nav||nav.dataset.tmmSixSections==="2")return;
+   nav.dataset.tmmSixSections="2";
    var sections=[
-    ["⌂","Overview","/contractor?view=dashboard"],
-    ["▣","Fleet & Machines","/contractor?view=fleet"],
-    ["◉","Machine Monitoring","/telemetry"],
-    ["⚙","Faults & Maintenance","/contractor?view=maintenance"],
-    ["▤","Reports & Analytics","/contractor?view=reports-live"],
+    ["▦","Dashboard","/contractor?view=dashboard"],
+    ["▣","Machines","/contractor?view=fleet"],
+    ["◉","Machine Health","/telemetry"],
+    ["⚙","Maintenance","/contractor?view=maintenance"],
+    ["▤","Reports","/contractor?view=reports-live"],
     ["▦","Administration","/contractor?view=users"]
    ];
    nav.replaceChildren();
    sections.forEach(function(item){
     var a=document.createElement("a");a.href=item[2];a.className="tmm-six-nav-link";
-    a.style.cssText="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:9px;text-decoration:none;color:#123b61;font-weight:700;margin:4px 0";
+    a.style.cssText="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:9px;text-decoration:none;color:#123b61;font-weight:700;margin:4px 0;line-height:1.35";
     var ico=document.createElement("span");ico.textContent=item[0];ico.style.cssText="font-size:19px;min-width:22px;text-align:center";
     var label=document.createElement("span");label.textContent=item[1];a.append(ico,label);
     if(location.pathname+location.search===item[2]){a.style.background="#e2f0fc";a.style.color="#005a9c";}
