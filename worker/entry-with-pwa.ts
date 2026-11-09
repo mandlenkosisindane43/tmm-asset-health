@@ -1,3 +1,4 @@
+import { machineHistory } from "./machine-history-direct";
 import app from "./mobile-install-email";
 import pwaApp from "./router-pwa";
 import loginApp from "./router-login-recovery";
@@ -24,6 +25,7 @@ const PWA_PATHS = new Set([
 export default {
   async fetch(req:Request,env:Env,ctx:ExecutionContext):Promise<Response>{
     const path=new URL(req.url).pathname;
+    if(path==="/fleet-history") return machineHistory(req,env);
     // Role schema setup is not a per-request responsibility.
     // Role-aware operations invoke ensureAccountRoles only when required.
     // Next.js operations has its own authentication and data access.
