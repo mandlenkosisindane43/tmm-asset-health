@@ -71,7 +71,41 @@ export default {
     if(path==="/owner-login"||path==="/owner"||path.startsWith("/owner/")){const res=await ownerApp.fetch(req,env as never,ctx as never);if(req.method!=="GET"||path!=="/owner")return res;const ct=res.headers.get("content-type")||"";if(!ct.includes("text/html"))return res;let body=await res.text();if(body.includes("</nav>")&&!body.includes('href="/owner/ai-control"'))body=body.replace("</nav>",'<a href="/owner/ai-control"><span>✦</span><b>AI Subscription Control</b></a></nav>');else if(!body.includes('href="/owner/ai-control"'))body=body.replace("</main>",'<section class="panel section-gap" style="border:2px solid #e3a500"><h2>TMM AI Subscription Control</h2><p class="muted">Choose which companies may use the AI Assistant and manage their subscription status.</p><a class="btn amber" href="/owner/ai-control">Open AI Subscription Control</a></section></main>');const h=new Headers(res.headers);h.delete("content-length");h.set("cache-control","private, no-store");return new Response(body,{status:res.status,statusText:res.statusText,headers:h});}
     if(path==="/company-licence"||path.startsWith("/company-licence/"))return licenceApp.fetch(req,env as never,ctx as never);
     if(path==="/telemetry"||path.startsWith("/telemetry/")||path.startsWith("/api/telemetry"))return telemetryApp.fetch(req,env as never,ctx as never);
-    if(path==="/contractor"&&req.method==="GET"){if(!hasCompanySession(req))return redirect("/contractor-login");const res=await enhanceUsersPage(req,env,await classicCompanyAdminApp.fetch(req,env as never,ctx as never));const ct=res.headers.get("content-type")||"";if(!ct.includes("text/html"))return res;let body=await res.text();if(body.includes("</nav>")&&!body.includes('href="/tutorials"'))body=body.replace("</nav>",'<a href="/tutorials"><span>▶</span>Tutorial Centre</a></nav>');if(body.includes("</nav>")&&!body.includes('href="/tmm-assistant"'))body=body.replace("</nav>",'<a href="/tmm-assistant"><span>✦</span>Ask TMM Assistant</a></nav>');const h=new Headers(res.headers);h.delete("content-length");h.set("cache-control","private, no-store");return new Response(body,{status:res.status,statusText:res.statusText,headers:h});}
+
+// Six clear top-level destinations for the light contractor workspace.
+// This runs only on the authenticated contractor HTML response.
+function simplifyContractorNavigation(body:string):string{
+ const script=`<script id="tmm-six-section-navigation">
+ (function(){
+  function update(){
+   var nav=Array.from(document.querySelectorAll("aside nav,.sidebar nav,.side nav")).find(function(el){return /Fleet\\s*&\\s*Operations/i.test(el.textContent||"");});
+   if(!nav||nav.dataset.tmmSixSections==="1")return;
+   nav.dataset.tmmSixSections="1";
+   var sections=[
+    ["⌂","Overview","/contractor?view=dashboard"],
+    ["▣","Fleet & Machines","/contractor?view=fleet"],
+    ["◉","Machine Monitoring","/telemetry"],
+    ["⚙","Faults & Maintenance","/contractor?view=maintenance"],
+    ["▤","Reports & Analytics","/contractor?view=reports-live"],
+    ["▦","Administration","/contractor?view=users"]
+   ];
+   nav.replaceChildren();
+   sections.forEach(function(item){
+    var a=document.createElement("a");a.href=item[2];a.className="tmm-six-nav-link";
+    a.style.cssText="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:9px;text-decoration:none;color:#123b61;font-weight:700;margin:4px 0";
+    var ico=document.createElement("span");ico.textContent=item[0];ico.style.cssText="font-size:19px;min-width:22px;text-align:center";
+    var label=document.createElement("span");label.textContent=item[1];a.append(ico,label);
+    if(location.pathname+location.search===item[2]){a.style.background="#e2f0fc";a.style.color="#005a9c";}
+    nav.appendChild(a);
+   });
+  }
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",update);else update();
+ })();
+ </script>`;
+ return body.includes("</body>")?body.replace("</body>",script+"</body>"):body;
+}
+
+    if(path==="/contractor"&&req.method==="GET"){if(!hasCompanySession(req))return redirect("/contractor-login");const res=await enhanceUsersPage(req,env,await classicCompanyAdminApp.fetch(req,env as never,ctx as never));const ct=res.headers.get("content-type")||"";if(!ct.includes("text/html"))return res;let body=simplifyContractorNavigation(await res.text());if(body.includes("</nav>")&&!body.includes('href="/tutorials"'))body=body.replace("</nav>",'<a href="/tutorials"><span>▶</span>Tutorial Centre</a></nav>');if(body.includes("</nav>")&&!body.includes('href="/tmm-assistant"'))body=body.replace("</nav>",'<a href="/tmm-assistant"><span>✦</span>Ask TMM Assistant</a></nav>');const h=new Headers(res.headers);h.delete("content-length");h.set("cache-control","private, no-store");return new Response(body,{status:res.status,statusText:res.statusText,headers:h});}
     if(path==="/company-admin/users/remove" && req.method==="POST") return removeUser(req,env);
     if(path.startsWith("/company-admin/")){const direct=await handleCompanyAdminV3(req,env as never);if(direct)return direct;}
     return coreApp.fetch(req,env as never,ctx as never);
