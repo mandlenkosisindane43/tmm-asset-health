@@ -29,36 +29,6 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci --ignore-scripts
-      - name: Stage 1 diagnostic - render operations through Vinext without auth or DB
-        run: |
-          cat > app/operations/page.tsx <<'EOF'
-          export const dynamic = "force-dynamic";
-          export default function OperationsPage() {
-            return <main style={{fontFamily:"system-ui,sans-serif",maxWidth:760,margin:"12vh auto",padding:24,color:"#172033"}}>
-              <h1>Operations Application Renderer Diagnostic</h1>
-              <p>Stage 1: the Vinext application rendered /operations without authentication, database queries, or the operations console.</p>
-              <p>This page exists only in the isolated staging build. Production code and data are unchanged.</p>
-            </main>;
-          }
-          EOF
-      - name: Stage 2 diagnostic - isolate global app layout and client registration
-        run: |
-          cat > app/layout.tsx <<'EOF'
-          export default function RootLayout({ children }: { children: React.ReactNode }) {
-            return <html lang="en"><body>{children}</body></html>;
-          }
-          EOF
-      - name: Stage 3 diagnostic - bypass global role schema initialization for operations only
-        run: |
-          node --input-type=module <<'EOF'
-          import fs from 'node:fs';
-          const path = 'worker/entry-with-pwa.ts';
-          let source = fs.readFileSync(path, 'utf8');
-          const before = '    await ensureAccountRoles(env);';
-          if (!source.includes(before)) throw Error('Expected global role initialization not found');
-          source = source.replace(before, '    if (path !== "/operations") await ensureAccountRoles(env);');
-          fs.writeFileSync(path, source);
-          EOF
       - name: Build
         run: npm run build
       - name: Isolate staging root from application request chain
