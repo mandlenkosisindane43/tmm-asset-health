@@ -122,6 +122,24 @@ function addTelemetryOverview(body:string):string{
    section.id="tmm-telemetry-overview";
    section.style.cssText="margin:16px 0 20px;background:#fff;border:1px solid #dce5ef;border-radius:14px;padding:22px;box-shadow:0 4px 18px rgba(20,40,70,.04)";
    section.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div><div style="font-size:11px;letter-spacing:.08em;font-weight:800;color:#008b85;margin-bottom:7px">AUTOMATIC MACHINE DATA</div><h2 style="margin:0 0 8px;font-size:22px;color:#102b4a">Fleet performance &amp; machine health</h2><p style="margin:0;color:#56708b;max-width:650px">Engine-hour trends, utilisation estimates, service thresholds and received alerts are calculated from valid telemetry. Missing data stays unavailable.</p></div><a href="/fleet-performance" style="background:#132b4d;color:#fff;padding:12px 16px;border-radius:8px;text-decoration:none;font-weight:700">View live fleet performance</a></div><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px"><a href="/telemetry" style="color:#12446f;font-weight:700;text-decoration:underline">Machine readings &amp; alerts</a><a href="/telemetry/connections" style="color:#12446f;font-weight:700;text-decoration:underline">Connect machine data</a></div>';
+   var metrics=document.createElement("div");
+   metrics.id="tmm-live-metrics";
+   metrics.style.cssText="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:18px";
+   metrics.innerHTML='<div style="color:#65768b">Loading authenticated telemetry calculations…</div>';
+   section.appendChild(metrics);
+   var fleet=document.createElement("div");
+   fleet.id="tmm-live-machines";
+   fleet.style.cssText="margin-top:14px;font-size:13px;color:#435a72";
+   section.appendChild(fleet);
+   function display(v,suffix){return v==null?"—":Number(v).toLocaleString(undefined,{maximumFractionDigits:1})+(suffix||"")}
+   fetch("/api/telemetry/fleet-metrics",{credentials:"same-origin",cache:"no-store"}).then(function(r){if(!r.ok)throw Error("Telemetry service returned "+r.status);return r.json()}).then(function(d){
+     var x=d.summary||{},c=d.coverage||{};
+     var entries=[["Machines reporting",display(c.machines_with_readings)+" / "+display(c.registered_machines)],["Utilisation",display(x.utilisation_percent,"%")],["Operating hours",display(x.operating_hours," h")],["Idle hours",display(x.idle_hours," h")],["Service due soon",display(x.services_due_soon)],["Overdue services",display(x.services_overdue)],["Open alerts",display(x.open_alerts)],["Observed period",display(x.observed_hours," h")]];
+     metrics.replaceChildren();
+     entries.forEach(function(pair){var card=document.createElement("div");card.style.cssText="padding:14px;border:1px solid #dce5ef;border-radius:10px;background:#f8fafc";var name=document.createElement("div");name.style.cssText="font-size:12px;color:#536981;margin-bottom:8px";name.textContent=pair[0];var value=document.createElement("strong");value.style.cssText="font-size:22px;color:#102b4a";value.textContent=pair[1];card.append(name,value);metrics.appendChild(card)});
+     var machines=Array.isArray(d.machines)?d.machines:[];
+     fleet.textContent=machines.length?machines.length+" registered machines available in the live fleet report. Select a machine there to inspect service calculations and history.":"No registered machines yet. Values are not estimated.";
+   }).catch(function(e){metrics.textContent="Live telemetry calculations are temporarily unavailable. Existing company data has not been changed.";fleet.textContent=String(e.message||e)});
    var banner=Array.from(main.querySelectorAll("h1,h2")).find(function(e){return /Fleet performance overview/i.test(e.textContent||"")});
    var target=banner&&banner.closest("section");
    if(target&&target.parentNode)target.insertAdjacentElement("afterend",section);
