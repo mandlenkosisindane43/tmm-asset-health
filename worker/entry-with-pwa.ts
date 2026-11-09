@@ -28,7 +28,7 @@ export default {
     // Role-aware operations invoke ensureAccountRoles only when required.
     // Next.js operations has its own authentication and data access.
     // Bypass the legacy Worker wrapper chain, whose global handlers perform D1 work.
-    if(path==="/operations" || path.startsWith("/operations/")) return vinextBase.fetch(req,env as never,ctx as never);
+    if(path==="/login" || path==="/api/auth/login" || path==="/logout" || path==="/callback" || path==="/operations" || path.startsWith("/operations/")) return vinextBase.fetch(req,env as never,ctx as never);
     if(path==="/contractor-login" || path==="/api/contractor/login") return loginApp.fetch(req,env as never,ctx as never);
     if(PWA_PATHS.has(path)) return pwaApp.fetch(req,env as never,ctx as never);
     return app.fetch(req,env as never,ctx as never);
