@@ -48,6 +48,27 @@ const fullNav = `<nav class="tmm-six-nav">
 const lightContractorRefresh = `<style id="tmm-light-contractor-refresh">
 /* Presentation-only refresh of the existing contractor application. */
 .tmm-six-nav{display:grid;gap:7px}.tmm-six-nav>details{margin:0}.tmm-six-nav>details>summary{display:flex;align-items:center;gap:12px;cursor:pointer;list-style:none;padding:12px 14px;border-radius:10px;font-weight:700;color:#43566e}.tmm-six-nav>details>summary::-webkit-details-marker{display:none}.tmm-six-nav>details>summary>span{display:inline-block;width:23px;text-align:center;font-size:19px}.tmm-six-nav>details>summary:hover,.tmm-six-nav>details[open]>summary{background:#e5f2fd;color:#075b98}.tmm-six-nav .tmm-subnav{display:grid;gap:3px;margin:3px 0 10px 35px;border-left:2px solid #e1eaf3;padding-left:9px}.tmm-six-nav .tmm-subnav a{font-size:12px!important;padding:8px 10px!important}.tmm-six-nav> a{font-weight:700}
+/* Correct legacy sidebar positioning and make the six groups the primary navigation. */
+@media(min-width:821px){
+.app{display:grid!important;grid-template-columns:270px minmax(0,1fr)!important;align-items:stretch!important}
+.side.full-admin-side{position:sticky!important;top:0!important;left:auto!important;bottom:auto!important;width:270px!important;max-width:270px!important;min-width:270px!important;height:100vh!important;box-sizing:border-box!important;z-index:10!important}
+.main{grid-column:2!important;width:auto!important;min-width:0!important;margin:0!important;padding:0!important}
+}
+.side.full-admin-side nav.tmm-six-nav{display:flex!important;flex-direction:column!important;align-items:stretch!important;gap:5px!important;overflow-x:hidden!important}
+.side.full-admin-side nav.tmm-six-nav>details{display:block!important;width:100%!important;flex:0 0 auto!important}
+.side.full-admin-side nav.tmm-six-nav>details>summary{font-size:13px!important;line-height:1.3!important;min-height:44px!important;box-sizing:border-box!important;padding:11px 10px!important;gap:9px!important}
+.side.full-admin-side nav.tmm-six-nav>details>summary>span{flex:0 0 22px!important;font-size:18px!important}
+.side.full-admin-side nav.tmm-six-nav>a{flex:0 0 auto!important;display:flex!important;align-items:center!important;gap:9px!important;min-height:44px!important;font-size:13px!important}
+.side.full-admin-side nav.tmm-six-nav>a>span{flex:0 0 22px!important;text-align:center!important;font-size:18px!important}
+.side.full-admin-side nav.tmm-six-nav .tmm-subnav{margin:2px 0 8px 20px!important;padding-left:9px!important;display:flex!important;flex-direction:column!important}
+.side.full-admin-side nav.tmm-six-nav .tmm-subnav a{min-height:0!important;font-size:12px!important;padding:8px 10px!important;line-height:1.4!important}
+.side.full-admin-side .compact-brand b{color:#183653!important}
+.side.full-admin-side .compact-brand small{color:#65778e!important}
+@media(max-width:820px){
+.side.full-admin-side{position:relative!important;top:auto!important;bottom:auto!important;left:auto!important;width:100%!important;max-width:none!important;height:auto!important;min-height:0!important}
+.side.full-admin-side nav.tmm-six-nav{display:flex!important;flex-direction:column!important;max-height:50vh!important;overflow-y:auto!important}
+.main{width:100%!important;margin:0!important}
+}
 body{background:#f5f8fc!important;color:#18283b!important;font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif!important}
 .main{min-width:0}.content{max-width:1560px;margin:0 auto;padding:28px clamp(16px,3vw,42px)!important}
 .topbar{background:#fff!important;border-bottom:1px solid #e4eaf2!important;box-shadow:0 1px 8px #172b4d08}
@@ -93,7 +114,12 @@ function fullSidebar(view:string,a:Row|null){
  const active=view==="reports"?"reports-live":view;
  const role=String(a?.role||"");
  const permittedNav=fullNav.replace(/<a data-nav="([^"]+)"[^>]*>[\s\S]*?<\/a>/g,(link, key)=>canViewCompanyPage(role,key)?link:"");
- const nav=permittedNav.replace(`data-nav="${active}"`,`data-nav="${active}" class="active"`);
+ const activeGroups:Record<string,string>={fleet:"fleet",daily:"fleet",production:"fleet",previous:"fleet","machine-history":"fleet",maintenance:"maintenance",breakdowns:"maintenance",alerts:"maintenance",recommendations:"engineering","data-quality":"engineering","management-presentation":"engineering","reports-live":"reports","reports-admin":"reports",documents:"reports",users:"admin",approvals:"admin",setup:"admin",settings:"admin",licence:"admin"};
+ const selectedGroup=activeGroups[active]||"";
+ const groupKeys=["fleet","maintenance","engineering","reports","admin"];
+ let nav=permittedNav.replace(`data-nav="${active}"`,`data-nav="${active}" class="active"`);
+ let groupIndex=0;
+ nav=nav.replace(/<details>/g,()=>`<details${groupKeys[groupIndex++]===selectedGroup?" open":""}>`);
  const label=active==="dashboard"?(isCompanyAdmin(role)?"Admin Dashboard":"Engineer Dashboard"):active==="recommendations"?"Recommendations":viewLabels[active]||"Company Workspace";
  return `<aside class="side full-admin-side"><div class="brand compact-brand"><img src="/sindane-logo.png" alt="Sindane Asset Solutions"><div><b>TMM Asset Health</b><small>${esc(label)}</small></div></div>${nav}<div class="companybox"><small>${esc(isCompanyAdmin(role)?"COMPANY ADMIN":"COMPANY WORKSPACE")}</small><b>${esc(a?.companyName||"Company Workspace")}</b><span>${esc(a?.licenceStatus||"active")} licence</span></div><div class="userbox full-user"><div><b>${esc(a?.fullName||"Company Admin")}</b><small>${esc(a?.email||"")}</small><span>${esc(a?.role||"company_admin")}</span></div><form method="post" action="/api/contractor/logout"><button type="submit">Sign out</button></form></div></aside>`;
 }
