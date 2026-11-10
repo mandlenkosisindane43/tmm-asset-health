@@ -71,7 +71,7 @@ async function testCentre(req:Request,env:Env,s:Session){
  if(req.headers.get("origin")!==new URL(req.url).origin)return new Response("Invalid request origin",{status:403});
  await ensure(env);
  const f=await req.formData(),machine=txt(f.get("machine"),120),scenario=low(f.get("scenario"),40);
- const selected=scenario==="all"?Object.entries(SCENARIOS):SCENARIOS[scenario]?[[scenario,SCENARIOS[scenario]] as [string,{label:string;data:Row}]]:[];
+ const selected:[string,{label:string;data:Row}][]=scenario==="all"?Object.entries(SCENARIOS):SCENARIOS[scenario]?[[scenario,SCENARIOS[scenario]]]:[];
  if(!selected.length)return new Response("Unknown test scenario",{status:400});
  const registered=await first(env,"SELECT fleet_number FROM machines WHERE company_id=? AND fleet_number=? LIMIT 1",[s.companyId,machine]);
  if(!registered)return page(s,'<div class="panel bad">Machine not registered for this company. <a href="/telemetry/connections">Return</a></div>');
