@@ -141,8 +141,8 @@ const J1939_FMI:Record<number,string>={
  31:"Condition exists"
 };
 function diagnosticLookup(input:string){
- const code=input.trim().replace(/\\s+/g," ").toUpperCase();
- const match=/^SPN (\\d{1,6}) FMI (\\d{1,2})$/.exec(code);
+ const code=input.trim().replace(/\s+/g," ").toUpperCase();
+ const match=/^SPN (\d{1,6}) FMI (\d{1,2})$/.exec(code);
  if(!match)return {code,system:"Unknown",meaning:"Unmapped or proprietary diagnostic identifier; verified OEM documentation required.",severity:"review",verified:false};
  const spn=Number(match[1]),fmi=Number(match[2]),parameter=J1939_SPN[spn],failure=J1939_FMI[fmi];
  if(spn>524287||fmi>31)return {code,system:"Unknown",meaning:"Invalid J1939 SPN/FMI range; verify original message.",severity:"review",verified:false};
@@ -168,7 +168,7 @@ async function automaticConditionAnalysis(env:Env){
    if(hydraulic!==null&&Number.isFinite(hydraulic))previousOil=hydraulic;
    const codes=txt(row.fault_code,200).split(",").map(x=>x.trim()).filter(Boolean);
    for(const code of codes){
-    const match=/^SPN\\s+(\\d+)\\s+FMI\\s+(\\d+)$/i.exec(code);
+    const match=/^SPN\s+(\d+)\s+FMI\s+(\d+)$/i.exec(code);
     const diagnostic=diagnosticLookup(code);
     const severity=diagnostic.severity;
     const occurrences=ordered.filter(x=>txt(x.fault_code,200).split(",").some(v=>v.trim()===code)).length;
