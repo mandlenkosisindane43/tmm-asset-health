@@ -124,14 +124,23 @@ async function automaticConditionAnalysis(env:Env){
   for(const row of ordered){
    const findings:{category:string;severity:string;code:string;details:string;action:string}[]=[];
    const coolant=row.coolant_temperature==null?null:Number(row.coolant_temperature);
-   if(coolant!==null&&Number.isFinite(coolant)&&coolant>=105)findings.push({category:"coolant_temperature",severity:coolant>=115?"critical":"high",code:"",details:"Reported coolant temperature "+coolant+" °C exceeds illustrative 105 °C screening threshold.",action:"Verify engine-specific OEM temperature limits and inspect cooling system."});
+   if(coolant!==null&&Number.isFinite(coolant)&&coolant>=105&&coolant<=200)findings.push({category:"coolant_temperature",severity:"review",code:"",details:"Reported coolant temperature "+coolant+" °C exceeds illustrative 105 °C screening threshold; not an OEM-approved alarm.",action:"Verify coolant sensor units and OEM-approved limits before assigning operational severity."});
    const oil=row.engine_oil_pressure==null?null:Number(row.engine_oil_pressure);
-   if(oil!==null&&Number.isFinite(oil)&&oil<15)findings.push({category:"engine_oil_pressure",severity:"high",code:"",details:"Engine oil pressure "+oil+" is below illustrative threshold 15; source units must be verified.",action:"Confirm sensor units, engine state and OEM lubrication limits."});
+   // Oil-pressure units and engine state are not validated in the staging feed; do not assert a low-pressure fault from a bare number.\n   if(oil!==null&&Number.isFinite(oil)&&oil<15)findings.push({category:"engine_oil_pressure_unverified",severity:"review",code:"",details:"Reported oil pressure "+oil+" cannot be assessed without confirmed units, engine speed and OEM limits.",action:"Verify measurement units, operating state and OEM specifications before classifying severity."});
    const hydraulic=row.hydraulic_oil_level==null?null:Number(row.hydraulic_oil_level);
-   if(hydraulic!==null&&Number.isFinite(hydraulic)&&previousOil!==null&&previousOil-hydraulic>=8)findings.push({category:"hydraulic_oil_drop",severity:"high",code:"",details:"Hydraulic oil level dropped "+(previousOil-hydraulic).toFixed(1)+" percentage points between consecutive simulated readings.",action:"Confirm operating conditions and inspect for leaks using OEM procedure."});
+   if(hydraulic!==null&&Number.isFinite(hydraulic)&&hydraulic>=0&&hydraulic<=100&&previousOil!==null&&previousOil-hydraulic>=8)findings.push({category:"hydraulic_oil_drop",severity:"review",code:"",details:"Hydraulic oil level changed by "+(previousOil-hydraulic).toFixed(1)+" percentage points between consecutive simulated readings; a leak is not confirmed.",action:"Verify sensor scaling, temperature, machine position and OEM service procedure."});
    if(hydraulic!==null&&Number.isFinite(hydraulic))previousOil=hydraulic;
    const codes=txt(row.fault_code,200).split(",").map(x=>x.trim()).filter(Boolean);
-   for(const code of codes)findings.push({category:"diagnostic_code",severity:"review",code,details:J1939_DIAGNOSTICS[code]||"Unmapped diagnostic code "+code+"; manufacturer documentation required.",action:"Verify code meaning, occurrence status and machine-specific service procedure."});
+   for(const code of codes){
+    const match=/^SPN\\s+(\\d+)\\s+FMI\\s+(\\d+)$/i.exec(code);
+    const fmi=match?Number(match[2]):null;
+    const severity=fmi===0||fmi===1?"high":"review";
+    const occurrences=ordered.filter(x=>txt(x.fault_code,200).split(",").some(v=>v.trim()===code)).length;
+    findings.push({category:"diagnostic_code",severity,code,details:(J1939_DIAGNOSTICS[code]||"Unmapped diagnostic code "+code+"; manufacturer documentation required.")+(occurrences>1?" Observed in "+occurrences+" of the last "+ordered.length+" simulated readings.":""),action:"Confirm OEM code definition, active/stored status, units and machine-specific service procedure."});
+   }
+   // Flag out-of-range sensor values for verification rather than treating them as real physical conditions.
+   if(coolant!==null&&(!Number.isFinite(coolant)||coolant< -50||coolant>200))findings.push({category:"invalid_coolant_reading",severity:"review",code:"",details:"Coolant temperature reading outside staging validation range.",action:"Check sensor scaling and telemetry unit conversion."});
+   if(hydraulic!==null&&(!Number.isFinite(hydraulic)||hydraulic<0||hydraulic>100))findings.push({category:"invalid_hydraulic_level",severity:"review",code:"",details:"Hydraulic level outside expected 0–100% range.",action:"Verify source units and sensor mapping."});
    for(const f of findings)await env.DB.prepare("INSERT OR IGNORE INTO telemetry_condition_findings_v2(company_id,machine_id,telemetry_id,source_mode,category,severity,diagnostic_code,details,recommendation,created_at) VALUES(?,?,?,'simulation',?,?,?,?,?,?)").bind(cid,machine,num(row.id),f.category,f.severity,f.code,f.details,f.action,new Date().toISOString()).run();
   }
  }
