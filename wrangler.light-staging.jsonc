@@ -6,6 +6,7 @@
   "compatibility_date": "2026-08-28",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
+  "triggers": {"crons": ["*/15 * * * *"]},
   "assets": {
     "directory": "./dist/client",
     "binding": "ASSETS",
