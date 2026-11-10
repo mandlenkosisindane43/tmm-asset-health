@@ -156,5 +156,5 @@ function addTelemetryOverview(body:string):string{
     if(path.startsWith("/company-admin/")){const direct=await handleCompanyAdminV3(req,env as never);if(direct)return direct;}
     return coreApp.fetch(req,env as never,ctx as never);
   },
-  async scheduled(c:ScheduledController,env:Env,ctx:ExecutionContext){const app=coreApp as unknown as {scheduled?:(c:ScheduledController,e:Env,x:ExecutionContext)=>Promise<void>|void};if(app.scheduled)return app.scheduled(c,env,ctx);}
+  async scheduled(c:ScheduledController,env:Env,ctx:ExecutionContext){const app=telemetryApp as unknown as {scheduled?:(c:ScheduledController,e:Env,x:ExecutionContext)=>Promise<void>|void};if(app.scheduled)return app.scheduled(c,env,ctx);}
 };
