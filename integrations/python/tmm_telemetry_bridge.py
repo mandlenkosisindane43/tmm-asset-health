@@ -22,6 +22,9 @@ FIELDS = {
     "fault_codes": ("fault_codes", "diagnostics", "activeFaults"),
     "units": ("units",),
     "counter_semantics": ("counter_semantics",),
+    "scheduled_hours": ("scheduled_hours",),
+    "available_hours": ("available_hours",),
+    "productive_hours": ("productive_hours",),
     "idle_hours": ("idle_hours", "idleHours"),
     "production_tonnes": ("production_tonnes", "productionTonnes"),
     "fuel_litres": ("fuel_litres", "fuelLitres"),
@@ -43,7 +46,7 @@ FIELDS = {
     "coolant_temperature": ("coolant_temperature", "coolant_c", "coolant_temp_c"),
     "fault_code": ("fault_code", "diagnostic_code"),
 }
-NUMERIC = {"engine_hours", "fuel_level", "hydraulic_pressure", "hydraulic_oil_level", "engine_oil_pressure", "coolant_temperature", "battery_voltage", "rpm", "engine_load", "latitude", "longitude", "hydraulic_temperature", "transmission_temperature", "idle_hours", "production_tonnes", "fuel_litres", "odometer"}
+NUMERIC = {"scheduled_hours", "available_hours", "productive_hours", "engine_hours", "fuel_level", "hydraulic_pressure", "hydraulic_oil_level", "engine_oil_pressure", "coolant_temperature", "battery_voltage", "rpm", "engine_load", "latitude", "longitude", "hydraulic_temperature", "transmission_temperature", "idle_hours", "production_tonnes", "fuel_litres", "odometer"}
 
 
 class RetryableIntakeError(RuntimeError):

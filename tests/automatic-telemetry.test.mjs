@@ -401,7 +401,7 @@ test('dashboard date windows roll automatically and explicit site/date filters p
 test('changing dashboard filters aborts the old refresh and ignores stale responses',async()=>{
  let resolveOld;const calls=[];
  const h=await dashboardHarness('',(url,options)=>{calls.push({url,options});return calls.length===1?new Promise(resolve=>{resolveOld=resolve}):Promise.resolve(dashboardResponse('simulation'))});
- h.form.mode.value='simulation';h.form.onchange({target:h.form.mode});await h.settle();
+ h.form.site.value='New site';h.form.onchange({target:h.form.site});await h.settle();
  assert.equal(calls[0].options.signal.aborted,true);assert.match(h.nodes['#status'].textContent,/SIMULATED/);
  resolveOld(dashboardResponse('live'));await h.settle();assert.match(h.nodes['#status'].textContent,/SIMULATED/);
  await h.interval();assert.equal(calls.length,3);
@@ -444,4 +444,28 @@ test('truncated reports retain the latest readings and sensor values',async()=>{
  await automationModule.runTelemetryAutomation(env,()=>({code:'',meaning:'',system:'',severity:'review',verified:false}),now);
  const report=JSON.parse(sql.prepare('SELECT report_json FROM telemetry_report_documents_v2 LIMIT 1').get().report_json);
  assert.equal(report.readings_truncated,true);assert.equal(report.reading_count,10000);assert.equal(report.latest_sensors.coolant_temperature.value,80.1);
+});
+
+test('availability and utilisation use explicit scheduled, available and productive hours with complete coverage',()=>{
+ const reading=(at,values,extra={})=>({recorded_at:at,raw_json:JSON.stringify({...values,units:{scheduled_hours:'h',available_hours:'h',productive_hours:'h'},counter_semantics:{scheduled_hours:'cumulative',available_hours:'cumulative',productive_hours:'cumulative'},...extra})});
+ const a=reading('2026-11-11T00:00:00Z',{scheduled_hours:100,available_hours:80,productive_hours:60}),b=reading('2026-11-11T10:00:00Z',{scheduled_hours:110,available_hours:88,productive_hours:66});
+ const m=automationModule.measuredMetrics([b,a]);assert.equal(m.availability_percent,80);assert.equal(m.utilisation_percent,75);assert.equal(m.scheduled_utilisation_percent,60);assert.equal(m.reported_downtime_hours,2);assert.equal(m.confirmed_downtime_hours,null);assert.equal(m.operating_hours,null,'KPI counters do not invent an engine meter');
+ const noProductive=reading('2026-11-11T10:00:00Z',{scheduled_hours:110,available_hours:88});const partial=automationModule.measuredMetrics([a,noProductive]);assert.equal(partial.availability_percent,80);assert.equal(partial.utilisation_percent,null);
+ for(const bad of [reading('2026-11-11T10:00:00Z',{scheduled_hours:110,available_hours:91,productive_hours:66}),reading('2026-11-11T10:00:00Z',{scheduled_hours:90,available_hours:88,productive_hours:66}),reading('2026-11-11T10:00:00Z',{scheduled_hours:110,available_hours:88,productive_hours:66},{units:{}}),reading('2026-11-11T10:00:00Z',{scheduled_hours:110,available_hours:88,productive_hours:66},{counter_semantics:{}})])assert.equal(automationModule.measuredMetrics([a,bad]).availability_percent,null);
+ const noScheduled=reading('2026-11-11T10:00:00Z',{scheduled_hours:100,available_hours:80,productive_hours:60});assert.equal(automationModule.measuredMetrics([a,noScheduled]).availability_percent,null);
+ assert.equal(automationModule.measuredMetrics([a,{recorded_at:'2026-11-11T05:00:00Z'},b]).availability_percent,null,'incomplete coverage must not look complete');
+});
+
+test('legacy fleet content keeps authorised forms and scripts inside the shared automatic shell',async()=>{
+ const html='<html><head><style>.old{}</style><script>headInit()</script></head><body><aside>Old sidebar</aside><main class="main"><div class="content"><h1>Fleet</h1><form method="post" action="/company-admin/fleet/add"><input name="fleetNumber"></form><script>formInit()</script></div><footer class="foot">Old footer</footer></main><script>tailInit()</script></body></html>';
+ const content=automationModule.companyPageContent(html);assert.match(content,/action="\/company-admin\/fleet\/add"/);assert.match(content,/headInit/);assert.match(content,/formInit/);assert.match(content,/tailInit/);assert.doesNotMatch(content,/Old sidebar|Old footer|\.old/);
+ const shell=await automationModule.automationShell('Company',content,'simulation').text();assert.match(shell,/data-tmm-shell="automatic"/);assert.match(shell,/view=fleet&mode=simulation/);assert.match(shell,/Availability|Fleet/);assert.equal(automationModule.companyPageContent('<h1>Login</h1>'),null);
+});
+
+test('operational hour counters survive authenticated intake and flow into saved automatic report metrics',async()=>{
+ const {sql,env}=database();await configure(env,sql);
+ const now=Date.now(),values=[{scheduled_hours:100,available_hours:80,productive_hours:60},{scheduled_hours:101,available_hours:80.8,productive_hours:60.6}];
+ for(let i=0;i<2;i++){const response=await intake(env,{external_machine_id:'EXT-ONE',event_id:'kpi-'+i,timestamp:new Date(now-3600000+i*3600000).toISOString(),...values[i],units:{scheduled_hours:'h',available_hours:'h',productive_hours:'h'},counter_semantics:{scheduled_hours:'cumulative',available_hours:'cumulative',productive_hours:'cumulative'}});const receipt=await response.json();assert.equal(receipt.results[0].status,"accepted",JSON.stringify(receipt));}
+ await app.scheduled({},env,ctx);
+ const reports=sql.prepare('SELECT report_json FROM telemetry_report_documents_v2').all().map(r=>JSON.parse(r.report_json));assert.ok(reports.length>=3);assert.equal(reports[0].metrics.availability_percent,80);assert.equal(reports[0].metrics.utilisation_percent,75);
 });
