@@ -161,3 +161,18 @@ Chart detail links preserve source, site, machine and date filters. All primary 
 The staging workspace uses a persistent navigation rail on desktop, compact overview cards, a received-data freshness donut and an asset list with hour meter and service forecast. Generic AI-generated ADT imagery is explicitly labelled as a type illustration; unknown equipment types retain a photo-not-supplied placeholder. This imagery is not evidence of machine identity. The donut represents fresh/stale/missing readings, not a health score. No sample percentages, breakdown counts or equipment identities are introduced. All existing automatic refresh and scheduled processing remain unchanged.
 
 Secondary data-workspace navigation and discovery actions share icon-button styling with active states and responsive wrapping. The large Data coverage panel has been removed from monitoring views; unavailable KPI labels, source-unit checks and calculation requirements remain unchanged.
+
+
+### Engineering charts and machine intelligence
+The overview now contains four panels: downtime Pareto, actual/target production, confirmed breakdown frequency and equipment health distribution. The machine performance register opens a machine-scoped intelligence view with six KPIs, unit-aware coolant and hydraulic trends, diagnostic findings, maintenance forecast and links to saved reports. All views retain source/site/date isolation and automatic refresh.
+
+Optional engineering fields pass through authorised ingestion into central raw telemetry:
+```json
+{
+  "daily_production_target_tonnes": 700,
+  "units": {"daily_production_target_tonnes":"t"},
+  "breakdown_events": [{"event_id":"work-order-123", "confirmed":true, "occurred_at":"2026-11-11T06:00:00Z", "category":"Hydraulics", "downtime_hours":2, "downtime_unit":"h"}],
+  "equipment_health":{"status":"watch","basis":"engineer","assessed_at":"2026-11-11T06:00:00Z"}
+}
+```
+These are optional normalized fields for an adapter to map from an authorised source; no arbitrary OEM format is automatically understood. A target is a daily value for the UTC date of its reading, not a cumulative counter. Actual tonnes continue to use declared cumulative production counters with measured coverage. Breakdown events deduplicate per machine/event ID, use occurrence dates, and accept recorded hours only with explicit hour units. A repeated event updates its last received facts. Events outside the selected window or after their carrying reading are excluded. Pareto displays the largest eight categories; cumulative share includes all supplied downtime categories. Missing event feeds do not imply zero breakdowns. A machine is Healthy/Watch/Critical only with a fresh OEM/engineer-assessed source classification; otherwise it is Unknown. Source assertions still require customer/OEM validation; receipt alone does not certify an assessment or a root cause.

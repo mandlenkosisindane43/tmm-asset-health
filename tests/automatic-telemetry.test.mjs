@@ -511,7 +511,7 @@ test('compact overview uses weighted daily percentages, preserves missing days a
 });
 
 test('dashboard hides detailed sections, renders honest chart empty states and keeps detail routes available',async()=>{
- const h=await dashboardHarness('',async()=>dashboardResponse());assert.equal(h.panels.find(p=>p.dataset.section==='daily').hidden,true);assert.equal(h.panels.find(p=>p.dataset.section==='overview').hidden,false);assert.match(h.nodes['#overviewCharts'].innerHTML,/Awaiting received machine readings/);assert.match(h.nodes['#cards'].innerHTML,/Fault observations<\/small><b aria-label="Unavailable">—/);assert.doesNotMatch(h.html,/<summary>More/);assert.match(h.html,/>Discovered machines<\/span><\/a>/);assert.match(h.html,/>Daily summaries<\/span><\/a>/);assert.match(h.html,/>Pipeline status<\/span><\/a>/);
+ const h=await dashboardHarness('',async()=>dashboardResponse());assert.equal(h.panels.find(p=>p.dataset.section==='daily').hidden,true);assert.equal(h.panels.find(p=>p.dataset.section==='overview').hidden,false);assert.match(h.nodes['#overviewCharts'].innerHTML,/Downtime Pareto Analysis/);assert.match(h.nodes['#cards'].innerHTML,/Fault observations<\/small><b aria-label="Unavailable">—/);assert.doesNotMatch(h.html,/<summary>More/);assert.match(h.html,/>Discovered machines<\/span><\/a>/);assert.match(h.html,/>Daily summaries<\/span><\/a>/);assert.match(h.html,/>Pipeline status<\/span><\/a>/);
  const section=await automationModule.automaticDashboard('Company',new URL('https://test.invalid/telemetry/automatic?section=health')).text();assert.match(section,/data-section="overview" hidden/);assert.doesNotMatch(section,/data-section="fleet" hidden/);
 });
 
@@ -528,9 +528,36 @@ test('fleet command centre distinguishes freshness from health and labels generi
  const machine={machine_id:'ADT-1',machine_type:'ADT',site:'North',reading_count:2,stale:false,current_hour_meter:1245,hours_to_service:5,daily_summaries:[],findings:[],readings:[]};
  const h=await dashboardHarness('',async()=>({ok:true,json:async()=>({...await dashboardResponse().json(),machines:[machine]})}));
  assert.match(h.nodes['#attention'].innerHTML,/Illustrative articulated dump truck; not an actual asset photo/);
- assert.match(h.nodes['#attention'].innerHTML,/1,245 h/);assert.match(h.nodes['#overviewCharts'].innerHTML,/1 fresh, 0 stale, 0 awaiting data/);
+ assert.match(h.nodes['#attention'].innerHTML,/1,245 h/);assert.match(h.nodes['#overviewCharts'].innerHTML,/Equipment health: Healthy 0, Watch 0, Critical 0, Unknown 1/);
  assert.doesNotMatch(h.nodes['#attention'].innerHTML,/94%|Healthy/);
  machine.machine_type='Unknown';machine.stale=true;await h.interval();
  assert.doesNotMatch(h.nodes['#attention'].innerHTML,/equipment-photo/);assert.match(h.nodes['#attention'].innerHTML,/Photo not supplied/);
- assert.match(h.nodes['#overviewCharts'].innerHTML,/0 fresh, 1 stale, 0 awaiting data/);
+ assert.match(h.nodes['#overviewCharts'].innerHTML,/Equipment Health Distribution/);
+});
+
+test('engineering charts use confirmed deduplicated events, explicit targets and sourced health',()=>{
+ const at=new Date().toISOString(),date=at.slice(0,10),payload={daily_production_target_tonnes:700,units:{daily_production_target_tonnes:'t'},breakdown_events:[{event_id:'B-1',confirmed:true,occurred_at:at,category:'Hydraulic',downtime_hours:4,downtime_unit:'h'},{event_id:'B-2',confirmed:true,occurred_at:at,category:'Engine',downtime_hours:2,downtime_unit:'h'},{event_id:'NO',confirmed:false,occurred_at:at,category:'Hydraulic',downtime_hours:99,downtime_unit:'h'}],equipment_health:{status:'watch',basis:'engineer',assessed_at:at}};
+ const rows=[{id:1,recorded_at:at,raw_json:JSON.stringify(payload)},{id:2,recorded_at:at,raw_json:JSON.stringify(payload)}];
+ const performance=automationModule.machinePerformance(rows,date,date);assert.equal(performance.breakdown_count,2);assert.equal(performance.downtime_hours,6);assert.deepEqual(performance.targets,[{date,tonnes:700}]);
+ const result=automationModule.performanceOverview([{stale:false,performance,daily_summaries:[{date,production_tonnes:620}]}],date,date);
+ assert.equal(result.pareto[0].category,'Hydraulic');assert.equal(result.pareto[1].cumulative,100);assert.equal(result.days[0].actual,620);assert.equal(result.days[0].target,700);assert.equal(result.days[0].breakdowns,2);assert.equal(result.health.watch,1);
+ const invalid=automationModule.machinePerformance([{recorded_at:at,raw_json:JSON.stringify({...payload,units:{daily_production_target_tonnes:'kg'},breakdown_events:[],equipment_health:{status:'healthy',basis:'guessed',assessed_at:at}})}],date,date);
+ assert.equal(invalid.breakdown_count,null);assert.equal(invalid.downtime_hours,null);assert.equal(invalid.targets.length,0);assert.equal(invalid.health,null);
+ const missing=automationModule.performanceOverview([{stale:true,performance,daily_summaries:[]}],date,date);assert.equal(missing.health.unknown,1);assert.equal(missing.days[0].actual,null);
+});
+
+test('machine click opens a filtered intelligence view with diagnostics and service history',async()=>{
+ const m={machine_id:'REAL-1',machine_type:'ADT',site:'North',reading_count:2,stale:false,current_hour_meter:1245,hours_to_service:5,next_service_hours:1250,availability_percent:90,utilisation_percent:70,daily_summaries:[],findings:[{diagnostic_code:'SPN 110 FMI 0',details:'Received coolant finding',severity:'review'}],readings:[],performance:{downtime_hours:3}};
+ const h=await dashboardHarness('?section=history&machine=REAL-1&mode=simulation',async()=>({ok:true,json:async()=>({...await dashboardResponse('simulation').json(),machines:[m]})}));
+ assert.match(h.nodes['#cards'].innerHTML,/Hour meter \(h\)/);assert.match(h.nodes['#cards'].innerHTML,/Confirmed downtime \(h\)/);assert.match(h.nodes['#machineCharts'].innerHTML,/Fault Code Diagnostics/);assert.match(h.nodes['#machineCharts'].innerHTML,/Received coolant finding/);assert.match(h.nodes['#machineCharts'].innerHTML,/Maintenance & History/);assert.match(h.nodes['#machineCharts'].innerHTML,/1,250 h/);
+ assert.match(h.nodes['#machineIdentity'].innerHTML,/section=dashboard/);assert.match(h.nodes['#machineIdentity'].innerHTML,/mode=simulation/);assert.equal(h.panels.find(p=>p.dataset.section==='fleet').hidden,true);
+});
+
+test('authorised intake preserves engineering facts through central storage into chart aggregates',async()=>{
+ const {env,sql}=database();await configure(env,sql);const at=new Date().toISOString(),date=at.slice(0,10);
+ await intake(env,reading({timestamp:at,event_id:'ENGINEERING-1',daily_production_target_tonnes:500,units:{daily_production_target_tonnes:'t'},breakdown_events:[{event_id:'WO-1',confirmed:true,occurred_at:at,category:'Hydraulic',downtime_hours:2,downtime_unit:'h'}],equipment_health:{status:'watch',basis:'oem',assessed_at:at}}));
+ const d=await automationModule.automaticFleetData(env,1,new URL('https://test.invalid/api/telemetry/automatic?mode=simulation&from='+date+'&to='+date));
+ assert.equal(d.performance.days[0].target,500);assert.equal(d.performance.days[0].breakdowns,1);assert.equal(d.performance.pareto[0].hours,2);assert.equal(d.performance.health.watch,1);
+ const other=await automationModule.automaticFleetData(env,2,new URL('https://test.invalid/api/telemetry/automatic?mode=simulation&from='+date+'&to='+date));assert.equal(other.performance.pareto.length,0);
+ const live=await automationModule.automaticFleetData(env,1,new URL('https://test.invalid/api/telemetry/automatic?mode=live&from='+date+'&to='+date));assert.equal(live.performance.pareto.length,0);assert.equal(live.performance.health.watch,0);
 });
