@@ -380,8 +380,8 @@ async function dashboardHarness(search,fetcher){
  const html=await automationModule.automaticDashboard('UI Test',new URL('https://test.invalid/telemetry/automatic'+search)).text();
  const fields=Object.fromEntries(Object.entries({section:'dashboard',mode:'live',from:'',to:'',site:'',machine:''}).map(([name,value])=>[name,{name,value}]));
  const form={...fields,elements:Object.values(fields),addEventListener(name,callback){this.onchange=callback}};
- const nodes=Object.fromEntries(['status','cards','overviewCharts','attention','fleet','daily','sensors','findings','reports','notes'].map(name=>['#'+name,{textContent:'',innerHTML:''}]));
- const panels=['overview','attention','definitions','fleet','daily','sensors','findings','reports','notes'].map(section=>({dataset:{section},hidden:false}));
+ const nodes=Object.fromEntries(['status','cards','overviewCharts','machineCharts','attention','fleet','daily','sensors','findings','reports','notes'].map(name=>['#'+name,{textContent:'',innerHTML:''}]));
+ const panels=['overview','attention','machineCharts','definitions','fleet','daily','sensors','findings','reports','notes'].map(section=>({dataset:{section},hidden:false}));
  const timers=[];let interval;
  const context=vm.createContext({URLSearchParams,AbortController,FormData:class{constructor(f){this.f=f}*[Symbol.iterator](){for(const field of this.f.elements)yield[field.name,field.value]}},document:{querySelector:s=>s==='#filters'?form:nodes[s],querySelectorAll:()=>panels},location:{search},history:{replaceState(){}},fetch:fetcher,setTimeout(callback,delay){timers.push({callback,delay});return timers.length},clearTimeout(){},setInterval(callback){interval=callback},console});
  vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1],context);
@@ -511,6 +511,14 @@ test('compact overview uses weighted daily percentages, preserves missing days a
 });
 
 test('dashboard hides detailed sections, renders honest chart empty states and keeps detail routes available',async()=>{
- const h=await dashboardHarness('',async()=>dashboardResponse());assert.equal(h.panels.find(p=>p.dataset.section==='daily').hidden,true);assert.equal(h.panels.find(p=>p.dataset.section==='overview').hidden,false);assert.match(h.nodes['#overviewCharts'].innerHTML,/Awaiting received machine readings/);assert.match(h.nodes['#cards'].innerHTML,/Fault observations<\/small><b>Unavailable/);assert.doesNotMatch(h.html,/<summary>More/);assert.match(h.html,/>Discovered machines<\/a>/);assert.match(h.html,/>Daily summaries<\/a>/);assert.match(h.html,/>Pipeline status<\/a>/);
+ const h=await dashboardHarness('',async()=>dashboardResponse());assert.equal(h.panels.find(p=>p.dataset.section==='daily').hidden,true);assert.equal(h.panels.find(p=>p.dataset.section==='overview').hidden,false);assert.match(h.nodes['#overviewCharts'].innerHTML,/Awaiting received machine readings/);assert.match(h.nodes['#cards'].innerHTML,/Fault observations<\/small><b>Unavailable/);assert.doesNotMatch(h.html,/<summary>More/);assert.match(h.html,/>Discovered machines<\/span><\/a>/);assert.match(h.html,/>Daily summaries<\/span><\/a>/);assert.match(h.html,/>Pipeline status<\/span><\/a>/);
  const section=await automationModule.automaticDashboard('Company',new URL('https://test.invalid/telemetry/automatic?section=health')).text();assert.match(section,/data-section="overview" hidden/);assert.doesNotMatch(section,/data-section="fleet" hidden/);
+});
+
+test('machine charts use received values and preserve gaps when source units change',async()=>{
+ const point=(stamp,value,unit)=>({recorded_at:stamp,raw_json:JSON.stringify({coolant_temperature:value,units:{coolant_temperature:unit}})});
+ const machine={machine_id:'REAL-READING-1',site:'North',daily_summaries:[],findings:[],readings:[point('2026-11-11T01:00:00Z',80,'degC'),point('2026-11-11T02:00:00Z',200,'unknown'),point('2026-11-11T03:00:00Z',90,'degC')]};
+ const response=async()=>({ok:true,json:async()=>({...await dashboardResponse().json(),machines:[machine]})});
+ const h=await dashboardHarness('?section=health&machine=REAL-READING-1',response);assert.match(h.nodes['#machineCharts'].innerHTML,/Coolant temperature history in degC/);assert.match(h.nodes['#machineCharts'].innerHTML,/80 degC/);assert.match(h.nodes['#machineCharts'].innerHTML,/90 degC/);assert.doesNotMatch(h.nodes['#machineCharts'].innerHTML,/200 unknown/);assert.match(h.nodes['#machineCharts'].innerHTML,/Awaiting two timestamped readings/,'pressure is not fabricated');
+ machine.readings=[point('2026-11-11T01:00:00Z',[],'degC'),point('2026-11-11T02:00:00Z',true,'degC')];await h.interval();assert.doesNotMatch(h.nodes['#machineCharts'].innerHTML,/<circle/);assert.match(h.nodes['#machineCharts'].innerHTML,/Awaiting two timestamped readings/);
 });

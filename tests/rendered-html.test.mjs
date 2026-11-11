@@ -26,7 +26,7 @@ test('built Worker renders automatic dashboards and uses the same company-isolat
   for(const path of ['/contractor','/contractor?view=daily','/contractor?view=production','/contractor?view=maintenance','/contractor?view=alerts','/telemetry','/fleet-history?machine=WORKER-01']){
    const response=await runtime.dispatchFetch('https://tmm.test'+path,{headers});assert.equal(response.status,200,path);
    const body=await response.text();assert.match(body,/Automatic fleet monitoring/,path);assert.match(body,/Availability/);assert.match(body,/Utilisation/);assert.match(body,/setInterval\(load,60000\)/);assert.ok(!body.includes('Generate report'));
-   for(const script of body.matchAll(/<script>([\s\S]*?)<\/script>/g))new Function(script[1]);
+   for(const script of body.matchAll(/<script(?: [^>]*)?>([\s\S]*?)<\/script>/g))new Function(script[1]);
   }
   const fleetPage=await runtime.dispatchFetch('https://tmm.test/contractor?view=fleet&mode=simulation',{headers});const fleetHtml=await fleetPage.text();assert.equal(fleetPage.status,200,fleetHtml);assert.match(fleetHtml,/data-tmm-shell="automatic"/);assert.doesNotMatch(fleetHtml,/<aside/);assert.match(fleetHtml,/WORKER-01/);assert.match(fleetHtml,/view=dashboard&mode=simulation/);
   for(const path of ['/telemetry/connections/discovered','/telemetry/connections/pipeline-status','/telemetry/connections/scheduled-reports','/telemetry/connections/diagnostic-library']){const res=await runtime.dispatchFetch('https://tmm.test'+path,{headers});assert.equal(res.status,200,path);assert.match(await res.text(),/data-tmm-shell="automatic"/,path)}
