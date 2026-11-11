@@ -159,3 +159,5 @@ Chart detail links preserve source, site, machine and date filters. All primary 
 
 ### Fleet command centre presentation
 The staging workspace uses a persistent navigation rail on desktop, compact overview cards, a received-data freshness donut and an asset list with hour meter and service forecast. Generic AI-generated ADT imagery is explicitly labelled as a type illustration; unknown equipment types retain a photo-not-supplied placeholder. This imagery is not evidence of machine identity. The donut represents fresh/stale/missing readings, not a health score. No sample percentages, breakdown counts or equipment identities are introduced. All existing automatic refresh and scheduled processing remain unchanged.
+
+Secondary data-workspace navigation and discovery actions share icon-button styling with active states and responsive wrapping. The large Data coverage panel has been removed from monitoring views; unavailable KPI labels, source-unit checks and calculation requirements remain unchanged.
