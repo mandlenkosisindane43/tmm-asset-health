@@ -522,3 +522,15 @@ test('machine charts use received values and preserve gaps when source units cha
  const h=await dashboardHarness('?section=health&machine=REAL-READING-1',response);assert.match(h.nodes['#machineCharts'].innerHTML,/Coolant temperature history in degC/);assert.match(h.nodes['#machineCharts'].innerHTML,/80 degC/);assert.match(h.nodes['#machineCharts'].innerHTML,/90 degC/);assert.doesNotMatch(h.nodes['#machineCharts'].innerHTML,/200 unknown/);assert.match(h.nodes['#machineCharts'].innerHTML,/Awaiting two timestamped readings/,'pressure is not fabricated');
  machine.readings=[point('2026-11-11T01:00:00Z',[],'degC'),point('2026-11-11T02:00:00Z',true,'degC')];await h.interval();assert.doesNotMatch(h.nodes['#machineCharts'].innerHTML,/<circle/);assert.match(h.nodes['#machineCharts'].innerHTML,/Awaiting two timestamped readings/);
 });
+
+
+test('fleet command centre distinguishes freshness from health and labels generic imagery',async()=>{
+ const machine={machine_id:'ADT-1',machine_type:'ADT',site:'North',reading_count:2,stale:false,current_hour_meter:1245,hours_to_service:5,daily_summaries:[],findings:[],readings:[]};
+ const h=await dashboardHarness('',async()=>({ok:true,json:async()=>({...await dashboardResponse().json(),machines:[machine]})}));
+ assert.match(h.nodes['#attention'].innerHTML,/Illustrative articulated dump truck; not an actual asset photo/);
+ assert.match(h.nodes['#attention'].innerHTML,/1,245 h/);assert.match(h.nodes['#overviewCharts'].innerHTML,/1 fresh, 0 stale, 0 awaiting data/);
+ assert.doesNotMatch(h.nodes['#attention'].innerHTML,/94%|Healthy/);
+ machine.machine_type='Unknown';machine.stale=true;await h.interval();
+ assert.doesNotMatch(h.nodes['#attention'].innerHTML,/equipment-photo/);assert.match(h.nodes['#attention'].innerHTML,/Photo not supplied/);
+ assert.match(h.nodes['#overviewCharts'].innerHTML,/0 fresh, 1 stale, 0 awaiting data/);
+});
