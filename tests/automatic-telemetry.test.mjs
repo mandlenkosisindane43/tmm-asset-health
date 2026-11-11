@@ -511,6 +511,6 @@ test('compact overview uses weighted daily percentages, preserves missing days a
 });
 
 test('dashboard hides detailed sections, renders honest chart empty states and keeps detail routes available',async()=>{
- const h=await dashboardHarness('',async()=>dashboardResponse());assert.equal(h.panels.find(p=>p.dataset.section==='daily').hidden,true);assert.equal(h.panels.find(p=>p.dataset.section==='overview').hidden,false);assert.match(h.nodes['#overviewCharts'].innerHTML,/Awaiting received machine readings/);assert.match(h.nodes['#cards'].innerHTML,/Fault observations<\/small><b>Unavailable/);assert.match(h.html,/<summary>More<\/summary>/);assert.match(h.html,/section=production/);
+ const h=await dashboardHarness('',async()=>dashboardResponse());assert.equal(h.panels.find(p=>p.dataset.section==='daily').hidden,true);assert.equal(h.panels.find(p=>p.dataset.section==='overview').hidden,false);assert.match(h.nodes['#overviewCharts'].innerHTML,/Awaiting received machine readings/);assert.match(h.nodes['#cards'].innerHTML,/Fault observations<\/small><b>Unavailable/);assert.doesNotMatch(h.html,/<summary>More/);assert.match(h.html,/>Discovered machines<\/a>/);assert.match(h.html,/>Daily summaries<\/a>/);assert.match(h.html,/>Pipeline status<\/a>/);
  const section=await automationModule.automaticDashboard('Company',new URL('https://test.invalid/telemetry/automatic?section=health')).text();assert.match(section,/data-section="overview" hidden/);assert.doesNotMatch(section,/data-section="fleet" hidden/);
 });
