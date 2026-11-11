@@ -1,5 +1,10 @@
 # TMM source adapter structure
 
+For operation outside Codespaces, see [independent operation](../../docs/INDEPENDENT_OPERATION.md)
+and `tmm_transfer_service.py`. The supplied Linux service watches completed NDJSON
+exports, preserves its queue across restarts and retries unattended. A real source
+reader, permanent host and authorised cloud connection still need configuration.
+
 This is a reusable Python translation layer for a future authorised company data hub, OEM export or device feed. It is **not an Exxaro connector** and does not yet fetch an unknown company's API or database.
 
 - `tmm_source_adapter.py`: translates a JSON object using configuration; no network, credentials, code execution or machine commands.

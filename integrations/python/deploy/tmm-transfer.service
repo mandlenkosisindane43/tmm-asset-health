@@ -1,0 +1,26 @@
+[Unit]
+Description=TMM authorised telemetry transfer
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=tmm-transfer
+Group=tmm-transfer
+WorkingDirectory=/opt/tmm-transfer/current/integrations/python
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/etc/tmm-transfer/connection.env
+ExecStart=/usr/bin/python3 /opt/tmm-transfer/current/integrations/python/tmm_transfer_service.py --incoming /var/lib/tmm-transfer/incoming --state /var/lib/tmm-transfer/state --mapping /etc/tmm-transfer/source.mapping.json
+Restart=always
+RestartSec=30
+TimeoutStopSec=45
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/tmm-transfer
+
+[Install]
+WantedBy=multi-user.target
