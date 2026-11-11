@@ -1,0 +1,335 @@
+<!doctype html><meta charset="utf-8"><title>TMM Python pipeline evidence</title><style>body{font:17px system-ui;background:#eef3f8;color:#16324b;margin:0}main{max-width:1100px;margin:auto;padding:40px}h1{font-size:36px}.badge{color:#087d75;font-weight:750}section{background:white;padding:26px;border-radius:16px;margin:20px 0}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}strong{display:block;font-size:32px}td,th{text-align:left;padding:12px;border-bottom:1px solid #dde5ef}pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px}@media(max-width:700px){.grid{grid-template-columns:1fr}}</style><main><p class="badge">TMM ASSET HEALTH · PYTHON INTEGRATION · SIMULATED DATA</p><h1>One automatic pipeline. Verified locally.</h1><p>Run: 2026-11-11T18:30:58+00:00. Actual Python adapter and transfer queue → actual TMM intake, storage, fault analysis and scheduled reporting.</p><div class="grid"><section><strong>6 / 6</strong>Readings stored and analysed</section><section><strong>3</strong>Automatically saved reports</section><section><strong>PASS</strong>Retry and duplicate protection</section></div><section><h2>What happened automatically</h2><ol><li>Generated six labelled synthetic machine observations.</li><li>Translated source fields and units through the Python adapter.</li><li>Saved observations in a durable queue before sending.</li><li>Recovered from a deliberate temporary transfer failure.</li><li>Stored six unique readings; recognised a replay as duplicate.</li><li>The background timer analysed readings and saved three reports.</li></ol></section><section><h2>Calculated from the received counters</h2><table><tr><th>Availability</th><th>Utilisation</th><th>Production</th><th>Latest hour meter</th></tr><tr><td>90%</td><td>77.78%</td><td>50 t</td><td>1000.4 h</td></tr></table><p>These are synthetic values over a 30-minute observation window, not a full working day. Availability = available ÷ scheduled hours; utilisation = productive ÷ available hours.</p></section><section><h2>Fault findings from the actual analyser</h2><table><tr><th>Code / category</th><th>Finding</th></tr><tr><td>SPN 110 FMI 0</td><td>Engine coolant temperature — Data valid but above normal operating range — most severe level [Engine cooling; reference mapped; verify OEM applicability]</td></tr><tr><td>DEMO-UNKNOWN</td><td>Unmapped or proprietary diagnostic identifier; verified OEM documentation required. [Unknown; definition required — OEM definition required]</td></tr><tr><td>coolant_temperature</td><td>Simulated coolant temperature 106 °C exceeds an illustrative screen; this is not an OEM-approved alarm.</td></tr><tr><td>SPN 110 FMI 0</td><td>Engine coolant temperature — Data valid but above normal operating range — most severe level [Engine cooling; reference mapped; verify OEM applicability]</td></tr><tr><td>DEMO-UNKNOWN</td><td>Unmapped or proprietary diagnostic identifier; verified OEM documentation required. [Unknown; definition required — OEM definition required]</td></tr><tr><td>coolant_temperature</td><td>Simulated coolant temperature 110 °C exceeds an illustrative screen; this is not an OEM-approved alarm.</td></tr></table></section><section><h2>Scope of this proof</h2><p>This ran in a disposable local SQLite database. Your online software was not changed. Python handles collection simulation, translation and transfer; the existing JavaScript/TypeScript TMM backend handles analysis and reporting. The local demonstration timer runs every two seconds; deployment uses its configured schedule.</p><p>No actual machine, company API, external email delivery or confirmed root cause was tested. No records were deleted from your software. Unknown fault definitions remain unknown.</p></section><section><h2>Saved engineering report contents</h2><details><summary>Read the three generated reports</summary><pre>[
+  {
+    &quot;version&quot;: 3,
+    &quot;latest_sensors&quot;: {
+      &quot;engine_hours&quot;: {
+        &quot;value&quot;: 1000.4,
+        &quot;unit&quot;: &quot;h&quot;
+      },
+      &quot;coolant_temperature&quot;: {
+        &quot;value&quot;: 110,
+        &quot;unit&quot;: &quot;degC&quot;
+      },
+      &quot;hydraulic_pressure&quot;: {
+        &quot;value&quot;: 145,
+        &quot;unit&quot;: &quot;bar&quot;
+      }
+    },
+    &quot;company_id&quot;: 1,
+    &quot;machine_id&quot;: &quot;PY-DEMO-ADT-001&quot;,
+    &quot;period&quot;: &quot;daily&quot;,
+    &quot;period_start&quot;: &quot;2026-11-10T18:31:00.452Z&quot;,
+    &quot;period_end&quot;: &quot;2026-11-11T18:31:00.452Z&quot;,
+    &quot;source_mode&quot;: &quot;simulation&quot;,
+    &quot;generated_at&quot;: &quot;2026-11-11T18:31:00.452Z&quot;,
+    &quot;reading_count&quot;: 6,
+    &quot;fault_readings&quot;: 2,
+    &quot;first_hours&quot;: 1000,
+    &quot;last_hours&quot;: 1000.4,
+    &quot;metrics&quot;: {
+      &quot;reading_count&quot;: 6,
+      &quot;valid_intervals&quot;: 5,
+      &quot;observed_hours&quot;: 0.5,
+      &quot;operating_hours&quot;: 0.4,
+      &quot;engine_runtime_percent&quot;: 80,
+      &quot;idle_hours&quot;: null,
+      &quot;production_tonnes&quot;: 50,
+      &quot;scheduled_hours&quot;: 0.5,
+      &quot;available_hours&quot;: 0.45,
+      &quot;productive_hours&quot;: 0.35,
+      &quot;reported_downtime_hours&quot;: 0.05,
+      &quot;availability_percent&quot;: 90,
+      &quot;utilisation_percent&quot;: 77.78,
+      &quot;scheduled_utilisation_percent&quot;: 70,
+      &quot;kpi_coverage&quot;: &quot;complete&quot;,
+      &quot;confirmed_downtime_hours&quot;: null
+    },
+    &quot;findings&quot;: [
+      {
+        &quot;telemetry_id&quot;: 6,
+        &quot;recorded_at&quot;: &quot;2026-11-11T18:29:58.000Z&quot;,
+        &quot;category&quot;: &quot;coolant_temperature&quot;,
+        &quot;severity&quot;: &quot;review&quot;,
+        &quot;diagnostic_code&quot;: &quot;&quot;,
+        &quot;details&quot;: &quot;Simulated coolant temperature 110 \u00b0C exceeds an illustrative screen; this is not an OEM-approved alarm.&quot;,
+        &quot;recommendation&quot;: &quot;Verify sensor units and the machine-specific approved limit.&quot;
+      },
+      {
+        &quot;telemetry_id&quot;: 6,
+        &quot;recorded_at&quot;: &quot;2026-11-11T18:29:58.000Z&quot;,
+        &quot;category&quot;: &quot;diagnostic_code&quot;,
+        &quot;severity&quot;: &quot;review&quot;,
+        &quot;diagnostic_code&quot;: &quot;DEMO-UNKNOWN&quot;,
+        &quot;details&quot;: &quot;Unmapped or proprietary diagnostic identifier; verified OEM documentation required. [Unknown; definition required \u2014 OEM definition required]&quot;,
+        &quot;recommendation&quot;: &quot;Confirm OEM applicability, occurrence state and machine-specific service procedure.&quot;
+      },
+      {
+        &quot;telemetry_id&quot;: 6,
+        &quot;recorded_at&quot;: &quot;2026-11-11T18:29:58.000Z&quot;,
+        &quot;category&quot;: &quot;diagnostic_code&quot;,
+        &quot;severity&quot;: &quot;review&quot;,
+        &quot;diagnostic_code&quot;: &quot;SPN 110 FMI 0&quot;,
+        &quot;details&quot;: &quot;Engine coolant temperature \u2014 Data valid but above normal operating range \u2014 most severe level [Engine cooling; reference mapped; verify OEM applicability]&quot;,
+        &quot;recommendation&quot;: &quot;Confirm OEM applicability, occurrence state and machine-specific service procedure.&quot;
+      },
+      {
+        &quot;telemetry_id&quot;: 5,
+        &quot;recorded_at&quot;: &quot;2026-11-11T18:23:58.000Z&quot;,
+        &quot;category&quot;: &quot;coolant_temperature&quot;,
+        &quot;severity&quot;: &quot;review&quot;,
+        &quot;diagnostic_code&quot;: &quot;&quot;,
+        &quot;details&quot;: &quot;Simulated coolant temperature 106 \u00b0C exceeds an illustrative screen; this is not an OEM-approved alarm.&quot;,
+        &quot;recommendation&quot;: &quot;Verify sensor units and the machine-specific approved limit.&quot;
+      },
+      {
+        &quot;telemetry_id&quot;: 5,
+        &quot;recorded_at&quot;: &quot;2026-11-11T18:23:58.000Z&quot;,
+        &quot;category&quot;: &quot;diagnostic_code&quot;,
+        &quot;severity&quot;: &quot;review&quot;,
+        &quot;diagnostic_code&quot;: &quot;DEMO-UNKNOWN&quot;,
+        &quot;details&quot;: &quot;Unmapped or proprietary diagnostic identifier; verified OEM documentation required. [Unknown; definition required \u2014 OEM definition required]&quot;,
+        &quot;recommendation&quot;: &quot;Confirm OEM applicability, occurrence state and machine-specific service procedure.&quot;
+      },
+      {
+        &quot;telemetry_id&quot;: 5,
+        &quot;recorded_at&quot;: &quot;2026-11-11T18:23:58.000Z&quot;,
+        &quot;category&quot;: &quot;diagnostic_code&quot;,
+        &quot;severity&quot;: &quot;review&quot;,
+        &quot;diagnostic_code&quot;: &quot;SPN 110 FMI 0&quot;,
+        &quot;details&quot;: &quot;Engine coolant temperature \u2014 Data valid but above normal operating range \u2014 most severe level [Engine cooling; reference mapped; verify OEM applicability]&quot;,
+        &quot;recommendation&quot;: &quot;Confirm OEM applicability, occurrence state and machine-specific service procedure.&quot;
+      }
+    ],
+    &quot;findings_truncated&quot;: false,
+    &quot;readings_truncated&quot;: false,
+    &quot;analysis_pending&quot;: 0,
+    &quot;analysis_window&quot;: &quot;Durable FIFO analysis receipts; reports disclose any remaining backlog and truncation.&quot;,
+    &quot;notes&quot;: [
+      &quot;SIMULATED DATA ONLY \u2014 not actual equipment conditions.&quot;,
+      &quot;Rolling observation window, not a certified calendar-period production return.&quot;,
+      &quot;Fault observations do not establish root cause, downtime or repair completion. Missing unsupported measurements remain unknown.&quot;
+    ]
+  },
+  {
+    &quot;version&quot;: 3,
+    &quot;latest_sensors&quot;: {
+      &quot;engine_hours&quot;: {
+        &quot;value&quot;: 1000.4,
+        &quot;unit&quot;: &quot;h&quot;
+      },
+      &quot;coolant_temperature&quot;: {
+        &quot;value&quot;: 110,
+        &quot;unit&quot;: &quot;degC&quot;
+      },
+      &quot;hydraulic_pressure&quot;: {
+        &quot;value&quot;: 145,
+        &quot;unit&quot;: &quot;bar&quot;
+      }
+    },
+    &quot;company_id&quot;: 1,
+    &quot;machine_id&quot;: &quot;PY-DEMO-ADT-001&quot;,
+    &quot;period&quot;: &quot;weekly&quot;,
+    &quot;period_start&quot;: &quot;2026-11-04T18:31:00.452Z&quot;,
+    &quot;period_end&quot;: &quot;2026-11-11T18:31:00.452Z&quot;,
+    &quot;source_mode&quot;: &quot;simulation&quot;,
+    &quot;generated_at&quot;: &quot;2026-11-11T18:31:00.452Z&quot;,
+    &quot;reading_count&quot;: 6,
+    &quot;fault_readings&quot;: 2,
+    &quot;first_hours&quot;: 1000,
+    &quot;last_hours&quot;: 1000.4,
+    &quot;metrics&quot;: {
+      &quot;reading_count&quot;: 6,
+      &quot;valid_intervals&quot;: 5,
+      &quot;observed_hours&quot;: 0.5,
+      &quot;operating_hours&quot;: 0.4,
+      &quot;engine_runtime_percent&quot;: 80,
+      &quot;idle_hours&quot;: null,
+      &quot;production_tonnes&quot;: 50,
+      &quot;scheduled_hours&quot;: 0.5,
+      &quot;available_hours&quot;: 0.45,
+      &quot;productive_hours&quot;: 0.35,
+      &quot;reported_downtime_hours&quot;: 0.05,
+      &quot;availability_percent&quot;: 90,
+      &quot;utilisation_percent&quot;: 77.78,
+      &quot;scheduled_utilisation_percent&quot;: 70,
+      &quot;kpi_coverage&quot;: &quot;complete&quot;,
+      &quot;confirmed_downtime_hours&quot;: null
+    },
+    &quot;findings&quot;: [
+      {
+        &quot;telemetry_id&quot;: 6,
+        &quot;recorded_at&quot;: &quot;2026-11-11T18:29:58.000Z&quot;,
+        &quot;category&quot;: &quot;coolant_temperature&quot;,
+        &quot;severity&quot;: &quot;review&quot;,
+        &quot;diagnostic_code&quot;: &quot;&quot;,
+        &quot;details&quot;: &quot;Simulated coolant temperature 110 \u00b0C exceeds an illustrative screen; this is not an OEM-approved alarm.&quot;,
+        &quot;recommendation&quot;: &quot;Verify sensor units and the machine-specific approved limit.&quot;
+      },
+      {
+        &quot;telemetry_id&quot;: 6,
+        &quot;recorded_at&quot;: &quot;2026-11-11T18:29:58.000Z&quot;,
+        &quot;category&quot;: &quot;diagnostic_code&quot;,
+        &quot;severity&quot;: &quot;review&quot;,
+        &quot;diagnostic_code&quot;: &quot;DEMO-UNKNOWN&quot;,
+        &quot;details&quot;: &quot;Unmapped or proprietary diagnostic identifier; verified OEM documentation required. [Unknown; definition required \u2014 OEM definition required]&quot;,
+        &quot;recommendation&quot;: &quot;Confirm OEM applicability, occurrence state and machine-specific service procedure.&quot;
+      },
+      {
+        &quot;telemetry_id&quot;: 6,
+        &quot;recorded_at&quot;: &quot;2026-11-11T18:29:58.000Z&quot;,
+        &quot;category&quot;: &quot;diagnostic_code&quot;,
+        &quot;severity&quot;: &quot;review&quot;,
+        &quot;diagnostic_code&quot;: &quot;SPN 110 FMI 0&quot;,
+        &quot;details&quot;: &quot;Engine coolant temperature \u2014 Data valid but above normal operating range \u2014 most severe level [Engine cooling; reference mapped; verify OEM applicability]&quot;,
+        &quot;recommendation&quot;: &quot;Confirm OEM applicability, occurrence state and machine-specific service procedure.&quot;
+      },
+      {
+        &quot;telemetry_id&quot;: 5,
+        &quot;recorded_at&quot;: &quot;2026-11-11T18:23:58.000Z&quot;,
+        &quot;category&quot;: &quot;coolant_temperature&quot;,
+        &quot;severity&quot;: &quot;review&quot;,
+        &quot;diagnostic_code&quot;: &quot;&quot;,
+        &quot;details&quot;: &quot;Simulated coolant temperature 106 \u00b0C exceeds an illustrative screen; this is not an OEM-approved alarm.&quot;,
+        &quot;recommendation&quot;: &quot;Verify sensor units and the machine-specific approved limit.&quot;
+      },
+      {
+        &quot;telemetry_id&quot;: 5,
+        &quot;recorded_at&quot;: &quot;2026-11-11T18:23:58.000Z&quot;,
+        &quot;category&quot;: &quot;diagnostic_code&quot;,
+        &quot;severity&quot;: &quot;review&quot;,
+        &quot;diagnostic_code&quot;: &quot;DEMO-UNKNOWN&quot;,
+        &quot;details&quot;: &quot;Unmapped or proprietary diagnostic identifier; verified OEM documentation required. [Unknown; definition required \u2014 OEM definition required]&quot;,
+        &quot;recommendation&quot;: &quot;Confirm OEM applicability, occurrence state and machine-specific service procedure.&quot;
+      },
+      {
+        &quot;telemetry_id&quot;: 5,
+        &quot;recorded_at&quot;: &quot;2026-11-11T18:23:58.000Z&quot;,
+        &quot;category&quot;: &quot;diagnostic_code&quot;,
+        &quot;severity&quot;: &quot;review&quot;,
+        &quot;diagnostic_code&quot;: &quot;SPN 110 FMI 0&quot;,
+        &quot;details&quot;: &quot;Engine coolant temperature \u2014 Data valid but above normal operating range \u2014 most severe level [Engine cooling; reference mapped; verify OEM applicability]&quot;,
+        &quot;recommendation&quot;: &quot;Confirm OEM applicability, occurrence state and machine-specific service procedure.&quot;
+      }
+    ],
+    &quot;findings_truncated&quot;: false,
+    &quot;readings_truncated&quot;: false,
+    &quot;analysis_pending&quot;: 0,
+    &quot;analysis_window&quot;: &quot;Durable FIFO analysis receipts; reports disclose any remaining backlog and truncation.&quot;,
+    &quot;notes&quot;: [
+      &quot;SIMULATED DATA ONLY \u2014 not actual equipment conditions.&quot;,
+      &quot;Rolling observation window, not a certified calendar-period production return.&quot;,
+      &quot;Fault observations do not establish root cause, downtime or repair completion. Missing unsupported measurements remain unknown.&quot;
+    ]
+  },
+  {
+    &quot;version&quot;: 3,
+    &quot;latest_sensors&quot;: {
+      &quot;engine_hours&quot;: {
+        &quot;value&quot;: 1000.4,
+        &quot;unit&quot;: &quot;h&quot;
+      },
+      &quot;coolant_temperature&quot;: {
+        &quot;value&quot;: 110,
+        &quot;unit&quot;: &quot;degC&quot;
+      },
+      &quot;hydraulic_pressure&quot;: {
+        &quot;value&quot;: 145,
+        &quot;unit&quot;: &quot;bar&quot;
+      }
+    },
+    &quot;company_id&quot;: 1,
+    &quot;machine_id&quot;: &quot;PY-DEMO-ADT-001&quot;,
+    &quot;period&quot;: &quot;monthly&quot;,
+    &quot;period_start&quot;: &quot;2026-10-12T18:31:00.452Z&quot;,
+    &quot;period_end&quot;: &quot;2026-11-11T18:31:00.452Z&quot;,
+    &quot;source_mode&quot;: &quot;simulation&quot;,
+    &quot;generated_at&quot;: &quot;2026-11-11T18:31:00.452Z&quot;,
+    &quot;reading_count&quot;: 6,
+    &quot;fault_readings&quot;: 2,
+    &quot;first_hours&quot;: 1000,
+    &quot;last_hours&quot;: 1000.4,
+    &quot;metrics&quot;: {
+      &quot;reading_count&quot;: 6,
+      &quot;valid_intervals&quot;: 5,
+      &quot;observed_hours&quot;: 0.5,
+      &quot;operating_hours&quot;: 0.4,
+      &quot;engine_runtime_percent&quot;: 80,
+      &quot;idle_hours&quot;: null,
+      &quot;production_tonnes&quot;: 50,
+      &quot;scheduled_hours&quot;: 0.5,
+      &quot;available_hours&quot;: 0.45,
+      &quot;productive_hours&quot;: 0.35,
+      &quot;reported_downtime_hours&quot;: 0.05,
+      &quot;availability_percent&quot;: 90,
+      &quot;utilisation_percent&quot;: 77.78,
+      &quot;scheduled_utilisation_percent&quot;: 70,
+      &quot;kpi_coverage&quot;: &quot;complete&quot;,
+      &quot;confirmed_downtime_hours&quot;: null
+    },
+    &quot;findings&quot;: [
+      {
+        &quot;telemetry_id&quot;: 6,
+        &quot;recorded_at&quot;: &quot;2026-11-11T18:29:58.000Z&quot;,
+        &quot;category&quot;: &quot;coolant_temperature&quot;,
+        &quot;severity&quot;: &quot;review&quot;,
+        &quot;diagnostic_code&quot;: &quot;&quot;,
+        &quot;details&quot;: &quot;Simulated coolant temperature 110 \u00b0C exceeds an illustrative screen; this is not an OEM-approved alarm.&quot;,
+        &quot;recommendation&quot;: &quot;Verify sensor units and the machine-specific approved limit.&quot;
+      },
+      {
+        &quot;telemetry_id&quot;: 6,
+        &quot;recorded_at&quot;: &quot;2026-11-11T18:29:58.000Z&quot;,
+        &quot;category&quot;: &quot;diagnostic_code&quot;,
+        &quot;severity&quot;: &quot;review&quot;,
+        &quot;diagnostic_code&quot;: &quot;DEMO-UNKNOWN&quot;,
+        &quot;details&quot;: &quot;Unmapped or proprietary diagnostic identifier; verified OEM documentation required. [Unknown; definition required \u2014 OEM definition required]&quot;,
+        &quot;recommendation&quot;: &quot;Confirm OEM applicability, occurrence state and machine-specific service procedure.&quot;
+      },
+      {
+        &quot;telemetry_id&quot;: 6,
+        &quot;recorded_at&quot;: &quot;2026-11-11T18:29:58.000Z&quot;,
+        &quot;category&quot;: &quot;diagnostic_code&quot;,
+        &quot;severity&quot;: &quot;review&quot;,
+        &quot;diagnostic_code&quot;: &quot;SPN 110 FMI 0&quot;,
+        &quot;details&quot;: &quot;Engine coolant temperature \u2014 Data valid but above normal operating range \u2014 most severe level [Engine cooling; reference mapped; verify OEM applicability]&quot;,
+        &quot;recommendation&quot;: &quot;Confirm OEM applicability, occurrence state and machine-specific service procedure.&quot;
+      },
+      {
+        &quot;telemetry_id&quot;: 5,
+        &quot;recorded_at&quot;: &quot;2026-11-11T18:23:58.000Z&quot;,
+        &quot;category&quot;: &quot;coolant_temperature&quot;,
+        &quot;severity&quot;: &quot;review&quot;,
+        &quot;diagnostic_code&quot;: &quot;&quot;,
+        &quot;details&quot;: &quot;Simulated coolant temperature 106 \u00b0C exceeds an illustrative screen; this is not an OEM-approved alarm.&quot;,
+        &quot;recommendation&quot;: &quot;Verify sensor units and the machine-specific approved limit.&quot;
+      },
+      {
+        &quot;telemetry_id&quot;: 5,
+        &quot;recorded_at&quot;: &quot;2026-11-11T18:23:58.000Z&quot;,
+        &quot;category&quot;: &quot;diagnostic_code&quot;,
+        &quot;severity&quot;: &quot;review&quot;,
+        &quot;diagnostic_code&quot;: &quot;DEMO-UNKNOWN&quot;,
+        &quot;details&quot;: &quot;Unmapped or proprietary diagnostic identifier; verified OEM documentation required. [Unknown; definition required \u2014 OEM definition required]&quot;,
+        &quot;recommendation&quot;: &quot;Confirm OEM applicability, occurrence state and machine-specific service procedure.&quot;
+      },
+      {
+        &quot;telemetry_id&quot;: 5,
+        &quot;recorded_at&quot;: &quot;2026-11-11T18:23:58.000Z&quot;,
+        &quot;category&quot;: &quot;diagnostic_code&quot;,
+        &quot;severity&quot;: &quot;review&quot;,
+        &quot;diagnostic_code&quot;: &quot;SPN 110 FMI 0&quot;,
+        &quot;details&quot;: &quot;Engine coolant temperature \u2014 Data valid but above normal operating range \u2014 most severe level [Engine cooling; reference mapped; verify OEM applicability]&quot;,
+        &quot;recommendation&quot;: &quot;Confirm OEM applicability, occurrence state and machine-specific service procedure.&quot;
+      }
+    ],
+    &quot;findings_truncated&quot;: false,
+    &quot;readings_truncated&quot;: false,
+    &quot;analysis_pending&quot;: 0,
+    &quot;analysis_window&quot;: &quot;Durable FIFO analysis receipts; reports disclose any remaining backlog and truncation.&quot;,
+    &quot;notes&quot;: [
+      &quot;SIMULATED DATA ONLY \u2014 not actual equipment conditions.&quot;,
+      &quot;Rolling observation window, not a certified calendar-period production return.&quot;,
+      &quot;Fault observations do not establish root cause, downtime or repair completion. Missing unsupported measurements remain unknown.&quot;
+    ]
+  }
+]</pre></details></section></main>

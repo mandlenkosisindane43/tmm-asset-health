@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "name": "Local synthetic demonstration",
+  "test_data": true,
+  "fields": {
+    "external_machine_id": "device.id",
+    "event_id": "message.id",
+    "timestamp": {
+      "path": "message.time",
+      "type": "iso8601"
+    },
+    "engine_hours": {
+      "path": "readings.engine_hours",
+      "type": "number",
+      "unit": "h",
+      "counter_semantics": "cumulative"
+    },
+    "scheduled_hours": {
+      "path": "readings.scheduled_hours",
+      "type": "number",
+      "unit": "h",
+      "counter_semantics": "cumulative"
+    },
+    "available_hours": {
+      "path": "readings.available_hours",
+      "type": "number",
+      "unit": "h",
+      "counter_semantics": "cumulative"
+    },
+    "productive_hours": {
+      "path": "readings.productive_hours",
+      "type": "number",
+      "unit": "h",
+      "counter_semantics": "cumulative"
+    },
+    "production_tonnes": {
+      "path": "readings.production_tonnes",
+      "type": "number",
+      "unit": "t",
+      "counter_semantics": "cumulative"
+    },
+    "coolant_temperature": {
+      "path": "readings.coolant_temperature",
+      "type": "number",
+      "unit": "degC"
+    },
+    "hydraulic_pressure": {
+      "path": "readings.hydraulic_pressure",
+      "type": "number",
+      "unit": "bar"
+    }
+  },
+  "faults": {
+    "spn_path": "fault.spn",
+    "fmi_path": "fault.fmi",
+    "codes_path": "fault.vendor"
+  }
+}

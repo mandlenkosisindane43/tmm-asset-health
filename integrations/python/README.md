@@ -40,3 +40,32 @@ Use `asset.serial_number`, `asset.manufacturer`, `asset.model`, `asset.machine_t
 5. Validate known records offline, then test the authorised intake, machine mapping/discovery and automatic report outputs.
 
 This is the prepared adapter framework; company compatibility and live operation are not certified by these examples.
+
+## Watch the complete pipeline locally
+
+From the repository root, with Python 3.10+ and Node 24+ installed:
+
+```sh
+python3 integrations/python/tmm_pipeline_demo.py
+```
+
+Open `docs/python-demo/latest-run/report.html` afterward. The run also saves
+`evidence.json`, the source mapping, and synthetic NDJSON observations. No packages,
+cloud credentials, or machine connection are needed. Start the command once; no
+Capture, Analyse or Generate Report buttons are involved.
+
+This uses the existing Python source adapter and SQLite outbox, then HTTP transfer
+to the actual TMM Worker intake, analyser and scheduled report code. The local host
+binds only to loopback and uses a disposable in-memory central database. Its
+two-second background timer accelerates the deployed schedule for demonstration.
+A deliberate HTTP 503 verifies automatic transfer retry; replay verifies deduplication.
+Assertions check six stored/analysed readings, recognised SPN 110 FMI 0, an unknown
+code requiring definition, and three saved daily/weekly/monthly rolling reports.
+The synthetic cumulative counters also verify 90% availability, 77.78% utilisation
+and 50 tonnes over the observed half-hour. These are not real operating results.
+
+The backend remains JavaScript/TypeScript; Python supplies collection simulation,
+translation and reliable transfer. This does not prove a real OEM protocol, device
+acquisition, all supported metrics or external email delivery. It neither connects
+to nor deletes anything from staging or production. The temporary local queue and
+central database are discarded on exit; generated evidence remains available.

@@ -1,0 +1,922 @@
+{
+  "run_at": "2026-11-11T18:30:58+00:00",
+  "scope": "Isolated local simulation using actual TMM modules; no staging or production writes",
+  "checks": {
+    "automatic_retry": true,
+    "pending_queue": 0,
+    "duplicate_prevention": true,
+    "analysed": 6,
+    "saved_reports": 3,
+    "no_external_email": true,
+    "live_meter_unchanged": true
+  },
+  "source_records": [
+    {
+      "device": {
+        "id": "PY-DEVICE-001"
+      },
+      "message": {
+        "id": "python-demo-0",
+        "time": "2026-11-11T17:59:58+00:00"
+      },
+      "readings": {
+        "engine_hours": 1000.0,
+        "scheduled_hours": 0.0,
+        "available_hours": 0.0,
+        "productive_hours": 0.0,
+        "production_tonnes": 0,
+        "coolant_temperature": 80,
+        "hydraulic_pressure": 140
+      },
+      "fault": {}
+    },
+    {
+      "device": {
+        "id": "PY-DEVICE-001"
+      },
+      "message": {
+        "id": "python-demo-1",
+        "time": "2026-11-11T18:05:58+00:00"
+      },
+      "readings": {
+        "engine_hours": 1000.08,
+        "scheduled_hours": 0.1,
+        "available_hours": 0.09,
+        "productive_hours": 0.07,
+        "production_tonnes": 10,
+        "coolant_temperature": 84,
+        "hydraulic_pressure": 142
+      },
+      "fault": {}
+    },
+    {
+      "device": {
+        "id": "PY-DEVICE-001"
+      },
+      "message": {
+        "id": "python-demo-2",
+        "time": "2026-11-11T18:11:58+00:00"
+      },
+      "readings": {
+        "engine_hours": 1000.16,
+        "scheduled_hours": 0.2,
+        "available_hours": 0.18,
+        "productive_hours": 0.14,
+        "production_tonnes": 20,
+        "coolant_temperature": 88,
+        "hydraulic_pressure": 145
+      },
+      "fault": {}
+    },
+    {
+      "device": {
+        "id": "PY-DEVICE-001"
+      },
+      "message": {
+        "id": "python-demo-3",
+        "time": "2026-11-11T18:17:58+00:00"
+      },
+      "readings": {
+        "engine_hours": 1000.24,
+        "scheduled_hours": 0.30000000000000004,
+        "available_hours": 0.27,
+        "productive_hours": 0.21000000000000002,
+        "production_tonnes": 30,
+        "coolant_temperature": 95,
+        "hydraulic_pressure": 143
+      },
+      "fault": {}
+    },
+    {
+      "device": {
+        "id": "PY-DEVICE-001"
+      },
+      "message": {
+        "id": "python-demo-4",
+        "time": "2026-11-11T18:23:58+00:00"
+      },
+      "readings": {
+        "engine_hours": 1000.32,
+        "scheduled_hours": 0.4,
+        "available_hours": 0.36,
+        "productive_hours": 0.28,
+        "production_tonnes": 40,
+        "coolant_temperature": 106,
+        "hydraulic_pressure": 146
+      },
+      "fault": {
+        "spn": 110,
+        "fmi": 0,
+        "vendor": [
+          "DEMO-UNKNOWN"
+        ]
+      }
+    },
+    {
+      "device": {
+        "id": "PY-DEVICE-001"
+      },
+      "message": {
+        "id": "python-demo-5",
+        "time": "2026-11-11T18:29:58+00:00"
+      },
+      "readings": {
+        "engine_hours": 1000.4,
+        "scheduled_hours": 0.5,
+        "available_hours": 0.44999999999999996,
+        "productive_hours": 0.35000000000000003,
+        "production_tonnes": 50,
+        "coolant_temperature": 110,
+        "hydraulic_pressure": 145
+      },
+      "fault": {
+        "spn": 110,
+        "fmi": 0,
+        "vendor": [
+          "DEMO-UNKNOWN"
+        ]
+      }
+    }
+  ],
+  "translated_readings": [
+    {
+      "external_machine_id": "PY-DEVICE-001",
+      "event_id": "python-demo-0",
+      "test_data": true,
+      "fault_codes": [],
+      "units": {
+        "engine_hours": "h",
+        "scheduled_hours": "h",
+        "available_hours": "h",
+        "productive_hours": "h",
+        "production_tonnes": "t",
+        "coolant_temperature": "degC",
+        "hydraulic_pressure": "bar"
+      },
+      "counter_semantics": {
+        "engine_hours": "cumulative",
+        "scheduled_hours": "cumulative",
+        "available_hours": "cumulative",
+        "productive_hours": "cumulative",
+        "production_tonnes": "cumulative"
+      },
+      "scheduled_hours": 0.0,
+      "available_hours": 0.0,
+      "productive_hours": 0.0,
+      "production_tonnes": 0.0,
+      "timestamp": "2026-11-11T17:59:58.000Z",
+      "engine_hours": 1000.0,
+      "hydraulic_pressure": 140.0,
+      "coolant_temperature": 80.0
+    },
+    {
+      "external_machine_id": "PY-DEVICE-001",
+      "event_id": "python-demo-1",
+      "test_data": true,
+      "fault_codes": [],
+      "units": {
+        "engine_hours": "h",
+        "scheduled_hours": "h",
+        "available_hours": "h",
+        "productive_hours": "h",
+        "production_tonnes": "t",
+        "coolant_temperature": "degC",
+        "hydraulic_pressure": "bar"
+      },
+      "counter_semantics": {
+        "engine_hours": "cumulative",
+        "scheduled_hours": "cumulative",
+        "available_hours": "cumulative",
+        "productive_hours": "cumulative",
+        "production_tonnes": "cumulative"
+      },
+      "scheduled_hours": 0.1,
+      "available_hours": 0.09,
+      "productive_hours": 0.07,
+      "production_tonnes": 10.0,
+      "timestamp": "2026-11-11T18:05:58.000Z",
+      "engine_hours": 1000.08,
+      "hydraulic_pressure": 142.0,
+      "coolant_temperature": 84.0
+    },
+    {
+      "external_machine_id": "PY-DEVICE-001",
+      "event_id": "python-demo-2",
+      "test_data": true,
+      "fault_codes": [],
+      "units": {
+        "engine_hours": "h",
+        "scheduled_hours": "h",
+        "available_hours": "h",
+        "productive_hours": "h",
+        "production_tonnes": "t",
+        "coolant_temperature": "degC",
+        "hydraulic_pressure": "bar"
+      },
+      "counter_semantics": {
+        "engine_hours": "cumulative",
+        "scheduled_hours": "cumulative",
+        "available_hours": "cumulative",
+        "productive_hours": "cumulative",
+        "production_tonnes": "cumulative"
+      },
+      "scheduled_hours": 0.2,
+      "available_hours": 0.18,
+      "productive_hours": 0.14,
+      "production_tonnes": 20.0,
+      "timestamp": "2026-11-11T18:11:58.000Z",
+      "engine_hours": 1000.16,
+      "hydraulic_pressure": 145.0,
+      "coolant_temperature": 88.0
+    },
+    {
+      "external_machine_id": "PY-DEVICE-001",
+      "event_id": "python-demo-3",
+      "test_data": true,
+      "fault_codes": [],
+      "units": {
+        "engine_hours": "h",
+        "scheduled_hours": "h",
+        "available_hours": "h",
+        "productive_hours": "h",
+        "production_tonnes": "t",
+        "coolant_temperature": "degC",
+        "hydraulic_pressure": "bar"
+      },
+      "counter_semantics": {
+        "engine_hours": "cumulative",
+        "scheduled_hours": "cumulative",
+        "available_hours": "cumulative",
+        "productive_hours": "cumulative",
+        "production_tonnes": "cumulative"
+      },
+      "scheduled_hours": 0.30000000000000004,
+      "available_hours": 0.27,
+      "productive_hours": 0.21000000000000002,
+      "production_tonnes": 30.0,
+      "timestamp": "2026-11-11T18:17:58.000Z",
+      "engine_hours": 1000.24,
+      "hydraulic_pressure": 143.0,
+      "coolant_temperature": 95.0
+    },
+    {
+      "external_machine_id": "PY-DEVICE-001",
+      "event_id": "python-demo-4",
+      "test_data": true,
+      "fault_codes": [
+        {
+          "spn": 110,
+          "fmi": 0
+        },
+        "DEMO-UNKNOWN"
+      ],
+      "units": {
+        "engine_hours": "h",
+        "scheduled_hours": "h",
+        "available_hours": "h",
+        "productive_hours": "h",
+        "production_tonnes": "t",
+        "coolant_temperature": "degC",
+        "hydraulic_pressure": "bar"
+      },
+      "counter_semantics": {
+        "engine_hours": "cumulative",
+        "scheduled_hours": "cumulative",
+        "available_hours": "cumulative",
+        "productive_hours": "cumulative",
+        "production_tonnes": "cumulative"
+      },
+      "scheduled_hours": 0.4,
+      "available_hours": 0.36,
+      "productive_hours": 0.28,
+      "production_tonnes": 40.0,
+      "timestamp": "2026-11-11T18:23:58.000Z",
+      "engine_hours": 1000.32,
+      "hydraulic_pressure": 146.0,
+      "coolant_temperature": 106.0
+    },
+    {
+      "external_machine_id": "PY-DEVICE-001",
+      "event_id": "python-demo-5",
+      "test_data": true,
+      "fault_codes": [
+        {
+          "spn": 110,
+          "fmi": 0
+        },
+        "DEMO-UNKNOWN"
+      ],
+      "units": {
+        "engine_hours": "h",
+        "scheduled_hours": "h",
+        "available_hours": "h",
+        "productive_hours": "h",
+        "production_tonnes": "t",
+        "coolant_temperature": "degC",
+        "hydraulic_pressure": "bar"
+      },
+      "counter_semantics": {
+        "engine_hours": "cumulative",
+        "scheduled_hours": "cumulative",
+        "available_hours": "cumulative",
+        "productive_hours": "cumulative",
+        "production_tonnes": "cumulative"
+      },
+      "scheduled_hours": 0.5,
+      "available_hours": 0.44999999999999996,
+      "productive_hours": 0.35000000000000003,
+      "production_tonnes": 50.0,
+      "timestamp": "2026-11-11T18:29:58.000Z",
+      "engine_hours": 1000.4,
+      "hydraulic_pressure": 145.0,
+      "coolant_temperature": 110.0
+    }
+  ],
+  "result": {
+    "cycles": 1,
+    "schedulerError": null,
+    "readings": [
+      {
+        "id": 1,
+        "company_id": 1,
+        "machine_id": "PY-DEMO-ADT-001",
+        "recorded_at": "2026-11-11T17:59:58.000Z",
+        "engine_hours": 1000,
+        "ignition_status": null,
+        "latitude": null,
+        "longitude": null,
+        "fuel_level": null,
+        "odometer": null,
+        "hydraulic_pressure": 140,
+        "hydraulic_oil_level": null,
+        "engine_oil_pressure": null,
+        "coolant_temperature": 80,
+        "rpm": null,
+        "engine_load": null,
+        "fault_code": null,
+        "source": "SIMULATED:other:python-demo",
+        "raw_json": "{\"_invalid_fault_codes\":false,\"machine_id\":\"PY-DEMO-ADT-001\",\"timestamp\":\"2026-11-11T17:59:58.000Z\",\"engine_hours\":1000,\"ignition_status\":null,\"latitude\":null,\"longitude\":null,\"fuel_level\":null,\"odometer\":null,\"hydraulic_pressure\":140,\"hydraulic_oil_level\":null,\"engine_oil_pressure\":null,\"coolant_temperature\":80,\"rpm\":null,\"engine_load\":null,\"fault_code\":\"\",\"battery_voltage\":null,\"fuel_consumption_lph\":null,\"hydraulic_temperature\":null,\"transmission_temperature\":null,\"transmission_gear\":null,\"idle_hours\":null,\"cycle_count\":null,\"payload_tonnes\":null,\"production_tonnes\":0,\"service_due_hours\":null,\"machine_events\":null,\"test_data\":true,\"units\":{\"available_hours\":\"h\",\"coolant_temperature\":\"degC\",\"engine_hours\":\"h\",\"hydraulic_pressure\":\"bar\",\"production_tonnes\":\"t\",\"productive_hours\":\"h\",\"scheduled_hours\":\"h\"},\"counter_semantics\":{\"available_hours\":\"cumulative\",\"engine_hours\":\"cumulative\",\"production_tonnes\":\"cumulative\",\"productive_hours\":\"cumulative\",\"scheduled_hours\":\"cumulative\"},\"scheduled_hours\":0,\"available_hours\":0,\"productive_hours\":0,\"fuel_litres\":null,\"daily_production_target_tonnes\":null,\"daily_production_target_timezone\":null,\"breakdown_events\":null,\"equipment_health\":null,\"ingestion_key\":\"1:python-demo-0\"}",
+        "created_at": "2026-11-11T18:30:58.476Z"
+      },
+      {
+        "id": 2,
+        "company_id": 1,
+        "machine_id": "PY-DEMO-ADT-001",
+        "recorded_at": "2026-11-11T18:05:58.000Z",
+        "engine_hours": 1000.08,
+        "ignition_status": null,
+        "latitude": null,
+        "longitude": null,
+        "fuel_level": null,
+        "odometer": null,
+        "hydraulic_pressure": 142,
+        "hydraulic_oil_level": null,
+        "engine_oil_pressure": null,
+        "coolant_temperature": 84,
+        "rpm": null,
+        "engine_load": null,
+        "fault_code": null,
+        "source": "SIMULATED:other:python-demo",
+        "raw_json": "{\"_invalid_fault_codes\":false,\"machine_id\":\"PY-DEMO-ADT-001\",\"timestamp\":\"2026-11-11T18:05:58.000Z\",\"engine_hours\":1000.08,\"ignition_status\":null,\"latitude\":null,\"longitude\":null,\"fuel_level\":null,\"odometer\":null,\"hydraulic_pressure\":142,\"hydraulic_oil_level\":null,\"engine_oil_pressure\":null,\"coolant_temperature\":84,\"rpm\":null,\"engine_load\":null,\"fault_code\":\"\",\"battery_voltage\":null,\"fuel_consumption_lph\":null,\"hydraulic_temperature\":null,\"transmission_temperature\":null,\"transmission_gear\":null,\"idle_hours\":null,\"cycle_count\":null,\"payload_tonnes\":null,\"production_tonnes\":10,\"service_due_hours\":null,\"machine_events\":null,\"test_data\":true,\"units\":{\"available_hours\":\"h\",\"coolant_temperature\":\"degC\",\"engine_hours\":\"h\",\"hydraulic_pressure\":\"bar\",\"production_tonnes\":\"t\",\"productive_hours\":\"h\",\"scheduled_hours\":\"h\"},\"counter_semantics\":{\"available_hours\":\"cumulative\",\"engine_hours\":\"cumulative\",\"production_tonnes\":\"cumulative\",\"productive_hours\":\"cumulative\",\"scheduled_hours\":\"cumulative\"},\"scheduled_hours\":0.1,\"available_hours\":0.09,\"productive_hours\":0.07,\"fuel_litres\":null,\"daily_production_target_tonnes\":null,\"daily_production_target_timezone\":null,\"breakdown_events\":null,\"equipment_health\":null,\"ingestion_key\":\"1:python-demo-1\"}",
+        "created_at": "2026-11-11T18:30:58.480Z"
+      },
+      {
+        "id": 3,
+        "company_id": 1,
+        "machine_id": "PY-DEMO-ADT-001",
+        "recorded_at": "2026-11-11T18:11:58.000Z",
+        "engine_hours": 1000.16,
+        "ignition_status": null,
+        "latitude": null,
+        "longitude": null,
+        "fuel_level": null,
+        "odometer": null,
+        "hydraulic_pressure": 145,
+        "hydraulic_oil_level": null,
+        "engine_oil_pressure": null,
+        "coolant_temperature": 88,
+        "rpm": null,
+        "engine_load": null,
+        "fault_code": null,
+        "source": "SIMULATED:other:python-demo",
+        "raw_json": "{\"_invalid_fault_codes\":false,\"machine_id\":\"PY-DEMO-ADT-001\",\"timestamp\":\"2026-11-11T18:11:58.000Z\",\"engine_hours\":1000.16,\"ignition_status\":null,\"latitude\":null,\"longitude\":null,\"fuel_level\":null,\"odometer\":null,\"hydraulic_pressure\":145,\"hydraulic_oil_level\":null,\"engine_oil_pressure\":null,\"coolant_temperature\":88,\"rpm\":null,\"engine_load\":null,\"fault_code\":\"\",\"battery_voltage\":null,\"fuel_consumption_lph\":null,\"hydraulic_temperature\":null,\"transmission_temperature\":null,\"transmission_gear\":null,\"idle_hours\":null,\"cycle_count\":null,\"payload_tonnes\":null,\"production_tonnes\":20,\"service_due_hours\":null,\"machine_events\":null,\"test_data\":true,\"units\":{\"available_hours\":\"h\",\"coolant_temperature\":\"degC\",\"engine_hours\":\"h\",\"hydraulic_pressure\":\"bar\",\"production_tonnes\":\"t\",\"productive_hours\":\"h\",\"scheduled_hours\":\"h\"},\"counter_semantics\":{\"available_hours\":\"cumulative\",\"engine_hours\":\"cumulative\",\"production_tonnes\":\"cumulative\",\"productive_hours\":\"cumulative\",\"scheduled_hours\":\"cumulative\"},\"scheduled_hours\":0.2,\"available_hours\":0.18,\"productive_hours\":0.14,\"fuel_litres\":null,\"daily_production_target_tonnes\":null,\"daily_production_target_timezone\":null,\"breakdown_events\":null,\"equipment_health\":null,\"ingestion_key\":\"1:python-demo-2\"}",
+        "created_at": "2026-11-11T18:30:58.482Z"
+      },
+      {
+        "id": 4,
+        "company_id": 1,
+        "machine_id": "PY-DEMO-ADT-001",
+        "recorded_at": "2026-11-11T18:17:58.000Z",
+        "engine_hours": 1000.24,
+        "ignition_status": null,
+        "latitude": null,
+        "longitude": null,
+        "fuel_level": null,
+        "odometer": null,
+        "hydraulic_pressure": 143,
+        "hydraulic_oil_level": null,
+        "engine_oil_pressure": null,
+        "coolant_temperature": 95,
+        "rpm": null,
+        "engine_load": null,
+        "fault_code": null,
+        "source": "SIMULATED:other:python-demo",
+        "raw_json": "{\"_invalid_fault_codes\":false,\"machine_id\":\"PY-DEMO-ADT-001\",\"timestamp\":\"2026-11-11T18:17:58.000Z\",\"engine_hours\":1000.24,\"ignition_status\":null,\"latitude\":null,\"longitude\":null,\"fuel_level\":null,\"odometer\":null,\"hydraulic_pressure\":143,\"hydraulic_oil_level\":null,\"engine_oil_pressure\":null,\"coolant_temperature\":95,\"rpm\":null,\"engine_load\":null,\"fault_code\":\"\",\"battery_voltage\":null,\"fuel_consumption_lph\":null,\"hydraulic_temperature\":null,\"transmission_temperature\":null,\"transmission_gear\":null,\"idle_hours\":null,\"cycle_count\":null,\"payload_tonnes\":null,\"production_tonnes\":30,\"service_due_hours\":null,\"machine_events\":null,\"test_data\":true,\"units\":{\"available_hours\":\"h\",\"coolant_temperature\":\"degC\",\"engine_hours\":\"h\",\"hydraulic_pressure\":\"bar\",\"production_tonnes\":\"t\",\"productive_hours\":\"h\",\"scheduled_hours\":\"h\"},\"counter_semantics\":{\"available_hours\":\"cumulative\",\"engine_hours\":\"cumulative\",\"production_tonnes\":\"cumulative\",\"productive_hours\":\"cumulative\",\"scheduled_hours\":\"cumulative\"},\"scheduled_hours\":0.30000000000000004,\"available_hours\":0.27,\"productive_hours\":0.21000000000000002,\"fuel_litres\":null,\"daily_production_target_tonnes\":null,\"daily_production_target_timezone\":null,\"breakdown_events\":null,\"equipment_health\":null,\"ingestion_key\":\"1:python-demo-3\"}",
+        "created_at": "2026-11-11T18:30:58.485Z"
+      },
+      {
+        "id": 5,
+        "company_id": 1,
+        "machine_id": "PY-DEMO-ADT-001",
+        "recorded_at": "2026-11-11T18:23:58.000Z",
+        "engine_hours": 1000.32,
+        "ignition_status": null,
+        "latitude": null,
+        "longitude": null,
+        "fuel_level": null,
+        "odometer": null,
+        "hydraulic_pressure": 146,
+        "hydraulic_oil_level": null,
+        "engine_oil_pressure": null,
+        "coolant_temperature": 106,
+        "rpm": null,
+        "engine_load": null,
+        "fault_code": "SPN 110 FMI 0, DEMO-UNKNOWN",
+        "source": "SIMULATED:other:python-demo",
+        "raw_json": "{\"_invalid_fault_codes\":false,\"machine_id\":\"PY-DEMO-ADT-001\",\"timestamp\":\"2026-11-11T18:23:58.000Z\",\"engine_hours\":1000.32,\"ignition_status\":null,\"latitude\":null,\"longitude\":null,\"fuel_level\":null,\"odometer\":null,\"hydraulic_pressure\":146,\"hydraulic_oil_level\":null,\"engine_oil_pressure\":null,\"coolant_temperature\":106,\"rpm\":null,\"engine_load\":null,\"fault_code\":\"SPN 110 FMI 0, DEMO-UNKNOWN\",\"battery_voltage\":null,\"fuel_consumption_lph\":null,\"hydraulic_temperature\":null,\"transmission_temperature\":null,\"transmission_gear\":null,\"idle_hours\":null,\"cycle_count\":null,\"payload_tonnes\":null,\"production_tonnes\":40,\"service_due_hours\":null,\"machine_events\":null,\"test_data\":true,\"units\":{\"available_hours\":\"h\",\"coolant_temperature\":\"degC\",\"engine_hours\":\"h\",\"hydraulic_pressure\":\"bar\",\"production_tonnes\":\"t\",\"productive_hours\":\"h\",\"scheduled_hours\":\"h\"},\"counter_semantics\":{\"available_hours\":\"cumulative\",\"engine_hours\":\"cumulative\",\"production_tonnes\":\"cumulative\",\"productive_hours\":\"cumulative\",\"scheduled_hours\":\"cumulative\"},\"scheduled_hours\":0.4,\"available_hours\":0.36,\"productive_hours\":0.28,\"fuel_litres\":null,\"daily_production_target_tonnes\":null,\"daily_production_target_timezone\":null,\"breakdown_events\":null,\"equipment_health\":null,\"ingestion_key\":\"1:python-demo-4\"}",
+        "created_at": "2026-11-11T18:30:58.487Z"
+      },
+      {
+        "id": 6,
+        "company_id": 1,
+        "machine_id": "PY-DEMO-ADT-001",
+        "recorded_at": "2026-11-11T18:29:58.000Z",
+        "engine_hours": 1000.4,
+        "ignition_status": null,
+        "latitude": null,
+        "longitude": null,
+        "fuel_level": null,
+        "odometer": null,
+        "hydraulic_pressure": 145,
+        "hydraulic_oil_level": null,
+        "engine_oil_pressure": null,
+        "coolant_temperature": 110,
+        "rpm": null,
+        "engine_load": null,
+        "fault_code": "SPN 110 FMI 0, DEMO-UNKNOWN",
+        "source": "SIMULATED:other:python-demo",
+        "raw_json": "{\"_invalid_fault_codes\":false,\"machine_id\":\"PY-DEMO-ADT-001\",\"timestamp\":\"2026-11-11T18:29:58.000Z\",\"engine_hours\":1000.4,\"ignition_status\":null,\"latitude\":null,\"longitude\":null,\"fuel_level\":null,\"odometer\":null,\"hydraulic_pressure\":145,\"hydraulic_oil_level\":null,\"engine_oil_pressure\":null,\"coolant_temperature\":110,\"rpm\":null,\"engine_load\":null,\"fault_code\":\"SPN 110 FMI 0, DEMO-UNKNOWN\",\"battery_voltage\":null,\"fuel_consumption_lph\":null,\"hydraulic_temperature\":null,\"transmission_temperature\":null,\"transmission_gear\":null,\"idle_hours\":null,\"cycle_count\":null,\"payload_tonnes\":null,\"production_tonnes\":50,\"service_due_hours\":null,\"machine_events\":null,\"test_data\":true,\"units\":{\"available_hours\":\"h\",\"coolant_temperature\":\"degC\",\"engine_hours\":\"h\",\"hydraulic_pressure\":\"bar\",\"production_tonnes\":\"t\",\"productive_hours\":\"h\",\"scheduled_hours\":\"h\"},\"counter_semantics\":{\"available_hours\":\"cumulative\",\"engine_hours\":\"cumulative\",\"production_tonnes\":\"cumulative\",\"productive_hours\":\"cumulative\",\"scheduled_hours\":\"cumulative\"},\"scheduled_hours\":0.5,\"available_hours\":0.44999999999999996,\"productive_hours\":0.35000000000000003,\"fuel_litres\":null,\"daily_production_target_tonnes\":null,\"daily_production_target_timezone\":null,\"breakdown_events\":null,\"equipment_health\":null,\"ingestion_key\":\"1:python-demo-5\"}",
+        "created_at": "2026-11-11T18:30:58.490Z"
+      }
+    ],
+    "receipts": [
+      {
+        "telemetry_id": 1,
+        "company_id": 1,
+        "analysed_at": "2026-11-11T18:31:00.452Z"
+      },
+      {
+        "telemetry_id": 2,
+        "company_id": 1,
+        "analysed_at": "2026-11-11T18:31:00.452Z"
+      },
+      {
+        "telemetry_id": 3,
+        "company_id": 1,
+        "analysed_at": "2026-11-11T18:31:00.452Z"
+      },
+      {
+        "telemetry_id": 4,
+        "company_id": 1,
+        "analysed_at": "2026-11-11T18:31:00.452Z"
+      },
+      {
+        "telemetry_id": 5,
+        "company_id": 1,
+        "analysed_at": "2026-11-11T18:31:00.452Z"
+      },
+      {
+        "telemetry_id": 6,
+        "company_id": 1,
+        "analysed_at": "2026-11-11T18:31:00.452Z"
+      }
+    ],
+    "findings": [
+      {
+        "id": 1,
+        "company_id": 1,
+        "machine_id": "PY-DEMO-ADT-001",
+        "telemetry_id": 5,
+        "source_mode": "simulation",
+        "category": "diagnostic_code",
+        "severity": "review",
+        "diagnostic_code": "SPN 110 FMI 0",
+        "details": "Engine coolant temperature \u2014 Data valid but above normal operating range \u2014 most severe level [Engine cooling; reference mapped; verify OEM applicability]",
+        "recommendation": "Confirm OEM applicability, occurrence state and machine-specific service procedure.",
+        "created_at": "2026-11-11T18:31:00.452Z"
+      },
+      {
+        "id": 2,
+        "company_id": 1,
+        "machine_id": "PY-DEMO-ADT-001",
+        "telemetry_id": 5,
+        "source_mode": "simulation",
+        "category": "diagnostic_code",
+        "severity": "review",
+        "diagnostic_code": "DEMO-UNKNOWN",
+        "details": "Unmapped or proprietary diagnostic identifier; verified OEM documentation required. [Unknown; definition required \u2014 OEM definition required]",
+        "recommendation": "Confirm OEM applicability, occurrence state and machine-specific service procedure.",
+        "created_at": "2026-11-11T18:31:00.452Z"
+      },
+      {
+        "id": 3,
+        "company_id": 1,
+        "machine_id": "PY-DEMO-ADT-001",
+        "telemetry_id": 5,
+        "source_mode": "simulation",
+        "category": "coolant_temperature",
+        "severity": "review",
+        "diagnostic_code": "",
+        "details": "Simulated coolant temperature 106 \u00b0C exceeds an illustrative screen; this is not an OEM-approved alarm.",
+        "recommendation": "Verify sensor units and the machine-specific approved limit.",
+        "created_at": "2026-11-11T18:31:00.452Z"
+      },
+      {
+        "id": 4,
+        "company_id": 1,
+        "machine_id": "PY-DEMO-ADT-001",
+        "telemetry_id": 6,
+        "source_mode": "simulation",
+        "category": "diagnostic_code",
+        "severity": "review",
+        "diagnostic_code": "SPN 110 FMI 0",
+        "details": "Engine coolant temperature \u2014 Data valid but above normal operating range \u2014 most severe level [Engine cooling; reference mapped; verify OEM applicability]",
+        "recommendation": "Confirm OEM applicability, occurrence state and machine-specific service procedure.",
+        "created_at": "2026-11-11T18:31:00.452Z"
+      },
+      {
+        "id": 5,
+        "company_id": 1,
+        "machine_id": "PY-DEMO-ADT-001",
+        "telemetry_id": 6,
+        "source_mode": "simulation",
+        "category": "diagnostic_code",
+        "severity": "review",
+        "diagnostic_code": "DEMO-UNKNOWN",
+        "details": "Unmapped or proprietary diagnostic identifier; verified OEM documentation required. [Unknown; definition required \u2014 OEM definition required]",
+        "recommendation": "Confirm OEM applicability, occurrence state and machine-specific service procedure.",
+        "created_at": "2026-11-11T18:31:00.452Z"
+      },
+      {
+        "id": 6,
+        "company_id": 1,
+        "machine_id": "PY-DEMO-ADT-001",
+        "telemetry_id": 6,
+        "source_mode": "simulation",
+        "category": "coolant_temperature",
+        "severity": "review",
+        "diagnostic_code": "",
+        "details": "Simulated coolant temperature 110 \u00b0C exceeds an illustrative screen; this is not an OEM-approved alarm.",
+        "recommendation": "Verify sensor units and the machine-specific approved limit.",
+        "created_at": "2026-11-11T18:31:00.452Z"
+      }
+    ],
+    "reports": [
+      {
+        "version": 3,
+        "latest_sensors": {
+          "engine_hours": {
+            "value": 1000.4,
+            "unit": "h"
+          },
+          "coolant_temperature": {
+            "value": 110,
+            "unit": "degC"
+          },
+          "hydraulic_pressure": {
+            "value": 145,
+            "unit": "bar"
+          }
+        },
+        "company_id": 1,
+        "machine_id": "PY-DEMO-ADT-001",
+        "period": "daily",
+        "period_start": "2026-11-10T18:31:00.452Z",
+        "period_end": "2026-11-11T18:31:00.452Z",
+        "source_mode": "simulation",
+        "generated_at": "2026-11-11T18:31:00.452Z",
+        "reading_count": 6,
+        "fault_readings": 2,
+        "first_hours": 1000,
+        "last_hours": 1000.4,
+        "metrics": {
+          "reading_count": 6,
+          "valid_intervals": 5,
+          "observed_hours": 0.5,
+          "operating_hours": 0.4,
+          "engine_runtime_percent": 80,
+          "idle_hours": null,
+          "production_tonnes": 50,
+          "scheduled_hours": 0.5,
+          "available_hours": 0.45,
+          "productive_hours": 0.35,
+          "reported_downtime_hours": 0.05,
+          "availability_percent": 90,
+          "utilisation_percent": 77.78,
+          "scheduled_utilisation_percent": 70,
+          "kpi_coverage": "complete",
+          "confirmed_downtime_hours": null
+        },
+        "findings": [
+          {
+            "telemetry_id": 6,
+            "recorded_at": "2026-11-11T18:29:58.000Z",
+            "category": "coolant_temperature",
+            "severity": "review",
+            "diagnostic_code": "",
+            "details": "Simulated coolant temperature 110 \u00b0C exceeds an illustrative screen; this is not an OEM-approved alarm.",
+            "recommendation": "Verify sensor units and the machine-specific approved limit."
+          },
+          {
+            "telemetry_id": 6,
+            "recorded_at": "2026-11-11T18:29:58.000Z",
+            "category": "diagnostic_code",
+            "severity": "review",
+            "diagnostic_code": "DEMO-UNKNOWN",
+            "details": "Unmapped or proprietary diagnostic identifier; verified OEM documentation required. [Unknown; definition required \u2014 OEM definition required]",
+            "recommendation": "Confirm OEM applicability, occurrence state and machine-specific service procedure."
+          },
+          {
+            "telemetry_id": 6,
+            "recorded_at": "2026-11-11T18:29:58.000Z",
+            "category": "diagnostic_code",
+            "severity": "review",
+            "diagnostic_code": "SPN 110 FMI 0",
+            "details": "Engine coolant temperature \u2014 Data valid but above normal operating range \u2014 most severe level [Engine cooling; reference mapped; verify OEM applicability]",
+            "recommendation": "Confirm OEM applicability, occurrence state and machine-specific service procedure."
+          },
+          {
+            "telemetry_id": 5,
+            "recorded_at": "2026-11-11T18:23:58.000Z",
+            "category": "coolant_temperature",
+            "severity": "review",
+            "diagnostic_code": "",
+            "details": "Simulated coolant temperature 106 \u00b0C exceeds an illustrative screen; this is not an OEM-approved alarm.",
+            "recommendation": "Verify sensor units and the machine-specific approved limit."
+          },
+          {
+            "telemetry_id": 5,
+            "recorded_at": "2026-11-11T18:23:58.000Z",
+            "category": "diagnostic_code",
+            "severity": "review",
+            "diagnostic_code": "DEMO-UNKNOWN",
+            "details": "Unmapped or proprietary diagnostic identifier; verified OEM documentation required. [Unknown; definition required \u2014 OEM definition required]",
+            "recommendation": "Confirm OEM applicability, occurrence state and machine-specific service procedure."
+          },
+          {
+            "telemetry_id": 5,
+            "recorded_at": "2026-11-11T18:23:58.000Z",
+            "category": "diagnostic_code",
+            "severity": "review",
+            "diagnostic_code": "SPN 110 FMI 0",
+            "details": "Engine coolant temperature \u2014 Data valid but above normal operating range \u2014 most severe level [Engine cooling; reference mapped; verify OEM applicability]",
+            "recommendation": "Confirm OEM applicability, occurrence state and machine-specific service procedure."
+          }
+        ],
+        "findings_truncated": false,
+        "readings_truncated": false,
+        "analysis_pending": 0,
+        "analysis_window": "Durable FIFO analysis receipts; reports disclose any remaining backlog and truncation.",
+        "notes": [
+          "SIMULATED DATA ONLY \u2014 not actual equipment conditions.",
+          "Rolling observation window, not a certified calendar-period production return.",
+          "Fault observations do not establish root cause, downtime or repair completion. Missing unsupported measurements remain unknown."
+        ]
+      },
+      {
+        "version": 3,
+        "latest_sensors": {
+          "engine_hours": {
+            "value": 1000.4,
+            "unit": "h"
+          },
+          "coolant_temperature": {
+            "value": 110,
+            "unit": "degC"
+          },
+          "hydraulic_pressure": {
+            "value": 145,
+            "unit": "bar"
+          }
+        },
+        "company_id": 1,
+        "machine_id": "PY-DEMO-ADT-001",
+        "period": "weekly",
+        "period_start": "2026-11-04T18:31:00.452Z",
+        "period_end": "2026-11-11T18:31:00.452Z",
+        "source_mode": "simulation",
+        "generated_at": "2026-11-11T18:31:00.452Z",
+        "reading_count": 6,
+        "fault_readings": 2,
+        "first_hours": 1000,
+        "last_hours": 1000.4,
+        "metrics": {
+          "reading_count": 6,
+          "valid_intervals": 5,
+          "observed_hours": 0.5,
+          "operating_hours": 0.4,
+          "engine_runtime_percent": 80,
+          "idle_hours": null,
+          "production_tonnes": 50,
+          "scheduled_hours": 0.5,
+          "available_hours": 0.45,
+          "productive_hours": 0.35,
+          "reported_downtime_hours": 0.05,
+          "availability_percent": 90,
+          "utilisation_percent": 77.78,
+          "scheduled_utilisation_percent": 70,
+          "kpi_coverage": "complete",
+          "confirmed_downtime_hours": null
+        },
+        "findings": [
+          {
+            "telemetry_id": 6,
+            "recorded_at": "2026-11-11T18:29:58.000Z",
+            "category": "coolant_temperature",
+            "severity": "review",
+            "diagnostic_code": "",
+            "details": "Simulated coolant temperature 110 \u00b0C exceeds an illustrative screen; this is not an OEM-approved alarm.",
+            "recommendation": "Verify sensor units and the machine-specific approved limit."
+          },
+          {
+            "telemetry_id": 6,
+            "recorded_at": "2026-11-11T18:29:58.000Z",
+            "category": "diagnostic_code",
+            "severity": "review",
+            "diagnostic_code": "DEMO-UNKNOWN",
+            "details": "Unmapped or proprietary diagnostic identifier; verified OEM documentation required. [Unknown; definition required \u2014 OEM definition required]",
+            "recommendation": "Confirm OEM applicability, occurrence state and machine-specific service procedure."
+          },
+          {
+            "telemetry_id": 6,
+            "recorded_at": "2026-11-11T18:29:58.000Z",
+            "category": "diagnostic_code",
+            "severity": "review",
+            "diagnostic_code": "SPN 110 FMI 0",
+            "details": "Engine coolant temperature \u2014 Data valid but above normal operating range \u2014 most severe level [Engine cooling; reference mapped; verify OEM applicability]",
+            "recommendation": "Confirm OEM applicability, occurrence state and machine-specific service procedure."
+          },
+          {
+            "telemetry_id": 5,
+            "recorded_at": "2026-11-11T18:23:58.000Z",
+            "category": "coolant_temperature",
+            "severity": "review",
+            "diagnostic_code": "",
+            "details": "Simulated coolant temperature 106 \u00b0C exceeds an illustrative screen; this is not an OEM-approved alarm.",
+            "recommendation": "Verify sensor units and the machine-specific approved limit."
+          },
+          {
+            "telemetry_id": 5,
+            "recorded_at": "2026-11-11T18:23:58.000Z",
+            "category": "diagnostic_code",
+            "severity": "review",
+            "diagnostic_code": "DEMO-UNKNOWN",
+            "details": "Unmapped or proprietary diagnostic identifier; verified OEM documentation required. [Unknown; definition required \u2014 OEM definition required]",
+            "recommendation": "Confirm OEM applicability, occurrence state and machine-specific service procedure."
+          },
+          {
+            "telemetry_id": 5,
+            "recorded_at": "2026-11-11T18:23:58.000Z",
+            "category": "diagnostic_code",
+            "severity": "review",
+            "diagnostic_code": "SPN 110 FMI 0",
+            "details": "Engine coolant temperature \u2014 Data valid but above normal operating range \u2014 most severe level [Engine cooling; reference mapped; verify OEM applicability]",
+            "recommendation": "Confirm OEM applicability, occurrence state and machine-specific service procedure."
+          }
+        ],
+        "findings_truncated": false,
+        "readings_truncated": false,
+        "analysis_pending": 0,
+        "analysis_window": "Durable FIFO analysis receipts; reports disclose any remaining backlog and truncation.",
+        "notes": [
+          "SIMULATED DATA ONLY \u2014 not actual equipment conditions.",
+          "Rolling observation window, not a certified calendar-period production return.",
+          "Fault observations do not establish root cause, downtime or repair completion. Missing unsupported measurements remain unknown."
+        ]
+      },
+      {
+        "version": 3,
+        "latest_sensors": {
+          "engine_hours": {
+            "value": 1000.4,
+            "unit": "h"
+          },
+          "coolant_temperature": {
+            "value": 110,
+            "unit": "degC"
+          },
+          "hydraulic_pressure": {
+            "value": 145,
+            "unit": "bar"
+          }
+        },
+        "company_id": 1,
+        "machine_id": "PY-DEMO-ADT-001",
+        "period": "monthly",
+        "period_start": "2026-10-12T18:31:00.452Z",
+        "period_end": "2026-11-11T18:31:00.452Z",
+        "source_mode": "simulation",
+        "generated_at": "2026-11-11T18:31:00.452Z",
+        "reading_count": 6,
+        "fault_readings": 2,
+        "first_hours": 1000,
+        "last_hours": 1000.4,
+        "metrics": {
+          "reading_count": 6,
+          "valid_intervals": 5,
+          "observed_hours": 0.5,
+          "operating_hours": 0.4,
+          "engine_runtime_percent": 80,
+          "idle_hours": null,
+          "production_tonnes": 50,
+          "scheduled_hours": 0.5,
+          "available_hours": 0.45,
+          "productive_hours": 0.35,
+          "reported_downtime_hours": 0.05,
+          "availability_percent": 90,
+          "utilisation_percent": 77.78,
+          "scheduled_utilisation_percent": 70,
+          "kpi_coverage": "complete",
+          "confirmed_downtime_hours": null
+        },
+        "findings": [
+          {
+            "telemetry_id": 6,
+            "recorded_at": "2026-11-11T18:29:58.000Z",
+            "category": "coolant_temperature",
+            "severity": "review",
+            "diagnostic_code": "",
+            "details": "Simulated coolant temperature 110 \u00b0C exceeds an illustrative screen; this is not an OEM-approved alarm.",
+            "recommendation": "Verify sensor units and the machine-specific approved limit."
+          },
+          {
+            "telemetry_id": 6,
+            "recorded_at": "2026-11-11T18:29:58.000Z",
+            "category": "diagnostic_code",
+            "severity": "review",
+            "diagnostic_code": "DEMO-UNKNOWN",
+            "details": "Unmapped or proprietary diagnostic identifier; verified OEM documentation required. [Unknown; definition required \u2014 OEM definition required]",
+            "recommendation": "Confirm OEM applicability, occurrence state and machine-specific service procedure."
+          },
+          {
+            "telemetry_id": 6,
+            "recorded_at": "2026-11-11T18:29:58.000Z",
+            "category": "diagnostic_code",
+            "severity": "review",
+            "diagnostic_code": "SPN 110 FMI 0",
+            "details": "Engine coolant temperature \u2014 Data valid but above normal operating range \u2014 most severe level [Engine cooling; reference mapped; verify OEM applicability]",
+            "recommendation": "Confirm OEM applicability, occurrence state and machine-specific service procedure."
+          },
+          {
+            "telemetry_id": 5,
+            "recorded_at": "2026-11-11T18:23:58.000Z",
+            "category": "coolant_temperature",
+            "severity": "review",
+            "diagnostic_code": "",
+            "details": "Simulated coolant temperature 106 \u00b0C exceeds an illustrative screen; this is not an OEM-approved alarm.",
+            "recommendation": "Verify sensor units and the machine-specific approved limit."
+          },
+          {
+            "telemetry_id": 5,
+            "recorded_at": "2026-11-11T18:23:58.000Z",
+            "category": "diagnostic_code",
+            "severity": "review",
+            "diagnostic_code": "DEMO-UNKNOWN",
+            "details": "Unmapped or proprietary diagnostic identifier; verified OEM documentation required. [Unknown; definition required \u2014 OEM definition required]",
+            "recommendation": "Confirm OEM applicability, occurrence state and machine-specific service procedure."
+          },
+          {
+            "telemetry_id": 5,
+            "recorded_at": "2026-11-11T18:23:58.000Z",
+            "category": "diagnostic_code",
+            "severity": "review",
+            "diagnostic_code": "SPN 110 FMI 0",
+            "details": "Engine coolant temperature \u2014 Data valid but above normal operating range \u2014 most severe level [Engine cooling; reference mapped; verify OEM applicability]",
+            "recommendation": "Confirm OEM applicability, occurrence state and machine-specific service procedure."
+          }
+        ],
+        "findings_truncated": false,
+        "readings_truncated": false,
+        "analysis_pending": 0,
+        "analysis_window": "Durable FIFO analysis receipts; reports disclose any remaining backlog and truncation.",
+        "notes": [
+          "SIMULATED DATA ONLY \u2014 not actual equipment conditions.",
+          "Rolling observation window, not a certified calendar-period production return.",
+          "Fault observations do not establish root cause, downtime or repair completion. Missing unsupported measurements remain unknown."
+        ]
+      }
+    ],
+    "deliveries": [],
+    "registeredHourMeter": 1000
+  }
+}
