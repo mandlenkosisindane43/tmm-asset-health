@@ -204,6 +204,7 @@ def main():
         parser.error('Check port and nonnegative delays')
     if not shutil.which('node'):
         parser.error('Node 24+ is required alongside Python. In Codespaces use: nvm install 24')
+    urllib.request.install_opener(urllib.request.build_opener(urllib.request.ProxyHandler({})))
     process = subprocess.Popen(['node','--disable-warning=ExperimentalWarning',str(ROOT/'tools/python_demo_host.mjs')],
                                stdout=subprocess.PIPE, text=True)
     server = None
@@ -237,7 +238,11 @@ def main():
                     pass
             def log_message(self, *_):
                 pass
-        server = ThreadingHTTPServer(('127.0.0.1', args.port), Handler)
+        try:
+            server = ThreadingHTTPServer(('127.0.0.1', 0 if args.self_test else args.port), Handler)
+        except OSError as error:
+            raise RuntimeError('Cannot open viewer port ' + str(args.port) + '; try --port 8002. ' + str(error)) from error
+        port = server.server_address[1]
         threads = [threading.Thread(target=viewer.watch, daemon=True),
                    threading.Thread(target=viewer.produce, daemon=True)]
         for thread in threads:
