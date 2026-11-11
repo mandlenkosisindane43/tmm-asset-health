@@ -81,3 +81,11 @@ Analysis consumes up to 50 queued observations in FIFO order per scheduled invoc
 The isolated staging deployment is gated on all Node tests, Python tests, the new engine's strict type check and the build. A read-only post-deployment observer waits for the normal scheduler and checks fresh analysis receipts and version-3 report documents. It does not invoke the simulator or report generation.
 
 Actual device collection and OEM connectivity remain the final integration step. No physical machine or external notification delivery is certified by passing software tests. Browser visual QA requires an authenticated preview environment; the local preview's remote AI binding currently requires a Cloudflare login, so the built Worker route tests provide functional rather than visual browser coverage.
+
+## Recorded staging verification — 11 November 2026
+
+Source commit `6251791d5d4ad835a989afecd302cf543326ca6b` passed [deployment #77](https://github.com/mandlenkosisindane43/tmm-asset-health/actions/runs/42982376690). GitHub ran 60 Node tests (60 passed, zero failures), five Python tests and the new engine's strict type check, then deployed to the dedicated light-staging Worker.
+
+At 10:02 SAST the read-only observer confirmed a normal unattended cycle had produced **1 fresh accepted intake linked to storage, 50 analysis receipts and 3 version-3 report documents**. It also found 11 stored SPN 110 FMI 0 findings with the mapped engine-coolant interpretation. The findings count is stored diagnostic evidence, not a claim that all eleven findings came from the single fresh reading. This proves a scheduled batch, not an assertion that every historical backlog item or physical machine has been validated.
+
+The deployed sign-in page was observed loading. Authenticated routes were verified in the isolated built-Worker runtime; live authenticated visual review remains the next user check. External email-provider calls were mocked in tests, and no test email was sent. Actual machine/network collection and actual inbox delivery remain outside this verification.
