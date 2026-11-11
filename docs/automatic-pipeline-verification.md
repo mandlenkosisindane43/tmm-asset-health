@@ -39,10 +39,16 @@ The integration suite executes the actual TypeScript intake, storage, analyser, 
 
 The existing dashboard analytics suite has three baseline failures, reproduced unchanged at starting commit `8cc4c4a`: empty-chart wording, dashboard action expectations and machine-history wording. These are separate from the telemetry suite. Repository-wide TypeScript diagnostics also predate this work, including missing Cloudflare binding types; a successful bundle is not a clean TypeScript check.
 
+## Observed staging result — 11 November 2026
+
+Deployment [#76](https://github.com/mandlenkosisindane43/tmm-asset-health/actions/runs/42975743278), source commit `598c04e57dbe6b13a82140f0468692cebe1333a7`, passed its tests, build, isolated binding checks and deployment. At 09:01 SAST, the read-only observer confirmed the normal scheduled run had produced **1 fresh accepted intake linked to central storage and 3 fresh automatic report documents**. It also found **10 stored SPN 110 FMI 0 findings with the mapped engine-coolant interpretation**. The observer did not invoke intake, the simulator or report generation. The 10 findings are stored diagnostic evidence, not a claim that all 10 were produced by the new reading.
+
+Local verification passed 9 telemetry integration tests and 4 Python bridge reliability tests. The selected navigation, period-report and role regression checks also passed (26 Node tests including the 9 telemetry tests, plus 4 Python tests). The separate three baseline dashboard failures below remain unchanged.
+
 ## Scope and remaining checks
 
 - These tests verify a simulated software flow, not an attached machine or a live OEM network.
-- Staging's clock-triggered execution and saved records must also be observed after deploying this commit. A local test is not deployment evidence.
+- The deployed scheduled simulation flow has been observed as recorded above. Live machine/network behavior and a complete browser-by-browser UI audit remain separate checks.
 - The simulator remains explicitly enabled per staging company; existing SAS ADT 027 demo enrollment respects a saved disabled setting. It is not enabled for arbitrary customer equipment.
 - Current staging analysis/reporting selects at most ten simulated machines per scheduled run and screens each machine's latest fifty readings. This pilot limit is not a fleet-scale throughput guarantee. Report documents include up to 200 stored findings and disclose truncation.
 - Reference definitions currently map SPN 110 and the explicitly listed FMI descriptions. This is not a complete CAT/Volvo/Komatsu diagnostic database or confirmed root-cause diagnosis.
