@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "name": "Illustrative central-hub format — not an Exxaro specification",
+  "test_data": true,
+  "fields": {
+    "external_machine_id": "equipment.id",
+    "event_id": "message.id",
+    "timestamp": {"path": "message.time", "type": "iso8601"},
+    "engine_hours": {"path": "readings.SMR", "type": "number", "unit": "h"},
+    "coolant_temperature": {"path": "readings.coolantC", "type": "number", "unit": "degC"},
+    "engine_oil_pressure": {"path": "readings.oilBar", "type": "number", "scale": 100, "unit": "kPa"},
+    "asset.serial_number": "equipment.serial",
+    "asset.manufacturer": "equipment.make",
+    "asset.model": "equipment.model",
+    "asset.machine_type": "equipment.type",
+    "asset.next_service_hours": {"path": "service.nextMeter", "type": "number"},
+    "asset.service_reference": "service.reference"
+  },
+  "faults": {"spn_path": "diagnostics.SPN", "fmi_path": "diagnostics.FMI", "codes_path": "diagnostics.vendorCodes"}
+}

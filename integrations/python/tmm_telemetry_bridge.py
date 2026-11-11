@@ -185,10 +185,18 @@ class Outbox:
 def main():
     parser = argparse.ArgumentParser(description="Forward authorised OEM readings to TMM")
     parser.add_argument("file", nargs="?", default="-", help="NDJSON file exported by authorised OEM/Arduino gateway")
+    parser.add_argument("--mapping", help="JSON source field mapping; omit for existing canonical input")
     parser.add_argument("--dry-run", action="store_true", help="Validate and display normalized records without sending")
     parser.add_argument("--spool", default=os.getenv("TMM_TELEMETRY_SPOOL", "tmm-telemetry-outbox.sqlite3"), help="Durable local queue, replayed automatically on startup")
     parser.add_argument("--retry-limit", type=int, default=5, help="Automatic network retries per observation")
     args = parser.parse_args()
+    adapter = None
+    if args.mapping:
+        from tmm_source_adapter import SourceAdapter
+        try:
+            adapter = SourceAdapter.from_file(args.mapping)
+        except (ValueError, OSError) as exc:
+            parser.error("Invalid adapter configuration: " + str(exc))
     endpoint = os.getenv("TMM_TELEMETRY_ENDPOINT", "").strip()
     source = os.getenv("TMM_TELEMETRY_SOURCE", "").strip()
     token = os.getenv("TMM_TELEMETRY_TOKEN", "").strip()
@@ -206,7 +214,8 @@ def main():
                 if not line.strip():
                     continue
                 try:
-                    reading = normalize(json.loads(line))
+                    record = json.loads(line)
+                    reading = normalize(adapter.translate(record) if adapter else record)
                 except (ValueError, TypeError) as exc:
                     if args.dry_run:
                         raise SystemExit("Invalid record on line %s: %s" % (lineno, exc))

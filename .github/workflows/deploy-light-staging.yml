@@ -44,7 +44,7 @@ jobs:
       - name: Verify automatic pipeline, dashboards and built Worker
         run: |
           node --test tests/*.test.mjs
-          python3 -m unittest discover -s tests -p test_telemetry_bridge.py
+          python3 -m unittest discover -s tests -p 'test_*.py'
           npx tsc worker/telemetry-automation.ts --noEmit --strict --target ES2022 --module esnext --moduleResolution bundler --skipLibCheck
       - name: Isolate staging root from application request chain
         run: |
