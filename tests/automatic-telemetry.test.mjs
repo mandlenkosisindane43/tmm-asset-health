@@ -376,17 +376,19 @@ test('historical replay cannot replace the most recent alert state or double-cou
  assert.equal(alert.latest_telemetry_id,1);assert.equal(alert.occurrences,2);
 });
 
-async function dashboardHarness(search,fetcher){
+async function dashboardHarness(search,fetcher,interactive=false){
  const html=await automationModule.automaticDashboard('UI Test',new URL('https://test.invalid/telemetry/automatic'+search)).text();
- const fields=Object.fromEntries(Object.entries({section:'dashboard',mode:'live',from:'',to:'',site:'',machine:''}).map(([name,value])=>[name,{name,value}]));
+ const fields=Object.fromEntries(Object.entries({section:'dashboard',mode:'live',from:'',to:'',site:'',machine:'',cause:'',health:''}).map(([name,value])=>[name,{name,value}]));
  const form={...fields,elements:Object.values(fields),addEventListener(name,callback){this.onchange=callback}};
  const nodes=Object.fromEntries(['status','cards','overviewCharts','machineCharts','coverageStrip','machineIdentity','attention','fleet','daily','sensors','findings','reports','notes'].map(name=>['#'+name,{textContent:'',innerHTML:''}]));
  const panels=['coverage','identity','overview','attention','machineCharts','definitions','fleet','daily','sensors','findings','reports','notes'].map(section=>({dataset:{section},hidden:false}));
+ const handlers={},navigation=[],storage=new Map();
+ if(interactive)for(const id of ['machineSearch','searchResults','notificationCount','notificationList','connectionSummary','connectionDetails','activeChartFilters','timelineKind','machineTimeline','markNotificationsRead','chartTooltip'])nodes['#'+id]={textContent:'',innerHTML:'',value:'',hidden:false,style:{},events:{},addEventListener(name,fn){this.events[name]=fn}};
  const timers=[];let interval;
- const context=vm.createContext({URLSearchParams,AbortController,FormData:class{constructor(f){this.f=f}*[Symbol.iterator](){for(const field of this.f.elements)yield[field.name,field.value]}},document:{querySelector:s=>s==='#filters'?form:nodes[s],querySelectorAll:()=>panels},location:{search},history:{replaceState(){}},fetch:fetcher,setTimeout(callback,delay){timers.push({callback,delay});return timers.length},clearTimeout(){},setInterval(callback){interval=callback},console});
+ const context=vm.createContext({URLSearchParams,AbortController,FormData:class{constructor(f){this.f=f}*[Symbol.iterator](){for(const field of this.f.elements)yield[field.name,field.value]}},document:{querySelector:s=>s==='#filters'?form:nodes[s],querySelectorAll:()=>panels,addEventListener(name,fn){handlers[name]=fn}},localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)},location:{search,assign:path=>navigation.push(path)},history:{replaceState(){}},fetch:fetcher,setTimeout(callback,delay){timers.push({callback,delay});return timers.length},clearTimeout(){},setInterval(callback){interval=callback},console});
  vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1],context);
  const settle=()=>new Promise(resolve=>setImmediate(resolve));await settle();
- return {html,form,nodes,panels,timers,interval,settle};
+ return {html,form,nodes,panels,timers,interval,settle,handlers,navigation,storage};
 }
 function dashboardResponse(mode='live',to='2026-11-11'){return {ok:true,json:async()=>({source_mode:mode,filters:{from:'2026-11-04',to},sites:['North'],machines:[],reports:[],notes:[],analysis_pending:0,analysis_retrying:0,run:{}})}}
 
@@ -560,4 +562,51 @@ test('authorised intake preserves engineering facts through central storage into
  assert.equal(d.performance.days[0].target,500);assert.equal(d.performance.days[0].breakdowns,1);assert.equal(d.performance.pareto[0].hours,2);assert.equal(d.performance.health.watch,1);
  const other=await automationModule.automaticFleetData(env,2,new URL('https://test.invalid/api/telemetry/automatic?mode=simulation&from='+date+'&to='+date));assert.equal(other.performance.pareto.length,0);
  const live=await automationModule.automaticFleetData(env,1,new URL('https://test.invalid/api/telemetry/automatic?mode=live&from='+date+'&to='+date));assert.equal(live.performance.pareto.length,0);assert.equal(live.performance.health.watch,0);
+});
+
+test('workspace search, notifications, timeline filters and chart controls operate on central records',async()=>{
+ const date='2026-11-11',m={machine_id:'ADT-1',site:'North',machine_type:'ADT',stale:true,reading_count:2,current_hour_meter:100,hours_to_service:5,service_status:'due_soon',daily_summaries:[],findings:[],readings:[],performance:{downtime_hours:2}};
+ const payload={...await dashboardResponse().json(),company_id:1,machines:[m],catalog:[{machine_id:'ADT-1',serial_number:'SERIAL-543',model:'Model X',type:'ADT',site:'North',external_ids:['OEM-123']}],notifications:[{id:'ADT:stale',machine_id:'ADT-1',title:'Stale data',detail:'No fresh readings'}],timeline:[{id:'r1',at:date+'T10:00:00Z',kind:'reading',title:'Machine reading',detail:'100 h'},{id:'f1',at:date+'T11:00:00Z',kind:'fault',title:'SPN 110 FMI 0',detail:'Received finding'}],connections:[{connection_name:'Device A',provider:'j1939',status:'active',last_error:'Transfer timeout'}],analysis_pending:2,analysis_retrying:1,performance:{days:[{date,actual:20,target:30,breakdowns:1}],pareto:[{category:'Hydraulic',hours:2,cumulative:100}],health:{healthy:0,watch:0,critical:0,unknown:1}}};
+ const calls=[],h=await dashboardHarness('?mode=live',async url=>{calls.push(url);return {ok:true,json:async()=>payload}},true);
+ assert.match(h.nodes['#connectionSummary'].textContent,/needs attention/);assert.match(h.nodes['#connectionDetails'].innerHTML,/Transfer timeout/);assert.equal(h.nodes['#notificationCount'].textContent,'1');
+ const input=h.nodes['#machineSearch'];input.value='serial-543';input.events.input();assert.match(h.nodes['#searchResults'].innerHTML,/ADT-1/);assert.match(h.nodes['#searchResults'].innerHTML,/section=history/);
+ input.value='OEM-123';input.events.input();assert.match(h.nodes['#searchResults'].innerHTML,/Model X/);input.value='missing';input.events.input();assert.match(h.nodes['#searchResults'].innerHTML,/No matching machine/);
+ h.nodes['#markNotificationsRead'].events.click();assert.equal(h.nodes['#notificationCount'].textContent,'0');assert.equal(h.storage.size,1);
+ h.nodes['#timelineKind'].value='fault';h.nodes['#timelineKind'].events.change();assert.match(h.nodes['#machineTimeline'].innerHTML,/SPN 110/);assert.doesNotMatch(h.nodes['#machineTimeline'].innerHTML,/Machine reading<\/h3>/);
+ const click=dataset=>h.handlers.click({target:{closest:()=>({dataset})}});
+ click({chartRange:'7'});await h.settle();assert.equal(h.form.from.value,'2026-11-05');assert.equal(h.form.to.value,date);
+ click({chartDate:date});await h.settle();assert.equal(h.form.from.value,date);assert.equal(h.form.to.value,date);
+ click({series:'target'});assert.match(h.nodes['#overviewCharts'].innerHTML,/data-series="target" aria-pressed="false"/);click({series:'target'});assert.match(h.nodes['#overviewCharts'].innerHTML,/data-series="target" aria-pressed="true"/);
+ click({chartCause:'Hydraulic'});assert.match(h.navigation.at(-1),/cause=Hydraulic/);click({chartHealth:'unknown'});assert.match(h.navigation.at(-1),/health=unknown/);
+ assert.match(h.nodes['#overviewCharts'].innerHTML,/data-chart-label="2026-11-11: Actual tonnes 20"/);
+});
+
+test('workspace projections deduplicate notifications and combine timeline types in chronological order',()=>{
+ const m={machine_id:'A',stale:true,last_reading:'2026-11-11T09:00:00Z',next_service_hours:200,service_status:'overdue',hours_to_service:-2,findings:[{id:1,diagnostic_code:'CODE',details:'one',recorded_at:'2026-11-11T10:00:00Z'},{id:2,diagnostic_code:'CODE',details:'two',recorded_at:'2026-11-11T09:00:00Z'}],readings:[{id:1,recorded_at:'2026-11-11T08:00:00Z',engine_hours:202}],performance:{breakdowns:[{event_id:'E',occurred_at:'2026-11-11T07:30:00Z',date:'2026-11-11',category:'Engine',downtime_hours:2}]}};
+ assert.equal(automationModule.workspaceNotifications([m]).filter(n=>n.kind==='fault').length,1);
+ const timeline=automationModule.workspaceTimeline([m],[{id:1,machine_id:'A',generated_at:'2026-11-11T11:00:00Z',period:'daily',reading_count:2}],[{id:4,fleet_number:'A',opened_at:'2026-11-11T07:00:00Z',status:'closed',event_type:'maintenance',description:'Service recorded'}]);
+ assert.equal(timeline[0].kind,'report');assert.ok(timeline.some(x=>x.kind==='reading'));assert.ok(timeline.some(x=>x.kind==='maintenance'));assert.ok(timeline.some(x=>x.kind==='fault'));assert.equal(timeline.find(x=>x.id==='A:event:E').at,'2026-11-11T07:30:00Z');
+});
+
+test('saved report downloads retain tenant checks, contain saved evidence and add print controls',async()=>{
+ const {sql,env}=database();await configure(env,sql);await intake(env,reading());await app.scheduled({scheduledTime:Date.now(),cron:'*/15 * * * *'},env,ctx);
+ const a='download-one',b='download-two';sql.prepare('INSERT INTO contractor_sessions VALUES(1,1,?,?,?)').run(await digest(a),'company_admin','2099-01-01');sql.prepare('INSERT INTO contractor_sessions VALUES(2,2,?,?,?)').run(await digest(b),'company_admin','2099-01-01');
+ const id=sql.prepare('SELECT id FROM telemetry_report_snapshots_v2 LIMIT 1').get().id;
+ const get=(format,token=a)=>app.fetch(new Request('https://test.invalid/telemetry/connections/report-document?id='+id+format,{headers:{cookie:'sas_contractor_v2='+token}}),env,ctx);
+ const preview=await get('');assert.equal(preview.status,200);assert.match(await preview.text(),/Print \/ save as PDF/);
+ const html=await get('&format=html');assert.match(html.headers.get('content-disposition'),/attachment.*\.html/);const body=await html.text();assert.match(body,/SIMULATED DATA ONLY/);assert.doesNotMatch(body,/<header>|printSavedReport/);
+ const json=await get('&format=json&download=1');assert.match(json.headers.get('content-disposition'),/attachment.*\.json/);assert.ok((await json.json()).machine_id);assert.equal((await get('&format=html',b)).status,404);
+});
+
+test('workspace API search catalog, cause filters and maintenance history stay company and source scoped',async()=>{
+ const {env,sql}=database();await configure(env,sql);const at=new Date().toISOString(),date=at.slice(0,10);
+ sql.exec(`CREATE TABLE events(id INTEGER PRIMARY KEY,company_id INTEGER,fleet_number TEXT,event_type TEXT,description TEXT,opened_at TEXT,closed_at TEXT,status TEXT,action TEXT);`);
+ sql.prepare('INSERT INTO events VALUES(1,1,?,?,?,?,?,?,?)').run('SAS ADT 027','maintenance','Service recorded',at,at,'closed','Oil changed');
+ sql.prepare('INSERT INTO events VALUES(2,2,?,?,?,?,?,?,?)').run('SECOND','maintenance','Other tenant record',at,at,'closed','Private record');
+ await intake(env,reading({test_data:false,timestamp:at,breakdown_events:[{event_id:'B',confirmed:true,occurred_at:at,category:'Hydraulic',downtime_hours:1,downtime_unit:'h'}]}));
+ const url=mode=>new URL('https://test.invalid/api/telemetry/automatic?mode='+mode+'&from='+date+'&to='+date);
+ sql.prepare("INSERT INTO telemetry_discovered_assets_v1(company_id,connection_id,external_key,external_machine_id,machine_id,metadata_json,latest_recorded_at,status,created_at) VALUES(1,1,'catalog-test','EXT-ONE','SAS ADT 027',?,?,'registered',?)").run(JSON.stringify({serial_number:'SERIAL-REGISTERED',model:'Model A'}),at,at);
+ const live=await automationModule.automaticFleetData(env,1,url('live'));assert.ok(live.catalog[0].external_ids.includes('EXT-ONE'));assert.equal(live.catalog[0].serial_number,'SERIAL-REGISTERED');assert.equal(live.catalog[0].model,'Model A');assert.ok(live.timeline.some(t=>t.title==='Recorded closure · maintenance'));assert.ok(!live.timeline.some(t=>t.detail.includes('Other tenant')));assert.equal(live.connections[0].connection_name,'Test');assert.ok(!JSON.stringify(live.connections).includes('token_hash'));
+ const sim=await automationModule.automaticFleetData(env,1,url('simulation'));assert.equal(sim.analysis_pending,0);assert.ok(!sim.timeline.some(t=>t.detail.includes('Oil changed')));
+ const cause=url('live');cause.searchParams.set('cause','Hydraulic');assert.equal((await automationModule.automaticFleetData(env,1,cause)).machines.length,1);cause.searchParams.set('cause','Electrical');assert.equal((await automationModule.automaticFleetData(env,1,cause)).machines.length,0);
 });
