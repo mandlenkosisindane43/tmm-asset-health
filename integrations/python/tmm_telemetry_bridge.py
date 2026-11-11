@@ -16,6 +16,15 @@ import urllib.error
 import urllib.request
 
 FIELDS = {
+    "asset": ("asset",),
+    "serial_number": ("serial_number",),
+    "manufacturer": ("manufacturer",),
+    "model": ("model",),
+    "machine_type": ("machine_type",),
+    "next_service_hours": ("next_service_hours",),
+    "service_interval_hours": ("service_interval_hours",),
+    "last_service_hours": ("last_service_hours",),
+    "service_reference": ("service_reference",),
     "external_machine_id": ("external_machine_id", "machine_id", "machineId", "serial", "device_id"),
     "event_id": ("event_id", "message_id"),
     "test_data": ("test_data",),
@@ -109,7 +118,7 @@ def send(endpoint, source, token, readings):
         results = result.get("results", []) if isinstance(result, dict) else []
         if not isinstance(results, list) or len(results) != len(readings) or any(not isinstance(r, dict) for r in results):
             raise RetryableIntakeError("Incomplete intake receipt; observation remains queued")
-        failures = [r for r in results if r.get("status") not in ("accepted", "duplicate")]
+        failures = [r for r in results if r.get("status") not in ("accepted", "duplicate", "discovered")]
         if failures:
             error = RetryableIntakeError if all(r.get("status") in ("pending", "failed") for r in failures) else PermanentIntakeError
             raise error("Telemetry intake did not accept every reading: " + json.dumps(failures))
@@ -210,7 +219,7 @@ def main():
                     continue
                 outbox.enqueue(reading)
                 count += outbox.flush(endpoint, source, token, args.retry_limit)
-                print(json.dumps({"accepted_or_duplicate": count}), flush=True)
+                print(json.dumps({"durably_received": count}), flush=True)
     finally:
         if outbox:
             outbox.close()

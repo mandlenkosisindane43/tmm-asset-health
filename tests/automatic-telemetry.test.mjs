@@ -25,11 +25,11 @@ const ctx = { waitUntil() {}, passThroughOnException() {} };
 function database() {
   const sql = new DatabaseSync(':memory:');
   sql.exec(`CREATE TABLE companies(id INTEGER PRIMARY KEY,name TEXT);
-    CREATE TABLE machines(id INTEGER PRIMARY KEY,company_id INTEGER,fleet_number TEXT,operating_hours REAL,next_service_hours REAL,site TEXT,status TEXT);
+    CREATE TABLE machines(id INTEGER PRIMARY KEY,company_id INTEGER,fleet_number TEXT,operating_hours REAL,next_service_hours REAL,site TEXT,status TEXT,category TEXT,created_at TEXT);
     CREATE TABLE contractor_accounts(id INTEGER PRIMARY KEY,company_id INTEGER,role TEXT,full_name TEXT,status TEXT,email TEXT);
     CREATE TABLE contractor_sessions(company_id INTEGER,account_id INTEGER,token_hash TEXT,active_role TEXT,expires_at TEXT);
     INSERT INTO companies VALUES(1,'Test One'),(2,'Test Two');
-    INSERT INTO machines VALUES(1,1,'SAS ADT 027',1000,1500,'North','active'),(2,2,'SECOND',2000,2500,'South','active');
+    INSERT INTO machines(id,company_id,fleet_number,operating_hours,next_service_hours,site,status) VALUES(1,1,'SAS ADT 027',1000,1500,'North','active'),(2,2,'SECOND',2000,2500,'South','active');
     INSERT INTO contractor_accounts VALUES(1,1,'engineer','Engineer One','active','one@example.test'),(2,2,'engineer','Engineer Two','active','two@example.test');`);
   let failure=null;
   const DB = { prepare(query) {
@@ -188,7 +188,7 @@ test('replaying a quarantined event never reports success; event IDs cannot chan
 
 test('multiple machines and companies produce separate reports and simulation never enters live fleet metrics',async()=>{
   const {sql,env}=database();await configure(env,sql);
-  sql.exec("INSERT INTO machines VALUES(3,1,'FIRST-SECOND',1500,1750,'North','active'); INSERT INTO telemetry_machine_map_v2(company_id,connection_id,external_machine_id,machine_id,created_at) VALUES(1,1,'EXT-TWO','FIRST-SECOND','now');");
+  sql.exec("INSERT INTO machines(id,company_id,fleet_number,operating_hours,next_service_hours,site,status) VALUES(3,1,'FIRST-SECOND',1500,1750,'North','active'); INSERT INTO telemetry_machine_map_v2(company_id,connection_id,external_machine_id,machine_id,created_at) VALUES(1,1,'EXT-TWO','FIRST-SECOND','now');");
   sql.prepare("INSERT INTO telemetry_connections_v2(company_id,provider,connection_name,source_key,token_hash,status,created_by,created_at) VALUES(2,'other','Second','second-source',?,'active',2,'now')").run(await digest('second-token'));
   sql.exec("INSERT INTO telemetry_machine_map_v2(company_id,connection_id,external_machine_id,machine_id,created_at) VALUES(2,2,'EXT-THREE','SECOND','now')");
   await intake(env,reading());
@@ -468,4 +468,36 @@ test('operational hour counters survive authenticated intake and flow into saved
  for(let i=0;i<2;i++){const response=await intake(env,{external_machine_id:'EXT-ONE',event_id:'kpi-'+i,timestamp:new Date(now-3600000+i*3600000).toISOString(),...values[i],units:{scheduled_hours:'h',available_hours:'h',productive_hours:'h'},counter_semantics:{scheduled_hours:'cumulative',available_hours:'cumulative',productive_hours:'cumulative'}});const receipt=await response.json();assert.equal(receipt.results[0].status,"accepted",JSON.stringify(receipt));}
  await app.scheduled({},env,ctx);
  const reports=sql.prepare('SELECT report_json FROM telemetry_report_documents_v2').all().map(r=>JSON.parse(r.report_json));assert.ok(reports.length>=3);assert.equal(reports[0].metrics.availability_percent,80);assert.equal(reports[0].metrics.utilisation_percent,75);
+});
+
+async function discoveryAdmin(sql){const headers=await signIn(sql);sql.exec("UPDATE contractor_accounts SET role='company_admin' WHERE id=1;UPDATE contractor_sessions SET active_role='company_admin' WHERE company_id=1");return headers;}
+const discoveryReading=(extra={})=>reading({external_machine_id:'NEW-SERIAL-42',test_data:false,asset:{serial_number:'SER-42',manufacturer:'Example',model:'Model 42',machine_type:'ADT',next_service_hours:1500,service_reference:'Source schedule'},engine_hours:1245,...extra});
+const assignSite=async(env,headers,id,site,origin='https://test.invalid')=>app.fetch(new Request('https://test.invalid/telemetry/connections/discovered',{method:'POST',headers:{...headers,origin},body:new URLSearchParams({id:String(id),site,csrf:await digest('session-1')})}),env,ctx);
+
+test('discovered machine registers from a site once and retained readings automatically reach reports despite interrupted replay',async()=>{
+ const {sql,env,failNext}=database();await configure(env,sql);const p=discoveryReading();const receipt=await (await intake(env,p)).json(),id=receipt.results[0].discovery_id;assert.equal(receipt.results[0].status,'discovered');
+ assert.equal((await (await intake(env,p)).json()).results[0].status,'discovered');assert.equal(count(sql,'telemetry_discovered_assets_v1'),1);assert.equal(count(sql,'machines'),2);
+ // Subsequent readings need not resend identity metadata.
+ const subsequent=discoveryReading({event_id:'next-before-site',timestamp:new Date(Date.now()+1000).toISOString(),asset:undefined,engine_hours:1246});assert.equal((await (await intake(env,subsequent)).json()).results[0].status,'discovered');
+ const headers=await discoveryAdmin(sql);assert.equal((await assignSite(env,headers,id,'Mine North')).status,303);assert.equal((await assignSite(env,headers,id,'Mine North')).status,303);assert.equal(count(sql,'machines'),3);
+ const machine=sql.prepare("SELECT * FROM machines WHERE site='Mine North'").get();assert.equal(machine.operating_hours,1246);assert.equal(machine.next_service_hours,1500);assert.equal(machine.category,'ADT');
+ failNext("UPDATE telemetry_ingest_v2 SET status='accepted'");await app.scheduled({scheduledTime:Date.now()},env,ctx);await app.scheduled({scheduledTime:Date.now()},env,ctx);
+ assert.equal(sql.prepare('SELECT status FROM telemetry_ingest_v2 WHERE event_key=?').get('1:'+p.event_id).status,'accepted');assert.equal(sql.prepare('SELECT COUNT(*) n FROM machine_telemetry_v1 WHERE machine_id=?').get(machine.fleet_number).n,2);assert.equal(sql.prepare('SELECT COUNT(*) n FROM telemetry_report_snapshots_v2 WHERE machine_id=?').get(machine.fleet_number).n,3);
+ const newer=discoveryReading({timestamp:new Date(Date.now()+2000).toISOString(),asset:{next_service_hours:1750},engine_hours:1247});assert.equal((await (await intake(env,newer)).json()).results[0].status,'accepted');assert.equal(sql.prepare('SELECT next_service_hours FROM machines WHERE id=?').get(machine.id).next_service_hours,1750);
+ assert.equal((await (await intake(env,discoveryReading({asset:{serial_number:'CHANGED'}}))).json()).results[0].status,'quarantined');
+});
+
+test('discovery is company-scoped and site assignment requires admin, same origin and valid token; unknown service is never 250 h',async()=>{
+ const {sql,env}=database();await configure(env,sql);const id=(await (await intake(env,discoveryReading({asset:{model:'Unknown schedule'},engine_hours:null}))).json()).results[0].discovery_id;
+ let headers=await signIn(sql);assert.equal((await assignSite(env,headers,id,'North')).status,403);headers=await discoveryAdmin(sql);assert.equal((await assignSite(env,headers,id,'North','https://evil.invalid')).status,403);assert.equal((await assignSite(env,headers,id+999,'North')).status,400);
+ const bad=await app.fetch(new Request('https://test.invalid/telemetry/connections/discovered',{method:'POST',headers:{...headers,origin:'https://test.invalid'},body:new URLSearchParams({id:String(id),site:'North',csrf:'bad'})}),env,ctx);assert.equal(bad.status,403);
+ const second=await signIn(sql,2),html=await (await app.fetch(new Request('https://test.invalid/telemetry/connections/discovered',{headers:second}),env,ctx)).text();assert.doesNotMatch(html,/Unknown schedule/);
+ assert.equal((await assignSite(env,headers,id,'North')).status,303);assert.equal(sql.prepare("SELECT next_service_hours FROM machines WHERE fleet_number LIKE 'AUTO-%'").get().next_service_hours,null);
+ assert.equal((await (await intake(env,discoveryReading({external_machine_id:'BAD-ASSET',asset:{model:'Bad',next_service_hours:-1}}))).json()).results[0].status,'quarantined');
+});
+
+test('simulation discovery cannot register real equipment; intervals require a source reference and pilot limits still apply',async()=>{
+ const {sql,env}=database();await configure(env,sql);const headers=await discoveryAdmin(sql);const id=(await (await intake(env,discoveryReading({test_data:true}))).json()).results[0].discovery_id;assert.equal((await assignSite(env,headers,id,'North')).status,400);
+ for(const [external,reference,expected] of [['NO-REF',null,null],['WITH-REF','Approved source schedule',1500]]){const r=await (await intake(env,discoveryReading({external_machine_id:external,asset:{model:'Interval model',service_interval_hours:500,last_service_hours:1000,...(reference?{service_reference:reference}:{})}}))).json();const m=JSON.parse(sql.prepare('SELECT metadata_json FROM telemetry_discovered_assets_v1 WHERE id=?').get(r.results[0].discovery_id).metadata_json);assert.equal(m.next_service_hours,expected);}
+ sql.exec('CREATE TABLE company_pilot_limits_v1(company_id INTEGER,max_machines INTEGER,max_sites INTEGER); INSERT INTO company_pilot_limits_v1 VALUES(1,1,1)');const candidate=sql.prepare("SELECT id FROM telemetry_discovered_assets_v1 WHERE external_machine_id='WITH-REF'").get();assert.equal((await assignSite(env,headers,candidate.id,'North')).status,409);
 });

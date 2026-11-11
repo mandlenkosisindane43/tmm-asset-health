@@ -84,6 +84,18 @@ class BridgeReliabilityTests(unittest.TestCase):
             self.assertEqual(queue.db.execute("SELECT COUNT(*) FROM rejected").fetchone()[0], 1)
             queue.close()
 
+    def test_discovery_metadata_survives_gateway_normalization(self):
+        original = {"machine_id": "NEW-ASSET", "timestamp": "2026-11-11T08:00:00Z", "asset": {"serial_number": "SER-42", "model": "Example model", "next_service_hours": 1500}}
+        self.assertEqual(bridge.normalize(original)["asset"], original["asset"])
+
+    def test_durably_discovered_receipt_is_acknowledged_without_resending(self):
+        import io
+        import json
+        response = io.BytesIO(json.dumps({"results": [{"status": "discovered", "discovery_id": 1}]}).encode())
+        with patch.object(bridge.urllib.request, "urlopen", return_value=response):
+            result = bridge.send("https://example.test/api/telemetry/v2", "source", "token", [self.observation()])
+        self.assertEqual(result["results"][0]["status"], "discovered")
+
     def test_boolean_measurements_are_not_converted_into_zero_or_one(self):
         with self.assertRaises(ValueError):
             bridge.normalize({"machine_id": "EXT", "timestamp": "2026-11-11T08:00:00Z", "engine_hours": True})

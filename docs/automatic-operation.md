@@ -109,3 +109,31 @@ Fleet registration and existing administrative forms use the automatic monitorin
 The dashboard shows machine and fleet availability and utilisation alongside runtime. Fleet percentages use the sums of covered time counters, not the arithmetic average of machine percentages. Missing coverage on any selected machine leaves the fleet KPI unavailable. Availability is available / scheduled hours × 100; utilisation is productive / available hours × 100. Saved reports additionally contain productive / scheduled hours. A zero denominator produces Unavailable.
 
 The intake and Python bridge accept `scheduled_hours`, `available_hours` and `productive_hours` as nonnegative cumulative counters. Supply `counter_semantics` with each field declared `cumulative` and `units` with each field set to `h`. Source mappings must define available time as machine-ready time within scheduled time, and productive time within available time. Values must be chronological, monotonic and satisfy productive ≤ available ≤ scheduled ≤ elapsed time for each interval. Counter resets, missing units/semantics, gaps exceeding 24 hours and incomplete interval coverage leave the relevant KPI unavailable. These are source-reported operating KPIs over the covered observation window; fault codes and engine-off time do not confirm breakdown downtime or root cause. Engineer-confirmed downtime remains separate.
+
+## Automatic machine discovery and site assignment
+
+Open **Discovered machines** from the shared navigation or Fleet page. A registered connection sends its usual external machine ID and timestamp plus source identity, either flat fields or an `asset` object. Supply `serial_number`, `manufacturer`, `model` and `machine_type` when available. At least serial number, model or type is required to discover an unmapped external ID; a fault code is never treated as identity. Unsupported payloads retain the existing quarantine behavior.
+
+Example source metadata (illustrative, not a real machine):
+
+```json
+{
+  "external_machine_id": "SOURCE-EQUIPMENT-42",
+  "timestamp": "2026-11-11T12:00:00Z",
+  "engine_hours": 1245,
+  "asset": {
+    "serial_number": "EXAMPLE-SERIAL-42",
+    "manufacturer": "Example manufacturer",
+    "model": "Example model",
+    "machine_type": "ADT",
+    "next_service_hours": 1500,
+    "service_reference": "Source-supplied machine service schedule"
+  }
+}
+```
+
+The authenticated company and connection determine ownership. Source assertions populate a discovery awaiting site. Its reading is durably retained in the intake with `discovered` status; the Python bridge recognises that acknowledgement and removes its local pending copy. This does not claim the reading has already been analysed. An administrator enters the site and saves once; registration and source mapping are created idempotently. The next normal scheduled run transfers up to 50 retained mapped readings into central telemetry before analysis and reports. Interrupted saves replay with the same ingestion identity. Inactive sources are excluded from automatic replay. Subsequent readings update the received hour meter and supplied service target automatically.
+
+No service schedule is guessed. `next_service_hours` can be supplied directly. Alternatively provide numeric `service_interval_hours`, `last_service_hours` and a nonempty `service_reference`; due is last-service meter plus interval. Missing meter and schedule remain labelled unknown. The legacy register stores a required numeric meter placeholder internally for unknown meters; discovery and operational views do not present that placeholder as a received measurement. Simulation discoveries cannot register real fleet equipment.
+
+Duplicate prevention is per company/connection and case-insensitive external ID. Changed serial/make/model is quarantined for review. Different connections are not silently merged; existing fleet machines must keep explicit source mappings when adding another feed. Registration respects existing pilot fleet/site limits. Site assignment requires administrator role, company ownership, same-origin submission and session CSRF token.
