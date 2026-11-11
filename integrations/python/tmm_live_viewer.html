@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TMM · Live Python Pipeline</title>
+<style>
+:root{color-scheme:light;--navy:#122b42;--ink:#16334c;--muted:#62798c;--teal:#008d84;--line:#dce5ed;--bg:#f1f5f9}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+header{background:var(--navy);color:white;padding:20px 4vw;display:flex;justify-content:space-between;align-items:center;gap:20px}
+.brand{font-weight:800;letter-spacing:.04em}.subbrand{color:#a8c4d7;font-size:13px}
+.badge{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:30px;font-size:13px;font-weight:750;background:#e5f5f1;color:#007665}.badge.sim{background:#34465a;color:#f4d88e}.badge.bad{background:#fce8e8;color:#b52c3d}
+main{max-width:1500px;padding:30px 4vw 50px;margin:auto}.eyebrow{font-size:12px;font-weight:800;letter-spacing:.15em;color:var(--teal)}h1{font-size:clamp(27px,3.4vw,42px);line-height:1.2;margin:8px 0 12px}h2{font-size:20px;margin:0}p{margin:8px 0;color:var(--muted)}
+.top{display:flex;justify-content:space-between;align-items:center;gap:20px}.hint{font-size:14px;color:var(--muted);max-width:760px}
+.statusline{display:flex;justify-content:space-between;gap:12px;align-items:center;margin:24px 0 18px;padding:14px 18px;background:#e3f3ef;border:1px solid #c7e5dc;border-radius:12px}
+.dot{width:8px;height:8px;display:inline-block;border-radius:50%;background:#039688;margin-right:8px}.blink{animation:blink 1.5s infinite}
+.flow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:18px;margin-bottom:24px}
+.stage{position:relative;background:white;border:1px solid var(--line);border-radius:16px;padding:20px;min-height:180px;transition:box-shadow .25s,border-color .25s}
+.stage.active{border-color:#43b4aa;box-shadow:0 0 0 3px #00a29212}.stage:not(:last-child):after{content:"→";position:absolute;right:-16px;top:65px;font-size:24px;color:#91a9b6;z-index:2}
+.stage.active:after{color:var(--teal);animation:move 1.2s infinite}.stage .count{font-size:36px;font-weight:800;line-height:1.3;margin:12px 0 2px}.stage .name{font-size:15px;font-weight:800}.stage small{color:var(--muted);font-size:12px}
+.icon{display:inline-flex;border-radius:12px;padding:9px;background:#e6f4f1;color:var(--teal)}svg{display:block}.icon svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.panel{background:white;border:1px solid var(--line);border-radius:16px;overflow:hidden;margin-top:22px}.panelhead{padding:22px 24px;border-bottom:1px solid #edf1f5;display:flex;justify-content:space-between;gap:16px;align-items:center}.panelbody{padding:22px 24px}
+.cols{display:grid;grid-template-columns:1.25fr 1fr;gap:22px}.cols>.panel{min-width:0}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 0}
+button{font:inherit;cursor:pointer;background:white;border:1px solid var(--line);border-radius:9px;padding:9px 16px;color:var(--ink);font-weight:650}button[aria-selected=true]{background:var(--navy);color:white;border-color:var(--navy)}button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid #db9f2f;outline-offset:3px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:20px 0}.kpi{border-left:3px solid var(--teal);padding:6px 15px}.kpi span{display:block;color:var(--muted);font-size:13px}.kpi b{font-size:25px;display:block;margin-top:6px}
+table{border-collapse:collapse;width:100%;font-size:14px}th{color:#60798f;background:#f7f9fb;font-size:12px;text-transform:uppercase;letter-spacing:.04em}td,th{padding:12px 15px;text-align:left;border-bottom:1px solid #e9eff4;vertical-align:top}
+.tablewrap{overflow:auto}td code{font-size:12px;white-space:nowrap}.pill{display:inline-block;border-radius:5px;background:#e3f5ee;color:#087868;padding:3px 7px;font-size:12px;font-weight:700}.pill.warn{background:#fff3d9;color:#9a6715}
+.events{max-height:380px;overflow:auto}.event{display:grid;grid-template-columns:75px 74px 1fr;gap:10px;border-bottom:1px solid #edf1f5;padding:12px 0;font-size:13px}.event time{color:var(--muted);font-variant-numeric:tabular-nums}.event .tag{font-size:11px;text-transform:uppercase;font-weight:800;color:var(--teal)}.event.error .tag{color:#b32d41}
+.empty{padding:35px 20px;text-align:center;color:var(--muted);font-size:14px}.legend{font-size:12px;color:var(--muted)}
+details{margin:12px 0}summary{cursor:pointer;font-weight:700}pre{padding:16px;background:#f5f8fb;overflow:auto;max-height:350px;font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere}
+a{color:#00877e;font-weight:650}.footer{font-size:12px;color:var(--muted);margin-top:24px;border-top:1px solid var(--line);padding-top:16px}
+#connection{font-size:13px}#chart{width:100%;height:180px}#chart text{font-family:inherit;font-size:11px;fill:#70869a}
+.errorbox{background:#fce8e8;border:1px solid #f1bec7;color:#9d263a;padding:14px 18px;border-radius:10px;margin:15px 0}[hidden]{display:none!important}
+@keyframes blink{50%{opacity:.3}}@keyframes move{50%{transform:translateX(3px)}}@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
+@media(max-width:1050px){.flow{gap:10px}.stage{padding:14px}.stage:not(:last-child):after{right:-12px}.cols{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:700px){header,.top{align-items:flex-start;flex-direction:column}.flow{grid-template-columns:1fr}.stage{min-height:105px;display:grid;grid-template-columns:45px 1fr 65px;align-items:center;gap:12px}.stage .count{grid-column:3;grid-row:1/3;margin:0}.stage .name{grid-column:2;grid-row:1}.stage small{grid-column:2;grid-row:2}.stage .icon{grid-column:1;grid-row:1/3}.stage:not(:last-child):after{content:none}.statusline{align-items:flex-start;flex-direction:column}.panelhead,.panelbody{padding:18px}.event{grid-template-columns:65px 1fr}.event p{grid-column:1/3;margin:0}}
+</style>
+</head>
+<body>
+<header><div><div class="brand">TMM ASSET HEALTH</div><div class="subbrand">Python integration laboratory</div></div><div class="badge sim">SIMULATED · ISOLATED LOCAL RUN</div></header>
+<main>
+<div class="top"><div><div class="eyebrow">LIVE DATA JOURNEY</div><h1>Watch your pipeline work.</h1><p class="hint">Python sends the readings. TMM stores, analyses and reports them automatically. These numbers come from the running backend, not a prerecorded animation.</p></div><div id="connection">Connecting to Python…</div></div>
+<div class="statusline"><div><span class="dot blink" id="dot"></span><b id="phase" role="status" aria-live="polite">Waiting for the source…</b></div><span class="legend">PY-DEMO-ADT-001 · Python Sandbox</span></div>
+<div id="error" class="errorbox" role="alert" hidden></div>
+<div class="flow" aria-label="Automatic pipeline stages">
+<section class="stage" data-stage="source"><span class="icon"><svg viewBox="0 0 24 24"><path d="M2 16V7h12v9H2Zm12-6h4l4 4v2h-8M6 7V4h5"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/></svg></span><div class="name">Machine source</div><div class="count" id="sourceCount">0</div><small>Readings collected by Python</small></section>
+<section class="stage" data-stage="pipeline"><span class="icon"><svg viewBox="0 0 24 24"><path d="M3 7h16m-4-4 4 4-4 4M21 17H5m4-4-4 4 4 4"/></svg></span><div class="name">Transfer pipeline</div><div class="count" id="queueCount">0</div><small id="queueNote">Waiting in durable outbox</small></section>
+<section class="stage" data-stage="storage"><span class="icon"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0"/></svg></span><div class="name">Central pot</div><div class="count" id="storedCount">0</div><small>Unique readings in central storage</small></section>
+<section class="stage" data-stage="analysis"><span class="icon"><svg viewBox="0 0 24 24"><circle cx="10" cy="10" r="7"/><path d="m15 15 6 6M6 10h2l2-4 2 8 2-4h2"/></svg></span><div class="name">Fault analysis</div><div class="count" id="analysisCount">0</div><small id="analysisNote">Readings analysed by TMM</small></section>
+<section class="stage" data-stage="reports"><span class="icon"><svg viewBox="0 0 24 24"><path d="M6 2h8l5 5v15H6V2Zm8 0v6h5M9 12h7M9 16h7"/></svg></span><div class="name">Saved reports</div><div class="count" id="reportCount">0</div><small>Daily · weekly · monthly</small></section>
+</div>
+<div class="cols">
+<section class="panel"><div class="panelhead"><div><h2>Received machine performance</h2><p class="legend">Calculated by the saved engineering report</p></div><span class="badge" id="checks">Observing</span></div><div class="panelbody"><div class="kpis"><div class="kpi"><span>Availability</span><b id="availability">—</b></div><div class="kpi"><span>Utilisation</span><b id="utilisation">—</b></div><div class="kpi"><span>Production</span><b id="production">—</b></div><div class="kpi"><span>Latest hour meter</span><b id="meter">—</b></div></div><p class="legend">Coolant temperature · received readings (°C)</p><svg id="chart" viewBox="0 0 600 180" role="img" aria-label="Coolant temperature from stored readings"></svg><p class="legend">Six synthetic observations cover 30 minutes of recorded time, replayed slowly so you can follow each stage. Missing measurements stay unknown.</p></div></section>
+<section class="panel"><div class="panelhead"><div><h2>Live activity</h2><p class="legend">Actual transfer receipts and backend changes · newest first</p></div></div><div class="panelbody events" id="events"><div class="empty">Waiting for the first event…</div></div></section>
+</div>
+<div class="tabs" role="tablist" aria-label="Inspect pipeline records">
+<button role="tab" id="tab-journey" aria-selected="true" aria-controls="detail">Reading journey</button>
+<button role="tab" id="tab-storage" aria-selected="false" aria-controls="detail">Central pot</button>
+<button role="tab" id="tab-findings" aria-selected="false" aria-controls="detail">Fault findings</button>
+<button role="tab" id="tab-reports" aria-selected="false" aria-controls="detail">Saved reports</button>
+<button role="tab" id="tab-source" aria-selected="false" aria-controls="detail">Python input</button>
+</div>
+<section class="panel" role="tabpanel" id="detail" aria-labelledby="tab-journey"><div class="panelhead"><h2 id="detailTitle">Follow each reading</h2><a href="evidence.json" target="_blank" rel="noopener">Open run evidence ↗</a></div><div id="detailBody" class="tablewrap"></div></section>
+<div class="footer"><b>What is running:</b> Python source adapter + disk-backed outbox → actual TMM intake → disposable SQLite central storage → actual TMM analyser and scheduled report generator. The demo scheduler runs every two seconds. It continues when this page is closed while the Python process remains running. No real machine, OEM API, email or production database is connected. Root cause and repair completion are not inferred. Stop with Ctrl+C in the terminal; restart the command for a fresh run.</div>
+</main>
+<script>
+'use strict';
+const el=id=>document.getElementById(id);
+let selected='journey', snapshot=null, lastEvent=0;
+const text=(id,value)=>{el(id).textContent=value};
+const number=(v,suffix='')=>v==null?'—':Number(v).toLocaleString(undefined,{maximumFractionDigits:2})+suffix;
+const clock=v=>v?new Date(v).toLocaleTimeString('en-ZA',{timeZone:'Africa/Johannesburg',hour12:false}):'—';
+function node(tag,value,className){const e=document.createElement(tag);if(value!=null)e.textContent=value;if(className)e.className=className;return e}
+function empty(message){const e=node('div',message,'empty');return e}
+function table(headers,rows){
+ if(!rows.length)return empty('Waiting for records. Processing is automatic.');
+ const t=node('table'),head=node('thead'),hr=node('tr');headers.forEach(h=>hr.append(node('th',h)));head.append(hr);t.append(head);
+ const body=node('tbody');rows.forEach(row=>{const tr=node('tr');row.forEach(value=>{const td=node('td');if(value instanceof Node)td.append(value);else td.textContent=value??'—';tr.append(td)});body.append(tr)});t.append(body);return t
+}
+function pill(message,warning=false){return node('span',message,'pill'+(warning?' warn':''))}
+function detail(s){
+ const b=s.backend,container=el('detailBody');container.replaceChildren();
+ const names={journey:'Follow each reading',storage:'Inside the central pot',findings:'Fault and condition findings',reports:'Automatically saved engineering reports',source:'Source fields translated by Python'};
+ text('detailTitle',names[selected]);el('detail').setAttribute('aria-labelledby','tab-'+selected);
+ if(selected==='journey'){
+  const analysed=new Set(b.receipts.map(r=>r.telemetry_id));
+  const covered=Math.max(0,...b.reports.map(r=>r.reading_count));
+  container.append(table(['Event','Python / queue','Central pot','Analysis','Reports cover reading'],s.observations.map(o=>{
+   const record=b.readings.find(r=>{try{return JSON.parse(r.raw_json).ingestion_key.endsWith(':'+o.event_id)}catch{return false}});
+   const index=b.readings.indexOf(record);
+   return [o.event_id,pill(o.status,o.status!=='accepted'),record?pill('Stored #'+record.id):'Waiting',record&&analysed.has(record.id)?pill('Analysed'):'Pending',record&&index<covered?pill('Included'):'Pending']
+  })))
+ }else if(selected==='storage'){
+  container.append(table(['Record','Machine','Recorded time · SAST','Hour meter','Coolant','Hydraulic pressure'],b.readings.map(r=>['#'+r.id,r.machine_id,clock(r.recorded_at),number(r.engine_hours,' h'),number(r.coolant_temperature,' °C'),number(r.hydraulic_pressure,' bar')])))
+ }else if(selected==='findings'){
+  container.append(table(['Reading','Code / category','Severity','Finding','Recommended next step'],b.findings.map(f=>['#'+f.telemetry_id,f.diagnostic_code||f.category,pill(f.severity,true),f.details,f.recommendation])))
+ }else if(selected==='reports'){
+  if(!b.reports.length)container.append(empty('The scheduler saves reports after the first accepted reading.'));
+  b.reports.forEach(r=>{
+   const wrapper=node('div');wrapper.style.padding='12px 24px';
+   wrapper.append(node('h2',r.period[0].toUpperCase()+r.period.slice(1)+' monitoring report'));
+   wrapper.append(node('p',r.reading_count+' readings · '+r.findings.length+' findings · saved '+clock(r.generated_at)+' SAST'));
+   const d=node('details'),summary=node('summary','Inspect saved report JSON'),pre=node('pre',JSON.stringify(r,null,2));d.append(summary,pre);wrapper.append(d);container.append(wrapper)
+  })
+ }else{
+  if(!s.observations.length)container.append(empty('Python will collect the first synthetic observation automatically.'));
+  s.observations.slice().reverse().forEach(o=>{
+   const d=node('details');d.style.margin='16px 24px';d.append(node('summary',o.event_id+' · raw source → translated reading'),node('pre',JSON.stringify({raw_source:o.raw,translated:o.translated??'Awaiting translation'},null,2)));container.append(d)
+  })
+ }
+}
+function chart(rows){
+ const svg=el('chart'),ns='http://www.w3.org/2000/svg';svg.replaceChildren();
+ const add=(tag,attrs,label)=>{const n=document.createElementNS(ns,tag);for(const [k,v]of Object.entries(attrs))n.setAttribute(k,v);if(label)n.textContent=label;svg.append(n);return n};
+ for(const value of [60,80,100,120]){const y=150-(value-60)*2;add('line',{x1:42,x2:570,y1:y,y2:y,stroke:'#e3eaf1','stroke-dasharray':'4 4'});add('text',{x:8,y:y+4},String(value))}
+ const data=rows.filter(r=>r.coolant_temperature!=null);
+ if(!data.length){add('text',{x:180,y:95},'Waiting for stored temperature readings');return}
+ const points=data.map((r,i)=>[48+i*100,150-(r.coolant_temperature-60)*2]);
+ if(points.length>1)add('polyline',{points:points.map(p=>p.join(',')).join(' '),fill:'none',stroke:'#008d84','stroke-width':3});
+ points.forEach(([x,y],i)=>{add('circle',{cx:x,cy:y,r:4,fill:'#fff',stroke:'#008d84','stroke-width':2});add('text',{x:x-8,y:y-10},String(data[i].coolant_temperature));add('text',{x:x-5,y:175},'#'+data[i].id)});
+}
+function render(s){
+ snapshot=s;const b=s.backend;
+ text('phase',s.phase);text('sourceCount',s.observations.length);text('queueCount',s.pending);text('storedCount',b.readings.length);text('analysisCount',b.receipts.length);text('reportCount',b.reports.length);
+ text('queueNote',s.retries?s.retries+' automatic retry · '+(s.duplicate?'duplicate blocked':'queue drains after receipt'):'Waiting in durable outbox');
+ text('analysisNote',b.findings.length+' findings · '+b.receipts.length+' readings analysed');
+ text('connection','● Connected · '+clock(s.last_backend_at)+' SAST');
+ const error=el('error');error.hidden=!s.error;error.textContent=s.error||'';
+ text('checks',s.completed?'ALL CHECKS PASSED':s.error?'Needs attention':'Processing automatically');
+ el('checks').className='badge'+(s.error?' bad':'');
+ el('dot').className='dot'+(s.completed?'':' blink');
+ const r=b.reports.find(r=>r.period==='daily'),m=r?.metrics;
+ text('availability',number(m?.availability_percent,'%'));text('utilisation',number(m?.utilisation_percent,'%'));text('production',number(m?.production_tonnes,' t'));text('meter',number(r?.last_hours,' h'));
+ chart(b.readings);
+ const newest=s.events[0];
+ if(newest&&newest.id!==lastEvent){
+  lastEvent=newest.id;document.querySelectorAll('.stage').forEach(stage=>stage.classList.toggle('active',stage.dataset.stage===newest.stage));
+  const list=el('events');list.replaceChildren();
+  s.events.slice(0,60).forEach(e=>{const row=node('div',null,'event'+(e.stage==='error'?' error':''));const tm=node('time',clock(e.time));tm.dateTime=e.time;row.append(tm,node('span',e.stage,'tag'),node('div',e.message));list.append(row)});
+ }
+ // Preserve open report/input details and scroll position between updates.
+ if(el('detailBody').querySelector('details[open]')&&['reports','source'].includes(selected))return;
+ detail(s)
+}
+document.querySelectorAll('[role=tab]').forEach(button=>button.addEventListener('click',()=>{
+ selected=button.id.slice(4);document.querySelectorAll('[role=tab]').forEach(b=>b.setAttribute('aria-selected',String(b===button)));if(snapshot)detail(snapshot)
+}));
+async function poll(){
+ try{const response=await fetch('api/state',{cache:'no-store'});if(!response.ok)throw Error('HTTP '+response.status);render(await response.json())}
+ catch(e){text('connection','Disconnected — retrying');text('error','Cannot reach the Python viewer. Keep the terminal running. '+e.message);el('error').hidden=false;el('dot').className='dot'}
+ finally{setTimeout(poll,600)}
+}
+poll();
+</script>
+</body></html>
