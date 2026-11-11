@@ -378,7 +378,7 @@ test('historical replay cannot replace the most recent alert state or double-cou
 
 async function dashboardHarness(search,fetcher,interactive=false){
  const html=await automationModule.automaticDashboard('UI Test',new URL('https://test.invalid/telemetry/automatic'+search)).text();
- const fields=Object.fromEntries(Object.entries({section:'dashboard',mode:'live',from:'',to:'',site:'',machine:'',cause:'',health:''}).map(([name,value])=>[name,{name,value}]));
+ const fields=Object.fromEntries(Object.entries({section:'dashboard',mode:'live',from:'',to:'',site:'',machine:'',cause:'',health:'',tz:'Africa/Johannesburg'}).map(([name,value])=>[name,{name,value}]));
  const form={...fields,elements:Object.values(fields),addEventListener(name,callback){this.onchange=callback}};
  const nodes=Object.fromEntries(['status','cards','overviewCharts','machineCharts','coverageStrip','machineIdentity','attention','fleet','daily','sensors','findings','reports','notes'].map(name=>['#'+name,{textContent:'',innerHTML:''}]));
  const panels=['coverage','identity','overview','attention','machineCharts','definitions','fleet','daily','sensors','findings','reports','notes'].map(section=>({dataset:{section},hidden:false}));
@@ -574,7 +574,7 @@ test('workspace search, notifications, timeline filters and chart controls opera
  h.nodes['#markNotificationsRead'].events.click();assert.equal(h.nodes['#notificationCount'].textContent,'0');assert.equal(h.storage.size,1);
  h.nodes['#timelineKind'].value='fault';h.nodes['#timelineKind'].events.change();assert.match(h.nodes['#machineTimeline'].innerHTML,/SPN 110/);assert.doesNotMatch(h.nodes['#machineTimeline'].innerHTML,/Machine reading<\/h3>/);
  const click=dataset=>h.handlers.click({target:{closest:()=>({dataset})}});
- click({chartRange:'7'});await h.settle();assert.equal(h.form.from.value,'2026-11-05');assert.equal(h.form.to.value,date);
+ click({chartRange:'7'});await h.settle();const today=automationModule.monitoringDay(Date.now(),'Africa/Johannesburg');assert.equal(h.form.to.value,today);assert.equal(h.form.from.value,new Date(Date.parse(today+'T00:00:00Z')-6*86400000).toISOString().slice(0,10));
  click({chartDate:date});await h.settle();assert.equal(h.form.from.value,date);assert.equal(h.form.to.value,date);
  click({series:'target'});assert.match(h.nodes['#overviewCharts'].innerHTML,/data-series="target" aria-pressed="false"/);click({series:'target'});assert.match(h.nodes['#overviewCharts'].innerHTML,/data-series="target" aria-pressed="true"/);
  click({chartCause:'Hydraulic'});assert.match(h.navigation.at(-1),/cause=Hydraulic/);click({chartHealth:'unknown'});assert.match(h.navigation.at(-1),/health=unknown/);
@@ -609,4 +609,29 @@ test('workspace API search catalog, cause filters and maintenance history stay c
  const live=await automationModule.automaticFleetData(env,1,url('live'));assert.ok(live.catalog[0].external_ids.includes('EXT-ONE'));assert.equal(live.catalog[0].serial_number,'SERIAL-REGISTERED');assert.equal(live.catalog[0].model,'Model A');assert.ok(live.timeline.some(t=>t.title==='Recorded closure · maintenance'));assert.ok(!live.timeline.some(t=>t.detail.includes('Other tenant')));assert.equal(live.connections[0].connection_name,'Test');assert.ok(!JSON.stringify(live.connections).includes('token_hash'));
  const sim=await automationModule.automaticFleetData(env,1,url('simulation'));assert.equal(sim.analysis_pending,0);assert.ok(!sim.timeline.some(t=>t.detail.includes('Oil changed')));
  const cause=url('live');cause.searchParams.set('cause','Hydraulic');assert.equal((await automationModule.automaticFleetData(env,1,cause)).machines.length,1);cause.searchParams.set('cause','Electrical');assert.equal((await automationModule.automaticFleetData(env,1,cause)).machines.length,0);
+});
+
+test('Today windows change at South African midnight and pinned historical dates stay fixed',()=>{
+ const url=new URL('https://test.invalid/api/telemetry/automatic?tz=Africa%2FJohannesburg');
+ const before=automationModule.monitoringWindow(url,Date.parse('2026-11-11T21:59:59Z')),after=automationModule.monitoringWindow(url,Date.parse('2026-11-11T22:00:00Z'));
+ assert.equal(before.from,'2026-11-11');assert.equal(before.to,'2026-11-11');assert.equal(before.start,'2026-11-10T22:00:00.000Z');assert.equal(before.end,'2026-11-11T21:59:59.999Z');assert.equal(after.from,'2026-11-12');assert.equal(after.to,'2026-11-12');assert.equal(after.automatic,true);
+ url.searchParams.set('from','2026-11-02');url.searchParams.set('to','2026-11-08');const pinned=automationModule.monitoringWindow(url,Date.parse('2026-11-12T12:00:00Z'));assert.equal(pinned.from,'2026-11-02');assert.equal(pinned.to,'2026-11-08');assert.equal(pinned.automatic,false);
+ const utc=automationModule.monitoringWindow(new URL('https://test.invalid/api/telemetry/automatic'),Date.parse('2026-11-11T22:00:00Z'));assert.equal(utc.from,'2026-11-11');assert.equal(utc.start,'2026-11-11T00:00:00.000Z');
+});
+
+test('SAST daily data includes the correct UTC boundaries and groups readings by local day',async()=>{
+ const {env,sql}=database();await configure(env,sql);await intake(env,reading());sql.exec('DELETE FROM machine_telemetry_v1');
+ for(const [i,at] of ['2026-11-10T21:59:59.999Z','2026-11-10T22:00:00.000Z','2026-11-11T21:59:59.999Z','2026-11-11T22:00:00.000Z'].entries())sql.prepare('INSERT INTO machine_telemetry_v1(company_id,machine_id,recorded_at,engine_hours,source,raw_json,created_at) VALUES(1,?,?,?,?,?,?)').run('SAS ADT 027',at,100+i,'SIMULATED:boundary','{}',at);
+ const d=await automationModule.automaticFleetData(env,1,new URL('https://test.invalid/api/telemetry/automatic?mode=simulation&tz=Africa%2FJohannesburg&from=2026-11-11&to=2026-11-11'));
+ assert.equal(d.machines[0].reading_count,2);assert.equal(d.machines[0].daily_summaries.length,1);assert.equal(d.machines[0].daily_summaries[0].date,'2026-11-11');assert.equal(d.filters.utc_start,'2026-11-10T22:00:00.000Z');
+});
+
+test('Today clears pinned dates, calendar presets are historical, and midnight refresh never changes custom dates',async()=>{
+ const calls=[],h=await dashboardHarness('',async url=>{calls.push(new URL(url,'https://test.invalid'));return dashboardResponse()},true);
+ const midnight=h.timers.find(t=>t.delay>20000);assert.ok(midnight);midnight.callback();await h.settle();assert.ok(calls.length>=2);assert.equal(calls.at(-1).searchParams.has('from'),false);assert.equal(calls.at(-1).searchParams.get('tz'),'Africa/Johannesburg');
+ const click=range=>h.handlers.click({target:{closest:()=>({dataset:{chartRange:range}})}});
+ click('last-week');await h.settle();const today=automationModule.monitoringDay(Date.now(),'Africa/Johannesburg'),monday=new Date(today+'T00:00:00Z');monday.setUTCDate(monday.getUTCDate()-(monday.getUTCDay()+6)%7);
+ assert.equal(h.form.from.value,new Date(monday.getTime()-7*86400000).toISOString().slice(0,10));assert.equal(h.form.to.value,new Date(monday.getTime()-86400000).toISOString().slice(0,10));const pinned=h.form.from.value,n=calls.length;midnight.callback();await h.settle();assert.equal(calls.length,n);assert.equal(h.form.from.value,pinned);
+ click('last-month');await h.settle();assert.equal(h.form.from.value.slice(-2),'01');assert.ok(h.form.to.value<today);
+ click('today');await h.settle();assert.equal(calls.at(-1).searchParams.has('from'),false);assert.equal(calls.at(-1).searchParams.has('to'),false);
 });
