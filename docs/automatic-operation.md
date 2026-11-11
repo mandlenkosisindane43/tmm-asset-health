@@ -95,3 +95,9 @@ The deployed sign-in page was observed loading. Authenticated routes were verifi
 The review adds per-observation analysis retries with backoff, independent report retries, canonical fault grouping and replay-safe occurrence counts. Historical readings cannot overwrite the newest alert state. Intake rejects malformed numeric shapes and timestamps; reordered JSON keys retain the same observation identity while preserving the original audit payload. Reports retain the newest readings when their documented cap is reached.
 
 The Python bridge retains permanent rejections separately and continues processing other machines; pending storage receipts retry automatically. Dashboard filters cancel stale requests, timed-out refreshes recover automatically, default dates roll forward, and source/site filters persist across navigation. Regression tests exercise these failure paths without contacting an email provider or a machine.
+
+### Verified follow-up deployment
+
+Source commit `8420f02880efed49858ebe7db8f991bc2b046ac9` passed [staging deployment #78](https://github.com/mandlenkosisindane43/tmm-asset-health/actions/runs/42992152371): 70 Node tests, 8 Python tests, the automation module strict type check, build and dedicated staging binding checks all passed.
+
+At 11:16 SAST on 11 November 2026, the read-only observer confirmed **1 fresh linked reading, 1 fresh analysis receipt and 3 fresh version-3 saved report documents** from the normal scheduler. It found 12 stored mapped SPN 110 FMI 0 findings in total; that total is not attributed to the single new reading. No application buttons or manual simulator trigger were used. Real machine collection, actual inbox delivery and authenticated browser visual review remain separate checks.
