@@ -380,8 +380,8 @@ async function dashboardHarness(search,fetcher){
  const html=await automationModule.automaticDashboard('UI Test',new URL('https://test.invalid/telemetry/automatic'+search)).text();
  const fields=Object.fromEntries(Object.entries({section:'dashboard',mode:'live',from:'',to:'',site:'',machine:''}).map(([name,value])=>[name,{name,value}]));
  const form={...fields,elements:Object.values(fields),addEventListener(name,callback){this.onchange=callback}};
- const nodes=Object.fromEntries(['status','cards','fleet','daily','sensors','findings','reports','notes'].map(name=>['#'+name,{textContent:'',innerHTML:''}]));
- const panels=['fleet','daily','sensors','findings','reports','notes'].map(section=>({dataset:{section},hidden:false}));
+ const nodes=Object.fromEntries(['status','cards','overviewCharts','attention','fleet','daily','sensors','findings','reports','notes'].map(name=>['#'+name,{textContent:'',innerHTML:''}]));
+ const panels=['overview','attention','definitions','fleet','daily','sensors','findings','reports','notes'].map(section=>({dataset:{section},hidden:false}));
  const timers=[];let interval;
  const context=vm.createContext({URLSearchParams,AbortController,FormData:class{constructor(f){this.f=f}*[Symbol.iterator](){for(const field of this.f.elements)yield[field.name,field.value]}},document:{querySelector:s=>s==='#filters'?form:nodes[s],querySelectorAll:()=>panels},location:{search},history:{replaceState(){}},fetch:fetcher,setTimeout(callback,delay){timers.push({callback,delay});return timers.length},clearTimeout(){},setInterval(callback){interval=callback},console});
  vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1],context);
@@ -500,4 +500,17 @@ test('simulation discovery cannot register real equipment; intervals require a s
  const {sql,env}=database();await configure(env,sql);const headers=await discoveryAdmin(sql);const id=(await (await intake(env,discoveryReading({test_data:true}))).json()).results[0].discovery_id;assert.equal((await assignSite(env,headers,id,'North')).status,400);
  for(const [external,reference,expected] of [['NO-REF',null,null],['WITH-REF','Approved source schedule',1500]]){const r=await (await intake(env,discoveryReading({external_machine_id:external,asset:{model:'Interval model',service_interval_hours:500,last_service_hours:1000,...(reference?{service_reference:reference}:{})}}))).json();const m=JSON.parse(sql.prepare('SELECT metadata_json FROM telemetry_discovered_assets_v1 WHERE id=?').get(r.results[0].discovery_id).metadata_json);assert.equal(m.next_service_hours,expected);}
  sql.exec('CREATE TABLE company_pilot_limits_v1(company_id INTEGER,max_machines INTEGER,max_sites INTEGER); INSERT INTO company_pilot_limits_v1 VALUES(1,1,1)');const candidate=sql.prepare("SELECT id FROM telemetry_discovered_assets_v1 WHERE external_machine_id='WITH-REF'").get();assert.equal((await assignSite(env,headers,candidate.id,'North')).status,409);
+});
+
+test('compact overview uses weighted daily percentages, preserves missing days and limits priority items',()=>{
+ const daily=(date,s,a,p,faults)=>({date,scheduled_hours:s,available_hours:a,productive_hours:p,fault_readings:faults});
+ const machines=[{machine_id:'ONE',site:'North',daily_summaries:[daily('2026-11-10',10,8,6,2)],hours_to_service:5,service_status:'due_soon',stale:false},{machine_id:'TWO',site:'South',daily_summaries:[daily('2026-11-10',2,1,1,0)],hours_to_service:100,service_status:'on_track',stale:false}];
+ const result=automationModule.fleetOverview(machines,'2026-11-09','2026-11-11');assert.equal(result.days.length,3);assert.equal(result.days[0].faults,null);assert.equal(result.days[1].availability,75);assert.equal(result.days[1].utilisation,77.78);assert.equal(result.days[1].faults,2);assert.equal(result.days[2].availability,null);assert.equal(result.attention.length,1);
+ const incomplete=automationModule.fleetOverview([machines[0],{...machines[1],daily_summaries:[]}],'2026-11-10','2026-11-10');assert.equal(incomplete.days[0].availability,null);assert.equal(incomplete.days[0].faults,2);
+ const large=automationModule.fleetOverview(Array.from({length:12},(_,i)=>({...machines[0],machine_id:'ID-'+i,service_status:i===10?'overdue':'due_soon'})),'2026-01-01','2026-11-11');assert.equal(large.days.length,90);assert.equal(large.days_limited,true);assert.equal(large.attention.length,8);assert.equal(large.attention_total,12);assert.equal(large.attention[0].machine_id,'ID-10');
+});
+
+test('dashboard hides detailed sections, renders honest chart empty states and keeps detail routes available',async()=>{
+ const h=await dashboardHarness('',async()=>dashboardResponse());assert.equal(h.panels.find(p=>p.dataset.section==='daily').hidden,true);assert.equal(h.panels.find(p=>p.dataset.section==='overview').hidden,false);assert.match(h.nodes['#overviewCharts'].innerHTML,/Awaiting received machine readings/);assert.match(h.nodes['#cards'].innerHTML,/Fault observations<\/small><b>Unavailable/);assert.match(h.html,/<summary>More<\/summary>/);assert.match(h.html,/section=production/);
+ const section=await automationModule.automaticDashboard('Company',new URL('https://test.invalid/telemetry/automatic?section=health')).text();assert.match(section,/data-section="overview" hidden/);assert.doesNotMatch(section,/data-section="fleet" hidden/);
 });
