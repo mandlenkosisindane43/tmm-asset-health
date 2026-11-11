@@ -1,3 +1,5 @@
+> Historical milestone record. The current implementation, resolved baseline tests, expanded definitions, capacity and latest verification are documented in [automatic-operation.md](automatic-operation.md). The scope notes below describe the earlier milestone.
+
 # Automatic telemetry pipeline — isolated light staging
 
 **Current implementation:** see [Automatic operation](automatic-operation.md) for the shared live/simulation engine, source-based dashboard, configured limits and durable delivery. The evidence below records the earlier simulation milestone.

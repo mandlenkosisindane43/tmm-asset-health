@@ -33,10 +33,24 @@ async function ensure(env:Env){const existing=schemas.get(env.DB);if(existing)re
 `CREATE TABLE IF NOT EXISTS telemetry_thresholds_v2(id INTEGER PRIMARY KEY AUTOINCREMENT,company_id INTEGER NOT NULL,machine_id TEXT,metric TEXT NOT NULL,warning_value REAL,critical_value REAL,comparison TEXT NOT NULL,unit TEXT,status TEXT NOT NULL DEFAULT 'active',created_at TEXT NOT NULL,UNIQUE(company_id,machine_id,metric))`
 ])await env.DB.prepare(q).run()})().catch(e=>{schemas.delete(env.DB);throw e});schemas.set(env.DB,schema);return schema}
 
+function stableJson(value:unknown):string{
+ if(Array.isArray(value))return "["+value.map(stableJson).join(",")+"]";
+ if(value&&typeof value==="object")return "{"+Object.keys(value).sort().map(k=>JSON.stringify(k)+":"+stableJson((value as Row)[k])).join(",")+"}";
+ return JSON.stringify(value)??"null";
+}
 function providerValue(p:Row,...names:string[]){for(const n of names)if(p[n]!==undefined&&p[n]!==null&&p[n]!=="")return p[n];return null}
 function normalize(p:Row,machineId:string){const faults=providerValue(p,"fault_codes","faultCodes","diagnostic_codes","diagnosticCodes","activeFaults","active_faults","diagnostics","dtcs","DTCs");
  const codes=Array.isArray(faults)?faults.map(f=>{if(typeof f==="string"||typeof f==="number")return String(f);if(f&&typeof f==="object"){const o=f as Row;const spn=providerValue(o,"spn","SPN"),fmi=providerValue(o,"fmi","FMI"),code=providerValue(o,"code","faultCode","fault_code","dtc","DTC");return code!=null?String(code):spn!=null&&fmi!=null?"SPN "+spn+" FMI "+fmi:""}return ""}).filter(Boolean):null;
+ const invalidFaults=Array.isArray(faults)&&(faults.length>50||faults.some(f=>{
+  if(typeof f==="string")return !f.trim();if(typeof f==="number")return !Number.isFinite(f);
+  if(!f||typeof f!=="object"||Array.isArray(f))return true;
+  const o=f as Row,code=providerValue(o,"code","faultCode","fault_code","dtc","DTC");
+  if(code!=null)return !(typeof code==="string"&&code.trim()||typeof code==="number"&&Number.isFinite(code));
+  const spn=providerValue(o,"spn","SPN"),fmi=providerValue(o,"fmi","FMI");
+  return spn==null||fmi==null||!(typeof spn==="number"||typeof spn==="string"&&/^\d+$/.test(spn.trim()))||!(typeof fmi==="number"||typeof fmi==="string"&&/^\d+$/.test(fmi.trim()))||!Number.isInteger(Number(spn))||!Number.isInteger(Number(fmi))||Number(spn)<0||Number(spn)>524287||Number(fmi)<0||Number(fmi)>31;
+ }));
  return {
+ _invalid_fault_codes:invalidFaults,
  machine_id:machineId,
  timestamp:providerValue(p,"recorded_at","recordedAt","timestamp","event_time","eventTime"),
  engine_hours:providerValue(p,"engine_hours","engineHours","hour_meter","hourMeter","smr"),
@@ -48,7 +62,25 @@ function normalize(p:Row,machineId:string){const faults=providerValue(p,"fault_c
  coolant_temperature:providerValue(p,"coolant_temperature","coolantTemperature","coolant_temp_c"),rpm:providerValue(p,"rpm","engine_rpm","engineRpm"),
  engine_load:providerValue(p,"engine_load","engineLoad"),fault_code:codes?codes.join(", "):providerValue(p,"fault_code","faultCode","diagnostic_code","diagnosticCode","dtc","DTC")??(typeof faults==="string"?faults:null),battery_voltage:providerValue(p,"battery_voltage","batteryVoltage"),fuel_consumption_lph:providerValue(p,"fuel_consumption_lph","fuelConsumptionLph"),hydraulic_temperature:providerValue(p,"hydraulic_temperature","hydraulicTemperature"),transmission_temperature:providerValue(p,"transmission_temperature","transmissionTemperature"),transmission_gear:providerValue(p,"transmission_gear","transmissionGear"),idle_hours:providerValue(p,"idle_hours","idleHours"),cycle_count:providerValue(p,"cycle_count","cycleCount"),payload_tonnes:providerValue(p,"payload_tonnes","payloadTonnes"),production_tonnes:providerValue(p,"production_tonnes","productionTonnes"),service_due_hours:providerValue(p,"service_due_hours","serviceDueHours"),machine_events:providerValue(p,"machine_events","machineEvents"),test_data:providerValue(p,"test_data"),units:providerValue(p,"units"),counter_semantics:providerValue(p,"counter_semantics"),fuel_litres:providerValue(p,"fuel_litres")
 }}
-function validate(p:Row){for(const field of ["engine_hours","fuel_level","coolant_temperature","latitude","longitude","odometer","hydraulic_pressure","hydraulic_oil_level","engine_oil_pressure","rpm","engine_load"]){if(p[field]!=null&&(typeof p[field]==="boolean"||!Number.isFinite(Number(p[field]))))return field+" must be a finite numeric measurement";}const ts=new Date(String(p.timestamp||""));if(!p.timestamp||Number.isNaN(ts.getTime()))return "A valid machine timestamp is required";const age=Date.now()-ts.getTime();if(age < -10*60000)return "Timestamp is more than 10 minutes in the future";if(age > 30*86400000)return "Timestamp is older than 30 days";if(p.engine_hours!=null&&num(p.engine_hours,-1)<0)return "Hour meter cannot be negative";if(p.fuel_level!=null&&(num(p.fuel_level,-1)<0||num(p.fuel_level)>100))return "Fuel level must be between 0 and 100 percent";if(p.coolant_temperature!=null&&(num(p.coolant_temperature)<-50||num(p.coolant_temperature)>180))return "Coolant temperature is outside the accepted physical range";for(const [field,min,max] of [["battery_voltage",0,120],["fuel_consumption_lph",0,2000],["hydraulic_temperature",-50,200],["transmission_temperature",-50,200],["idle_hours",0,1000000],["cycle_count",0,100000000],["payload_tonnes",0,1000],["production_tonnes",0,100000000],["service_due_hours",0,1000000]] as const){if(p[field]!=null&&(!Number.isFinite(Number(p[field]))||Number(p[field])<min||Number(p[field])>max))return field+" is outside the accepted range";}if(p.latitude!=null&&(num(p.latitude)<-90||num(p.latitude)>90))return "Latitude is invalid";if(p.longitude!=null&&(num(p.longitude)<-180||num(p.longitude)>180))return "Longitude is invalid";return ""}
+function validate(p:Row){
+ const numeric=(v:unknown)=>typeof v==="number"?Number.isFinite(v):typeof v==="string"&&/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(v.trim())&&Number.isFinite(Number(v));
+ const ranges:Record<string,[number,number]>={engine_hours:[0,1e9],fuel_level:[0,100],coolant_temperature:[-50,180],latitude:[-90,90],longitude:[-180,180],odometer:[0,1e10],hydraulic_pressure:[0,1e9],hydraulic_oil_level:[0,100],engine_oil_pressure:[0,1e9],rpm:[0,30000],engine_load:[0,1e9],battery_voltage:[0,120],fuel_consumption_lph:[0,2000],hydraulic_temperature:[-50,200],transmission_temperature:[-50,200],idle_hours:[0,1e6],cycle_count:[0,1e8],payload_tonnes:[0,1000],production_tonnes:[0,1e8],service_due_hours:[0,1e6],fuel_litres:[0,1e10]};
+ for(const [field,[min,max]] of Object.entries(ranges))if(p[field]!=null){if(!numeric(p[field]))return field+" must be a finite decimal measurement";const v=Number(p[field]);if(v<min||v>max)return field+" is outside the accepted range";}
+ if(p.test_data!=null&&typeof p.test_data!=="boolean")return "test_data must be a boolean";
+ for(const name of ["units","counter_semantics"]){
+  const value=p[name];if(value==null)continue;
+  if(typeof value!=="object"||Array.isArray(value)||Object.values(value).some(v=>typeof v!=="string"||v.length>60))return name+" must be an object of string values";
+  if(name==="counter_semantics"&&Object.values(value).some(v=>!["cumulative","instantaneous","increment"].includes(String(v))))return "Unknown counter semantics";
+ }
+ if(p.fault_code!=null&&typeof p.fault_code!=="string"&&typeof p.fault_code!=="number")return "fault_code must be an identifier";
+ if(p._invalid_fault_codes)return "Fault arrays require at most 50 valid identifiers or integer SPN/FMI pairs in range";
+ if(String(p.fault_code??"").length>4000)return "Fault-code message exceeds the supported length";
+ const stamp=String(p.timestamp||""),match=/^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})$/i.exec(stamp);
+ const ts=new Date(stamp),calendar=match?new Date(match[1]+"T00:00:00Z"):null;
+ if(!match||!calendar||!Number.isFinite(ts.getTime())||!Number.isFinite(calendar.getTime())||calendar.toISOString().slice(0,10)!==match[1]||Number(match[2])>23||Number(match[3])>59||Number(match[4]||0)>59)return "A valid ISO machine timestamp with timezone is required";
+ const age=Date.now()-ts.getTime();if(age< -10*60000)return "Timestamp is more than 10 minutes in the future";if(age>30*86400000)return "Timestamp is older than 30 days";
+ return "";
+}
 async function quarantine(env:Env,c:Row,raw:string,external:string,recorded:string,eventKey:string,reason:string){const now=new Date().toISOString(),ph=await hash(raw);const ins=await env.DB.prepare("INSERT OR IGNORE INTO telemetry_ingest_v2(company_id,connection_id,event_key,external_machine_id,recorded_at,raw_json,payload_hash,status,error,received_at,processed_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)").bind(num(c.company_id),num(c.id),eventKey,external||null,recorded||null,raw,ph,"quarantined",reason,now,now).run();const id=num(ins.meta?.last_row_id);if(id)await env.DB.prepare("INSERT INTO telemetry_quarantine_v2(company_id,connection_id,ingest_id,reason,raw_json,created_at) VALUES(?,?,?,?,?,?)").bind(num(c.company_id),num(c.id),id,reason,raw,now).run();return {status:"quarantined",reason}}
 
 async function ingest(req:Request,env:Env){
@@ -68,10 +100,12 @@ async function ingest(req:Request,env:Env){
  for(const item of items){
   if(!item||typeof item!=="object"||Array.isArray(item)){results.push({status:"rejected",reason:"Reading must be an object"});continue}
   const p=item as Row,raw=JSON.stringify(p),external=txt(providerValue(p,"external_machine_id","externalMachineId","machine_id","machineId","serial_number","serialNumber"),160),recorded=txt(providerValue(p,"recorded_at","recordedAt","timestamp","event_time","eventTime"),60),providerEvent=txt(providerValue(p,"event_id","eventId","message_id","messageId"),160);
-  const eventKey=providerEvent?`${num(c.id)}:${providerEvent}`:await hash(`${c.id}|${external}|${recorded}|${raw}`),ph=await hash(raw);
-  const duplicate=await first(env,"SELECT id,status,error,payload_hash,received_at FROM telemetry_ingest_v2 WHERE event_key=? LIMIT 1",[eventKey]);
+  const canonical=stableJson(p),eventKey=providerEvent?`${num(c.id)}:${providerEvent}`:await hash(`${c.id}|${external}|${recorded}|${canonical}`),ph=await hash(canonical);
+  const duplicate=await first(env,"SELECT id,status,error,payload_hash,raw_json,received_at FROM telemetry_ingest_v2 WHERE event_key=? LIMIT 1",[eventKey]);
   if(duplicate){
-   if(duplicate.payload_hash!==ph){results.push({status:"rejected",reason:"Event ID was reused with a different payload"});continue}
+   let equivalent=duplicate.payload_hash===ph||duplicate.payload_hash===await hash(raw);
+   if(!equivalent){try{equivalent=await hash(stableJson(JSON.parse(String(duplicate.raw_json))))===ph}catch{}}
+   if(!equivalent){results.push({status:"rejected",reason:"Event ID was reused with a different payload"});continue}
    if(duplicate.status==="accepted"){results.push({status:"duplicate",ingest_id:num(duplicate.id)});continue}
    if(duplicate.status==="quarantined"){results.push({status:"quarantined",reason:duplicate.error,ingest_id:num(duplicate.id)});continue}
    if(duplicate.status==="processing"&&Date.now()-Date.parse(String(duplicate.received_at))<120000){results.push({status:"pending",reason:"Event is being processed; retry later",ingest_id:num(duplicate.id)});continue}

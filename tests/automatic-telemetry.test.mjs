@@ -5,6 +5,7 @@ import { stripTypeScriptTypes } from 'node:module';
 import { DatabaseSync } from 'node:sqlite';
 import { createServer } from 'node:http';
 import { spawn } from 'node:child_process';
+import vm from 'node:vm';
 
 // Execute the actual intake, storage, analyser and scheduled report code against
 // SQLite. Only the unrelated legacy router fallback is stubbed.
@@ -333,4 +334,114 @@ test('all telemetry intake aliases use connection-scoped authentication and the 
   assert.equal((await response.json()).ok,true);
  }
  assert.equal(count(sql,'machine_telemetry_v1'),3);
+});
+
+test('equivalent and repeated J1939 identifiers share one finding and notification group',async()=>{
+ const {sql,env}=database();await configure(env,sql);await deliverySettings(sql);
+ await intake(env,reading({test_data:false,fault_codes:[' spn 000110 fmi 00 ','SPN 110 FMI 0','spn110fmi0']}));
+ await intake(env,reading({test_data:false,fault_codes:['SPN 110 FMI 0']}));
+ await app.scheduled({scheduledTime:Date.now(),cron:'*/15 * * * *'},env,ctx);
+ const alerts=sql.prepare("SELECT * FROM telemetry_auto_alerts_v3 WHERE source_mode='live' AND rule_key LIKE 'diagnostic_code:%'").all();
+ assert.equal(alerts.length,1);assert.equal(alerts[0].occurrences,2);
+ assert.equal(sql.prepare("SELECT COUNT(*) n FROM telemetry_condition_findings_v2 WHERE source_mode='live'").get().n,2);
+ assert.equal(sql.prepare("SELECT COUNT(*) n FROM telemetry_delivery_outbox_v3 WHERE kind='alert'").get().n,1);
+});
+
+test('invalid numeric shapes, simulation flags and timestamp metadata are quarantined',async()=>{
+ const {sql,env}=database();await configure(env,sql);
+ const cases=[{engine_hours:[]},{rpm:'   '},{fuel_litres:true},{battery_voltage:false},{engine_hours:'0x10'},{test_data:'true'},{units:[]},{counter_semantics:'cumulative'},{timestamp:new Date().toISOString().replace('Z','')},{fault_codes:[{spn:-1,fmi:0}]}];
+ for(const extra of cases){const result=await (await intake(env,reading(extra))).json();assert.equal(result.results[0].status,'quarantined',JSON.stringify(extra));}
+ assert.equal(count(sql,'machine_telemetry_v1'),0);
+});
+
+test('a transient analysis failure is retried automatically without blocking other readings',async()=>{
+ const {sql,env,failNext}=database();await configure(env,sql);
+ await intake(env,reading({test_data:false,event_id:'FAIL-FIRST'}));
+ await intake(env,reading({test_data:false,event_id:'PASS-SECOND'}));
+ failNext('INSERT OR IGNORE INTO telemetry_condition_findings_v2');
+ const at=Date.now();await automationModule.runTelemetryAutomation(env,()=>({code:'SPN 110 FMI 0',meaning:'Engine coolant temperature',system:'Engine cooling',severity:'review',verified:true}),at);
+ assert.equal(count(sql,'telemetry_analysis_receipts_v3'),1);assert.equal(count(sql,'telemetry_analysis_failures_v3'),1);
+ await automationModule.runTelemetryAutomation(env,()=>({code:'SPN 110 FMI 0',meaning:'Engine coolant temperature',system:'Engine cooling',severity:'review',verified:true}),at+16*60000);
+ assert.equal(count(sql,'telemetry_analysis_receipts_v3'),2);assert.equal(count(sql,'telemetry_analysis_failures_v3'),0);
+});
+
+test('historical replay cannot replace the most recent alert state or double-count old observations',async()=>{
+ const {sql,env}=database();await configure(env,sql);
+ const now=Date.now();
+ await intake(env,reading({test_data:false,timestamp:new Date(now).toISOString()}));
+ await intake(env,reading({test_data:false,timestamp:new Date(now-7200000).toISOString()}));
+ await app.scheduled({scheduledTime:now,cron:'*/15 * * * *'},env,ctx);
+ const alert=sql.prepare("SELECT * FROM telemetry_auto_alerts_v3 WHERE source_mode='live'").get();
+ assert.equal(alert.first_seen,new Date(now-7200000).toISOString());assert.equal(alert.last_seen,new Date(now).toISOString());
+ assert.equal(alert.latest_telemetry_id,1);assert.equal(alert.occurrences,2);
+});
+
+async function dashboardHarness(search,fetcher){
+ const html=await automationModule.automaticDashboard('UI Test',new URL('https://test.invalid/telemetry/automatic'+search)).text();
+ const fields=Object.fromEntries(Object.entries({section:'dashboard',mode:'live',from:'',to:'',site:'',machine:''}).map(([name,value])=>[name,{name,value}]));
+ const form={...fields,elements:Object.values(fields),addEventListener(name,callback){this.onchange=callback}};
+ const nodes=Object.fromEntries(['status','cards','fleet','daily','sensors','findings','reports','notes'].map(name=>['#'+name,{textContent:'',innerHTML:''}]));
+ const panels=['fleet','daily','sensors','findings','reports','notes'].map(section=>({dataset:{section},hidden:false}));
+ const timers=[];let interval;
+ const context=vm.createContext({URLSearchParams,AbortController,FormData:class{constructor(f){this.f=f}*[Symbol.iterator](){for(const field of this.f.elements)yield[field.name,field.value]}},document:{querySelector:s=>s==='#filters'?form:nodes[s],querySelectorAll:()=>panels},location:{search},history:{replaceState(){}},fetch:fetcher,setTimeout(callback,delay){timers.push({callback,delay});return timers.length},clearTimeout(){},setInterval(callback){interval=callback},console});
+ vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1],context);
+ const settle=()=>new Promise(resolve=>setImmediate(resolve));await settle();
+ return {html,form,nodes,panels,timers,interval,settle};
+}
+function dashboardResponse(mode='live',to='2026-11-11'){return {ok:true,json:async()=>({source_mode:mode,filters:{from:'2026-11-04',to},sites:['North'],machines:[],reports:[],notes:[],analysis_pending:0,analysis_retrying:0,run:{}})}}
+
+test('dashboard date windows roll automatically and explicit site/date filters persist',async()=>{
+ const calls=[];let day='2026-11-11';
+ const h=await dashboardHarness('?site=North',async url=>{calls.push(new URL(url,'https://test.invalid'));return dashboardResponse('live',day)});
+ assert.match(h.html,/<option value="North" selected>/);assert.equal(calls[0].searchParams.get('site'),'North');assert.equal(calls[0].searchParams.has('from'),false);
+ day='2026-11-12';await h.interval();assert.equal(h.form.to.value,day);assert.equal(calls[1].searchParams.has('to'),false);
+ h.form.from.value='2026-11-01';h.form.onchange({target:h.form.from});await h.settle();assert.equal(calls.at(-1).searchParams.get('from'),'2026-11-01');
+});
+
+test('changing dashboard filters aborts the old refresh and ignores stale responses',async()=>{
+ let resolveOld;const calls=[];
+ const h=await dashboardHarness('',(url,options)=>{calls.push({url,options});return calls.length===1?new Promise(resolve=>{resolveOld=resolve}):Promise.resolve(dashboardResponse('simulation'))});
+ h.form.mode.value='simulation';h.form.onchange({target:h.form.mode});await h.settle();
+ assert.equal(calls[0].options.signal.aborted,true);assert.match(h.nodes['#status'].textContent,/SIMULATED/);
+ resolveOld(dashboardResponse('live'));await h.settle();assert.match(h.nodes['#status'].textContent,/SIMULATED/);
+ await h.interval();assert.equal(calls.length,3);
+});
+
+test('dashboard refresh timeouts release the loop for automatic recovery',async()=>{
+ let calls=0;
+ const h=await dashboardHarness('',(url,options)=>{calls++;return calls===1?new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>reject(Object.assign(new Error('timeout'),{name:'AbortError'})))):Promise.resolve(dashboardResponse())});
+ assert.equal(h.timers[0].delay,20000);h.timers[0].callback();await h.settle();assert.match(h.nodes['#status'].textContent,/automatic retry/);
+ await h.interval();assert.equal(calls,2);assert.match(h.nodes['#status'].textContent,/LIVE SOURCE/);
+});
+
+test('partial persisted analysis and report failures recover without duplicate occurrences or starvation',async()=>{
+ const {sql,env,failNext}=database();await configure(env,sql);
+ await intake(env,reading({test_data:false,event_id:'FIRST'}));await intake(env,reading({test_data:false,event_id:'SECOND'}));
+ const lookup=()=>({code:'SPN 110 FMI 0',meaning:'Engine coolant temperature',system:'Engine cooling',severity:'review',verified:true}),at=Date.now();
+ failNext('INSERT INTO telemetry_auto_alerts_v3');await automationModule.runTelemetryAutomation(env,lookup,at);
+ await automationModule.runTelemetryAutomation(env,lookup,at+16*60000);
+ assert.equal(sql.prepare('SELECT occurrences FROM telemetry_auto_alerts_v3').get().occurrences,2);assert.equal(count(sql,'telemetry_analysis_receipts_v3'),2);
+ failNext('INSERT INTO telemetry_report_snapshots_v2');await automationModule.runTelemetryAutomation(env,lookup,at+32*60000);
+ assert.match(sql.prepare('SELECT last_error FROM telemetry_automation_runs_v3').get().last_error,/Report retry/);
+ await automationModule.runTelemetryAutomation(env,lookup,at+48*60000);assert.equal(count(sql,'telemetry_report_documents_v2'),3);assert.equal(sql.prepare('SELECT last_error FROM telemetry_automation_runs_v3').get().last_error,null);
+});
+
+test('reordered JSON objects remain duplicate observations and preserve original audit payloads',async()=>{
+ const {sql,env}=database();await configure(env,sql);
+ for(const event_id of ['STABLE-JSON',undefined]){
+  const original=reading({event_id,units:{coolant_temperature:'degC',rpm:'rpm'}});
+  const reordered=Object.fromEntries(Object.entries(original).reverse());reordered.units={rpm:'rpm',coolant_temperature:'degC'};
+  assert.equal((await (await intake(env,original)).json()).results[0].status,'accepted');
+  assert.equal((await (await intake(env,reordered)).json()).results[0].status,'duplicate');
+ }
+ assert.equal(count(sql,'machine_telemetry_v1'),2);
+});
+
+test('truncated reports retain the latest readings and sensor values',async()=>{
+ const {sql,env}=database();await configure(env,sql);
+ const insert=sql.prepare("INSERT INTO machine_telemetry_v1(company_id,machine_id,recorded_at,engine_hours,source,raw_json,created_at) VALUES(1,'SAS ADT 027',?,?,'authorised-test',?,?)"),now=Date.now();
+ sql.exec('BEGIN');for(let i=0;i<=10000;i++){const at=new Date(now-(10000-i)*1000).toISOString();insert.run(at,1000+i/3600,JSON.stringify({coolant_temperature:80+i/100000,units:{coolant_temperature:'degC'}}),at)}sql.exec('COMMIT');
+ await automationModule.runTelemetryAutomation(env,()=>({code:'',meaning:'',system:'',severity:'review',verified:false}),now);
+ const report=JSON.parse(sql.prepare('SELECT report_json FROM telemetry_report_documents_v2 LIMIT 1').get().report_json);
+ assert.equal(report.readings_truncated,true);assert.equal(report.reading_count,10000);assert.equal(report.latest_sensors.coolant_temperature.value,80.1);
 });

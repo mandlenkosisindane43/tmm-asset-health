@@ -62,6 +62,32 @@ class BridgeReliabilityTests(unittest.TestCase):
             self.assertEqual(queue.db.execute("SELECT COUNT(*) FROM pending").fetchone()[0], 1)
             queue.close()
 
+    def test_pending_intake_receipt_retries_without_losing_the_observation(self):
+        with tempfile.TemporaryDirectory() as root:
+            queue = bridge.Outbox(str(Path(root) / "queue.sqlite3"))
+            queue.enqueue(self.observation())
+            with patch.object(bridge, "send", side_effect=[bridge.RetryableIntakeError("pending"), {"ok": True}]) as send:
+                self.assertEqual(queue.flush("unused", "source", "token", delay=lambda _: None), 1)
+                self.assertEqual(send.call_count, 2)
+            queue.close()
+
+    def test_quarantined_record_does_not_block_the_next_machine(self):
+        with tempfile.TemporaryDirectory() as root:
+            queue = bridge.Outbox(str(Path(root) / "queue.sqlite3"))
+            first = self.observation()
+            second = {**first, "event_id": "second-machine", "external_machine_id": "EXT-TWO"}
+            queue.enqueue(first)
+            queue.enqueue(second)
+            with patch.object(bridge, "send", side_effect=[bridge.PermanentIntakeError("unmapped machine"), {"ok": True}]):
+                self.assertEqual(queue.flush("unused", "source", "token"), 1)
+            self.assertEqual(queue.db.execute("SELECT COUNT(*) FROM pending").fetchone()[0], 0)
+            self.assertEqual(queue.db.execute("SELECT COUNT(*) FROM rejected").fetchone()[0], 1)
+            queue.close()
+
+    def test_boolean_measurements_are_not_converted_into_zero_or_one(self):
+        with self.assertRaises(ValueError):
+            bridge.normalize({"machine_id": "EXT", "timestamp": "2026-11-11T08:00:00Z", "engine_hours": True})
+
 
 if __name__ == "__main__":
     unittest.main()

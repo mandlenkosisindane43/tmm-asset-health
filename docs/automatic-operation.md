@@ -89,3 +89,9 @@ Source commit `6251791d5d4ad835a989afecd302cf543326ca6b` passed [deployment #77]
 At 10:02 SAST the read-only observer confirmed a normal unattended cycle had produced **1 fresh accepted intake linked to storage, 50 analysis receipts and 3 version-3 report documents**. It also found 11 stored SPN 110 FMI 0 findings with the mapped engine-coolant interpretation. The findings count is stored diagnostic evidence, not a claim that all eleven findings came from the single fresh reading. This proves a scheduled batch, not an assertion that every historical backlog item or physical machine has been validated.
 
 The deployed sign-in page was observed loading. Authenticated routes were verified in the isolated built-Worker runtime; live authenticated visual review remains the next user check. External email-provider calls were mocked in tests, and no test email was sent. Actual machine/network collection and actual inbox delivery remain outside this verification.
+
+## Follow-up reliability review
+
+The review adds per-observation analysis retries with backoff, independent report retries, canonical fault grouping and replay-safe occurrence counts. Historical readings cannot overwrite the newest alert state. Intake rejects malformed numeric shapes and timestamps; reordered JSON keys retain the same observation identity while preserving the original audit payload. Reports retain the newest readings when their documented cap is reached.
+
+The Python bridge retains permanent rejections separately and continues processing other machines; pending storage receipts retry automatically. Dashboard filters cancel stale requests, timed-out refreshes recover automatically, default dates roll forward, and source/site filters persist across navigation. Regression tests exercise these failure paths without contacting an email provider or a machine.

@@ -46,6 +46,14 @@ FIELDS = {
 NUMERIC = {"engine_hours", "fuel_level", "hydraulic_pressure", "hydraulic_oil_level", "engine_oil_pressure", "coolant_temperature", "battery_voltage", "rpm", "engine_load", "latitude", "longitude", "hydraulic_temperature", "transmission_temperature", "idle_hours", "production_tonnes", "fuel_litres", "odometer"}
 
 
+class RetryableIntakeError(RuntimeError):
+    """The server has not acknowledged the stable observation identity yet."""
+
+
+class PermanentIntakeError(RuntimeError):
+    """The observation needs mapping/data correction, not repeated transmission."""
+
+
 def normalize(record):
     if not isinstance(record, dict):
         raise ValueError("Each reading must be a JSON object")
@@ -54,6 +62,8 @@ def normalize(record):
         value = next((record[a] for a in aliases if a in record and record[a] is not None), None)
         if value is not None:
             if key in NUMERIC:
+                if isinstance(value, bool) or not isinstance(value, (str, int, float)):
+                    raise ValueError("Expected a numeric measurement: " + key)
                 value = float(value)
                 if not -1e12 < value < 1e12:
                     raise ValueError("Out-of-range numeric field: " + key)
@@ -89,10 +99,17 @@ def send(endpoint, source, token, readings):
                  "Authorization": "Bearer " + token},
     )
     with urllib.request.urlopen(req, timeout=20) as response:
-        result = json.loads(response.read().decode("utf-8"))
-        results = result.get("results", [])
-        if len(results) != len(readings) or any(r.get("status") not in ("accepted", "duplicate") for r in results):
-            raise RuntimeError("Telemetry intake did not accept every reading: " + json.dumps(results))
+        try:
+            result = json.loads(response.read().decode("utf-8"))
+        except (ValueError, UnicodeError) as error:
+            raise RetryableIntakeError("Invalid intake receipt; observation remains queued") from error
+        results = result.get("results", []) if isinstance(result, dict) else []
+        if not isinstance(results, list) or len(results) != len(readings) or any(not isinstance(r, dict) for r in results):
+            raise RetryableIntakeError("Incomplete intake receipt; observation remains queued")
+        failures = [r for r in results if r.get("status") not in ("accepted", "duplicate")]
+        if failures:
+            error = RetryableIntakeError if all(r.get("status") in ("pending", "failed") for r in failures) else PermanentIntakeError
+            raise error("Telemetry intake did not accept every reading: " + json.dumps(failures))
         return result
 
 
@@ -101,7 +118,14 @@ class Outbox:
     def __init__(self, path):
         self.db = sqlite3.connect(path)
         self.db.execute("CREATE TABLE IF NOT EXISTS pending(event_id TEXT PRIMARY KEY,payload TEXT NOT NULL)")
+        self.db.execute("CREATE TABLE IF NOT EXISTS rejected(event_id TEXT PRIMARY KEY,payload TEXT NOT NULL,reason TEXT NOT NULL,captured_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
         self.db.commit()
+
+    def reject(self, event_id, payload, reason):
+        self.db.execute("INSERT OR REPLACE INTO rejected(event_id,payload,reason) VALUES(?,?,?)", (event_id, payload, str(reason)))
+        self.db.execute("DELETE FROM pending WHERE event_id=?", (event_id,))
+        self.db.commit()
+        print(json.dumps({"quarantined_event": event_id, "reason": str(reason)}), file=sys.stderr, flush=True)
 
     def enqueue(self, reading):
         payload = json.dumps(reading, sort_keys=True)
@@ -114,16 +138,28 @@ class Outbox:
     def flush(self, endpoint, source, token, retry_limit=5, delay=time.sleep):
         sent = 0
         for event_id, payload in self.db.execute("SELECT event_id,payload FROM pending ORDER BY rowid").fetchall():
+            try:
+                reading = json.loads(payload)
+            except ValueError as error:
+                self.reject(event_id, payload, "Invalid queued JSON: " + str(error))
+                continue
+            accepted = False
             for attempt in range(retry_limit + 1):
                 try:
-                    send(endpoint, source, token, [json.loads(payload)])
+                    send(endpoint, source, token, [reading])
+                    accepted = True
                     break
-                except urllib.error.URLError as error:
+                except PermanentIntakeError as error:
+                    self.reject(event_id, payload, error)
+                    break
+                except (urllib.error.URLError, RetryableIntakeError) as error:
                     if isinstance(error, urllib.error.HTTPError) and error.code < 500 and error.code != 429:
                         raise
                     if attempt == retry_limit:
                         raise
                     delay(min(30, 2 ** attempt))
+            if not accepted:
+                continue
             # A crash before this commit replays the same stable event ID safely.
             self.db.execute("DELETE FROM pending WHERE event_id=?", (event_id,))
             self.db.commit()
@@ -160,7 +196,11 @@ def main():
                 try:
                     reading = normalize(json.loads(line))
                 except (ValueError, TypeError) as exc:
-                    raise SystemExit("Invalid record on line %s: %s" % (lineno, exc))
+                    if args.dry_run:
+                        raise SystemExit("Invalid record on line %s: %s" % (lineno, exc))
+                    event_id = "invalid-" + hashlib.sha256(line.encode()).hexdigest()
+                    outbox.reject(event_id, line, "Invalid source record on line %s: %s" % (lineno, exc))
+                    continue
                 if args.dry_run:
                     print(json.dumps(reading))
                     count += 1
