@@ -39,12 +39,13 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci --ignore-scripts
-      - name: Verify automatic telemetry pipeline
-        run: |
-          node --test tests/automatic-telemetry.test.mjs
-          python3 -m unittest discover -s tests -p test_telemetry_bridge.py
       - name: Build
         run: npm run build
+      - name: Verify automatic pipeline, dashboards and built Worker
+        run: |
+          node --test tests/*.test.mjs
+          python3 -m unittest discover -s tests -p test_telemetry_bridge.py
+          npx tsc worker/telemetry-automation.ts --noEmit --strict --target ES2022 --module esnext --moduleResolution bundler --skipLibCheck
       - name: Isolate staging root from application request chain
         run: |
           node --input-type=module <<'EOF'
@@ -118,14 +119,15 @@ jobs:
           // The next normal 15-minute cron must populate the new report documents.
           const sql = `SELECT
             (SELECT COUNT(*) FROM telemetry_ingest_v2 i JOIN machine_telemetry_v1 t ON t.id=i.telemetry_id AND t.company_id=i.company_id WHERE i.status='accepted' AND i.received_at>='${since}' AND t.source LIKE '%staging-test%') linked_readings,
-            (SELECT COUNT(*) FROM telemetry_report_documents_v2 WHERE generated_at>='${since}') reports,
+            (SELECT COUNT(*) FROM telemetry_report_documents_v2 WHERE generated_at>='${since}' AND json_extract(report_json,'$.version')=3) reports,
+            (SELECT COUNT(*) FROM telemetry_analysis_receipts_v3 WHERE analysed_at>='${since}') analysis_receipts,
             (SELECT COUNT(*) FROM telemetry_condition_findings_v2 WHERE diagnostic_code='SPN 110 FMI 0' AND details LIKE '%Engine coolant temperature%') mapped_diagnostic_findings`;
           for(let attempt=0;attempt<33;attempt++) {
             const result=spawnSync('npx',['wrangler','d1','execute','tmm-asset-health-light-staging-db','--remote','--config','wrangler.light-staging.jsonc','--command',sql,'--json'],{encoding:'utf8',timeout:45000});
             if(result.status===0) {
               try {
                 const row=JSON.parse(result.stdout)?.[0]?.results?.[0];
-                if(row?.linked_readings>0 && row?.reports>=3 && row?.mapped_diagnostic_findings>0) {
+                if(row?.linked_readings>0 && row?.reports>=3 && row?.analysis_receipts>0 && row?.mapped_diagnostic_findings>0) {
                   console.log('PASS: unattended staging intake -> storage -> mapped diagnostics -> saved automatic reports',JSON.stringify(row));
                   process.exit(0);
                 }

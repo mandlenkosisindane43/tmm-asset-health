@@ -70,6 +70,12 @@ export default {
     if(path==="/owner"&&req.method==="GET"&&url.searchParams.get("view")==="companies"){const csrf=String((await first(env,"SELECT csrf_token csrf FROM owner_sessions_v1 WHERE token_hash=? LIMIT 1",[await sha256(getCookie(req,OWNER_COOKIE))]))?.csrf||"");return polishOwnerCompanies(await ownerApp.fetch(req,env as never,ctx as never),env,csrf);}
     if(path==="/owner-login"||path==="/owner"||path.startsWith("/owner/")){const res=await ownerApp.fetch(req,env as never,ctx as never);if(req.method!=="GET"||path!=="/owner")return res;const ct=res.headers.get("content-type")||"";if(!ct.includes("text/html"))return res;let body=await res.text();if(body.includes("</nav>")&&!body.includes('href="/owner/ai-control"'))body=body.replace("</nav>",'<a href="/owner/ai-control"><span>✦</span><b>AI Subscription Control</b></a></nav>');else if(!body.includes('href="/owner/ai-control"'))body=body.replace("</main>",'<section class="panel section-gap" style="border:2px solid #e3a500"><h2>TMM AI Subscription Control</h2><p class="muted">Choose which companies may use the AI Assistant and manage their subscription status.</p><a class="btn amber" href="/owner/ai-control">Open AI Subscription Control</a></section></main>');const h=new Headers(res.headers);h.delete("content-length");h.set("cache-control","private, no-store");return new Response(body,{status:res.status,statusText:res.statusText,headers:h});}
     if(path==="/company-licence"||path.startsWith("/company-licence/"))return licenceApp.fetch(req,env as never,ctx as never);
+    // Operational views share the central telemetry store; historical/manual records remain explicit.
+    if(req.method==="GET"&&path==="/contractor"&&url.searchParams.get("manual")!=="1"&&["","dashboard","daily","production","maintenance","alerts","machine-monitoring","reports-live","management-presentation"].includes(url.searchParams.get("view")||"")){
+      const target=new URL("/telemetry/automatic",url);for(const [key,value] of url.searchParams)if(key!=="view")target.searchParams.set(key,value);target.searchParams.set("section",url.searchParams.get("view")||"dashboard");
+      return telemetryApp.fetch(new Request(target,req),env as never,ctx as never);
+    }
+    if(path==="/telemetry"&&req.method==="GET"){const target=new URL("/telemetry/automatic",url);target.search=url.search;return telemetryApp.fetch(new Request(target,req),env as never,ctx as never)}
     if(path==="/telemetry"||path.startsWith("/telemetry/")||path.startsWith("/api/telemetry"))return telemetryApp.fetch(req,env as never,ctx as never);
 
 // Six clear top-level destinations for the light contractor workspace.
@@ -132,14 +138,15 @@ function addTelemetryOverview(body:string):string{
    fleet.style.cssText="margin-top:14px;font-size:13px;color:#435a72";
    section.appendChild(fleet);
    function display(v,suffix){return v==null?"—":Number(v).toLocaleString(undefined,{maximumFractionDigits:1})+(suffix||"")}
-   fetch("/api/telemetry/fleet-metrics",{credentials:"same-origin",cache:"no-store"}).then(function(r){if(!r.ok)throw Error("Telemetry service returned "+r.status);return r.json()}).then(function(d){
+   function refreshMetrics(){fetch("/api/telemetry/fleet-metrics",{credentials:"same-origin",cache:"no-store"}).then(function(r){if(!r.ok)throw Error("Telemetry service returned "+r.status);return r.json()}).then(function(d){
      var x=d.summary||{},c=d.coverage||{};
      var entries=[["Machines reporting",display(c.machines_with_readings)+" / "+display(c.registered_machines)],["Utilisation",display(x.utilisation_percent,"%")],["Operating hours",display(x.operating_hours," h")],["Idle hours",display(x.idle_hours," h")],["Service due soon",display(x.services_due_soon)],["Overdue services",display(x.services_overdue)],["Open alerts",display(x.open_alerts)],["Observed period",display(x.observed_hours," h")]];
      metrics.replaceChildren();
      entries.forEach(function(pair){var card=document.createElement("div");card.style.cssText="padding:14px;border:1px solid #dce5ef;border-radius:10px;background:#f8fafc";var name=document.createElement("div");name.style.cssText="font-size:12px;color:#536981;margin-bottom:8px";name.textContent=pair[0];var value=document.createElement("strong");value.style.cssText="font-size:22px;color:#102b4a";value.textContent=pair[1];card.append(name,value);metrics.appendChild(card)});
      var machines=Array.isArray(d.machines)?d.machines:[];
      fleet.textContent=machines.length?machines.length+" registered machines available in the live fleet report. Select a machine there to inspect service calculations and history.":"No registered machines yet. Values are not estimated.";
-   }).catch(function(e){metrics.textContent="Live telemetry calculations are temporarily unavailable. Existing company data has not been changed.";fleet.textContent=String(e.message||e)});
+   }).catch(function(e){metrics.textContent="Live telemetry calculations are temporarily unavailable. Existing company data has not been changed.";fleet.textContent=String(e.message||e)});}
+   refreshMetrics();setInterval(refreshMetrics,60000);
    var banner=Array.from(main.querySelectorAll("h1,h2")).find(function(e){return /Fleet performance overview/i.test(e.textContent||"")});
    var target=banner&&banner.closest("section");
    if(target&&target.parentNode)target.insertAdjacentElement("afterend",section);

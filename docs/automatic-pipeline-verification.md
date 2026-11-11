@@ -1,5 +1,7 @@
 # Automatic telemetry pipeline — isolated light staging
 
+**Current implementation:** see [Automatic operation](automatic-operation.md) for the shared live/simulation engine, source-based dashboard, configured limits and durable delivery. The evidence below records the earlier simulation milestone.
+
 ## Implemented flow
 
 The existing Cloudflare scheduled handler runs every 15 minutes while the dashboard is closed:

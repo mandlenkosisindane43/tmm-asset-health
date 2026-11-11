@@ -349,7 +349,7 @@ export async function scanCompany(env: Env, cid: number) {
     );
   }
   const zaHour = zaNow().getUTCHours();
-  if (zaHour >= 18) {
+  if (zaHour >= 18 && env.TMM_AUTOMATIC_MODE !== "true") {
     const missing = await all(
       env,
       `SELECT m.fleet_number AS fleet,m.site

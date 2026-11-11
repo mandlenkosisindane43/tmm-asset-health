@@ -33,7 +33,12 @@ export default {
       if(machine)target.searchParams.set("machine",machine);
       return Response.redirect(target,302);
     }
-    if(path==="/fleet-history") return machineHistory(req,env);
+    if(path==="/fleet-history"){
+      if(url.searchParams.get("manual")==="1")return machineHistory(req,env);
+      const target=new URL("/telemetry/automatic",url);target.search=url.search;
+      if(url.searchParams.get("fleet"))target.searchParams.set("machine",url.searchParams.get("fleet")!);
+      return app.fetch(new Request(target,req),env as never,ctx as never);
+    }
     // Role schema setup is not a per-request responsibility.
     // Role-aware operations invoke ensureAccountRoles only when required.
     // Next.js operations has its own authentication and data access.

@@ -4,22 +4,38 @@
   "account_id": "ba53c9a85c6f300723d5d58f899722f9",
   "main": "./dist/server/index.js",
   "compatibility_date": "2026-08-28",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
   "workers_dev": true,
-  "triggers": {"crons": ["*/15 * * * *"]},
+  "triggers": {
+    "crons": [
+      "*/15 * * * *"
+    ]
+  },
   "assets": {
     "directory": "./dist/client",
     "binding": "ASSETS",
     "not_found_handling": "none"
   },
-  "d1_databases": [{
-    "binding": "DB",
-    "database_name": "tmm-asset-health-light-staging-db",
-    "database_id": "b7f64035-831b-45ab-8a6c-036a67368bd7"
-  }],
-  "r2_buckets": [{
-    "binding": "BUCKET",
-    "bucket_name": "tmm-asset-health-light-staging-files"
-  }],
-  "observability": { "enabled": true }
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "tmm-asset-health-light-staging-db",
+      "database_id": "b7f64035-831b-45ab-8a6c-036a67368bd7"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "BUCKET",
+      "bucket_name": "tmm-asset-health-light-staging-files"
+    }
+  ],
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "TMM_AUTOMATIC_MODE": "true",
+    "TMM_APP_ORIGIN": "https://tmm-asset-health-light-staging.mandlenkosisindane43.workers.dev"
+  }
 }

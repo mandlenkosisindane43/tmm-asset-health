@@ -20,6 +20,14 @@ class BridgeReliabilityTests(unittest.TestCase):
         self.assertEqual(first["fault_codes"], [{"spn": 110, "fmi": 0}])
         self.assertIs(first["test_data"], True)
 
+    def test_units_and_counter_semantics_survive_transfer_normalization(self):
+        observation = {"machine_id": "EXT", "recorded_at": "2026-11-11T08:00:00Z", "coolant_temp_c": 90,
+                       "production_tonnes": 100, "counter_semantics": {"production_tonnes": "cumulative"}}
+        normalized = bridge.normalize(observation)
+        self.assertEqual(normalized["units"]["coolant_temperature"], "degC")
+        self.assertEqual(normalized["counter_semantics"], {"production_tonnes": "cumulative"})
+        self.assertEqual(normalized["production_tonnes"], 100)
+
     def test_network_outage_retries_automatically(self):
         with tempfile.TemporaryDirectory() as root:
             queue = bridge.Outbox(str(Path(root) / "queue.sqlite3"))

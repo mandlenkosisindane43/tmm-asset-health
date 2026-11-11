@@ -20,24 +20,30 @@ FIELDS = {
     "event_id": ("event_id", "message_id"),
     "test_data": ("test_data",),
     "fault_codes": ("fault_codes", "diagnostics", "activeFaults"),
+    "units": ("units",),
+    "counter_semantics": ("counter_semantics",),
+    "idle_hours": ("idle_hours", "idleHours"),
+    "production_tonnes": ("production_tonnes", "productionTonnes"),
+    "fuel_litres": ("fuel_litres", "fuelLitres"),
+    "odometer": ("odometer",),
     "battery_voltage": ("battery_voltage", "batteryVoltage"),
     "rpm": ("rpm", "engine_rpm"),
     "engine_load": ("engine_load", "engineLoad"),
     "latitude": ("latitude", "lat"),
     "longitude": ("longitude", "lon", "lng"),
-    "hydraulic_temperature": ("hydraulic_temperature", "hydraulicTemperature"),
+    "hydraulic_temperature": ("hydraulic_temperature", "hydraulicTemperature", "hydraulic_oil_temp_c"),
     "transmission_temperature": ("transmission_temperature", "transmissionTemperature"),
     "timestamp": ("timestamp", "recorded_at", "time"),
     "engine_hours": ("engine_hours", "engineHours", "hour_meter"),
     "ignition_status": ("ignition_status", "ignition"),
     "fuel_level": ("fuel_level", "fuel_percent"),
-    "hydraulic_pressure": ("hydraulic_pressure",),
+    "hydraulic_pressure": ("hydraulic_pressure", "hydraulic_pressure_bar"),
     "hydraulic_oil_level": ("hydraulic_oil_level",),
     "engine_oil_pressure": ("engine_oil_pressure",),
-    "coolant_temperature": ("coolant_temperature", "coolant_c"),
+    "coolant_temperature": ("coolant_temperature", "coolant_c", "coolant_temp_c"),
     "fault_code": ("fault_code", "diagnostic_code"),
 }
-NUMERIC = {"engine_hours", "fuel_level", "hydraulic_pressure", "hydraulic_oil_level", "engine_oil_pressure", "coolant_temperature", "battery_voltage", "rpm", "engine_load", "latitude", "longitude", "hydraulic_temperature", "transmission_temperature"}
+NUMERIC = {"engine_hours", "fuel_level", "hydraulic_pressure", "hydraulic_oil_level", "engine_oil_pressure", "coolant_temperature", "battery_voltage", "rpm", "engine_load", "latitude", "longitude", "hydraulic_temperature", "transmission_temperature", "idle_hours", "production_tonnes", "fuel_litres", "odometer"}
 
 
 def normalize(record):
@@ -58,6 +64,18 @@ def normalize(record):
         raise ValueError("timestamp required; do not fabricate timestamps")
     if "test_data" in out and not isinstance(out["test_data"], bool):
         raise ValueError("test_data must be a boolean")
+    for field in ("units", "counter_semantics"):
+        if field in out and not isinstance(out[field], dict):
+            raise ValueError(field + " must be an object")
+    inferred_units = {}
+    if "hydraulic_pressure_bar" in record and "hydraulic_pressure" not in record:
+        inferred_units["hydraulic_pressure"] = "bar"
+    if ("coolant_c" in record or "coolant_temp_c" in record) and "coolant_temperature" not in record:
+        inferred_units["coolant_temperature"] = "degC"
+    if "hydraulic_oil_temp_c" in record and "hydraulic_temperature" not in record:
+        inferred_units["hydraulic_temperature"] = "degC"
+    if inferred_units:
+        out["units"] = {**inferred_units, **out.get("units", {})}
     if not out.get("event_id"):
         out["event_id"] = "bridge-" + hashlib.sha256(json.dumps(out, sort_keys=True).encode()).hexdigest()
     return out

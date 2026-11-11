@@ -12,8 +12,11 @@ const fallback = `const currentApp={fetch:async()=>new Response('fallback',{stat
 const dataURL = source => 'data:text/javascript;base64,' + Buffer.from(stripTypeScriptTypes(source)+'\n//# sourceURL=telemetry-under-test.js').toString('base64');
 const storage = readFileSync(new URL('../worker/router-telemetry-ready.ts', import.meta.url), 'utf8')
   .replace('import currentApp from "./router-month-end";', fallback);
+const automation=readFileSync(new URL('../worker/telemetry-automation.ts',import.meta.url),'utf8');
+const automationModule=await import(dataURL(automation));
 const router = readFileSync(new URL('../worker/router-telemetry-ingestion-v2.ts', import.meta.url), 'utf8')
-  .replace('"./router-telemetry-ready"', JSON.stringify(dataURL(storage)));
+  .replace('"./router-telemetry-ready"', JSON.stringify(dataURL(storage)))
+  .replace('"./telemetry-automation"', JSON.stringify(dataURL(automation)));
 const app = (await import(dataURL(router))).default;
 const digest = async v => Buffer.from(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(v))).toString('hex');
 const ctx = { waitUntil() {}, passThroughOnException() {} };
@@ -21,11 +24,11 @@ const ctx = { waitUntil() {}, passThroughOnException() {} };
 function database() {
   const sql = new DatabaseSync(':memory:');
   sql.exec(`CREATE TABLE companies(id INTEGER PRIMARY KEY,name TEXT);
-    CREATE TABLE machines(id INTEGER PRIMARY KEY,company_id INTEGER,fleet_number TEXT,operating_hours REAL,next_service_hours REAL);
+    CREATE TABLE machines(id INTEGER PRIMARY KEY,company_id INTEGER,fleet_number TEXT,operating_hours REAL,next_service_hours REAL,site TEXT,status TEXT);
     CREATE TABLE contractor_accounts(id INTEGER PRIMARY KEY,company_id INTEGER,role TEXT,full_name TEXT,status TEXT,email TEXT);
     CREATE TABLE contractor_sessions(company_id INTEGER,account_id INTEGER,token_hash TEXT,active_role TEXT,expires_at TEXT);
     INSERT INTO companies VALUES(1,'Test One'),(2,'Test Two');
-    INSERT INTO machines VALUES(1,1,'SAS ADT 027',1000,1500),(2,2,'SECOND',2000,2500);
+    INSERT INTO machines VALUES(1,1,'SAS ADT 027',1000,1500,'North','active'),(2,2,'SECOND',2000,2500,'South','active');
     INSERT INTO contractor_accounts VALUES(1,1,'engineer','Engineer One','active','one@example.test'),(2,2,'engineer','Engineer Two','active','two@example.test');`);
   let failure=null;
   const DB = { prepare(query) {
@@ -184,7 +187,7 @@ test('replaying a quarantined event never reports success; event IDs cannot chan
 
 test('multiple machines and companies produce separate reports and simulation never enters live fleet metrics',async()=>{
   const {sql,env}=database();await configure(env,sql);
-  sql.exec("INSERT INTO machines VALUES(3,1,'FIRST-SECOND',1500,1750); INSERT INTO telemetry_machine_map_v2(company_id,connection_id,external_machine_id,machine_id,created_at) VALUES(1,1,'EXT-TWO','FIRST-SECOND','now');");
+  sql.exec("INSERT INTO machines VALUES(3,1,'FIRST-SECOND',1500,1750,'North','active'); INSERT INTO telemetry_machine_map_v2(company_id,connection_id,external_machine_id,machine_id,created_at) VALUES(1,1,'EXT-TWO','FIRST-SECOND','now');");
   sql.prepare("INSERT INTO telemetry_connections_v2(company_id,provider,connection_name,source_key,token_hash,status,created_by,created_at) VALUES(2,'other','Second','second-source',?,'active',2,'now')").run(await digest('second-token'));
   sql.exec("INSERT INTO telemetry_machine_map_v2(company_id,connection_id,external_machine_id,machine_id,created_at) VALUES(2,2,'EXT-THREE','SECOND','now')");
   await intake(env,reading());
@@ -204,4 +207,130 @@ test('multiple machines and companies produce separate reports and simulation ne
   const data=await metrics.json();
   assert.equal(data.coverage.machines_with_readings,0);
   assert.equal(data.summary.operating_hours,null);
+});
+
+async function deliverySettings(sql,enabled=1){
+ sql.prepare("INSERT INTO telemetry_automation_settings_v3(company_id,recipients_json,delivery_enabled,report_hour_sast,updated_by,updated_at) VALUES(1,?, ?,0,1,?)").run(JSON.stringify(['engineer@example.test']),enabled,new Date().toISOString());
+}
+
+test('live intake automatically produces sourced fault findings, approved-limit alerts and saved live reports',async()=>{
+ const {sql,env}=database();await configure(env,sql);await deliverySettings(sql);
+ sql.prepare("INSERT INTO telemetry_machine_limits_v3(company_id,machine_id,metric,unit,comparison,warning_value,critical_value,reference,approved_by,updated_at) VALUES(1,'SAS ADT 027','coolant_temperature','degC','high',100,108,'Test-only approved specification',1,?)").run(new Date().toISOString());
+ const p=reading({test_data:false,fault_codes:[{spn:100,fmi:1},'UNMAPPED-OEM'],units:{coolant_temperature:'degC'}});
+ assert.equal((await (await intake(env,p)).json()).ok,true);
+ await app.scheduled({scheduledTime:Date.now(),cron:'*/15 * * * *'},env,ctx);
+ const reports=sql.prepare("SELECT report_json FROM telemetry_report_documents_v2").all().map(r=>JSON.parse(r.report_json));
+ assert.equal(reports.length,3);assert.ok(reports.every(r=>r.source_mode==='live'));
+ assert.ok(reports[0].findings.some(f=>f.diagnostic_code==='SPN 100 FMI 1'&&f.details.includes('Engine oil pressure')));
+ assert.ok(reports[0].findings.some(f=>f.diagnostic_code==='UNMAPPED-OEM'&&f.details.includes('definition required')));
+ assert.ok(reports[0].findings.some(f=>f.category==='configured_limit'&&f.severity==='critical'));
+ assert.equal(count(sql,'telemetry_alerts_v1'),0,'unconfigured legacy numeric rules must not create guessed alarms');
+ const outbox=count(sql,'telemetry_delivery_outbox_v3');assert.ok(outbox>=4);
+ assert.equal(sql.prepare("SELECT COUNT(*) n FROM telemetry_delivery_outbox_v3 WHERE status='sent'").get().n,0,'no provider credentials means no send claims');
+ await app.scheduled({scheduledTime:Date.now(),cron:'*/15 * * * *'},env,ctx);
+ assert.equal(count(sql,'telemetry_delivery_outbox_v3'),outbox,'replayed processing must not duplicate notification jobs');
+ const headers=await signIn(sql);
+ const page=await app.fetch(new Request('https://test.invalid/telemetry/connections/report-document?id=1',{headers}),env,ctx);
+ assert.match(await page.text(),/LIVE RECEIVED TELEMETRY/);
+ const data=await (await app.fetch(new Request('https://test.invalid/api/telemetry/automatic?site=North',{headers}),env,ctx)).json();
+ assert.equal(data.machines[0].reading_count,1);assert.equal(data.machines[0].production_tonnes,null);assert.equal(data.analysis_pending,0);
+ const wrongSite=await (await app.fetch(new Request('https://test.invalid/api/telemetry/automatic?site=South',{headers}),env,ctx)).json();assert.equal(wrongSite.machines.length,0);
+});
+
+test('missing source units and stopped engines never produce configured pressure alarms',async()=>{
+ const {sql,env}=database();await configure(env,sql);
+ sql.exec("INSERT INTO telemetry_machine_limits_v3(company_id,machine_id,metric,unit,comparison,warning_value,critical_value,reference,approved_by,updated_at) VALUES(1,'SAS ADT 027','engine_oil_pressure','kPa','low',150,100,'Test-only pressure reference',1,'now')");
+ await intake(env,reading({test_data:false,fault_codes:[],engine_oil_pressure:1,ignition_status:'off',rpm:0,units:{engine_oil_pressure:'kPa'}}));
+ await intake(env,reading({test_data:false,fault_codes:[],engine_oil_pressure:1,ignition_status:'on',rpm:1000,units:{engine_oil_pressure:'psi'}}));
+ await app.scheduled({scheduledTime:Date.now(),cron:'*/15 * * * *'},env,ctx);
+ assert.equal(sql.prepare("SELECT COUNT(*) n FROM telemetry_condition_findings_v2 WHERE category='configured_limit'").get().n,0);
+ assert.equal(sql.prepare("SELECT COUNT(*) n FROM telemetry_condition_findings_v2 WHERE category='units_required'").get().n,1);
+});
+
+test('delivery retries retain the same provider idempotency key; simulation never queues external mail',async()=>{
+ const {sql,env}=database();await configure(env,sql);await deliverySettings(sql);
+ await intake(env,reading({test_data:false}));
+ await app.scheduled({scheduledTime:Date.now(),cron:'*/15 * * * *'},env,ctx);
+ const job=sql.prepare('SELECT * FROM telemetry_delivery_outbox_v3 ORDER BY id LIMIT 1').get();
+ sql.prepare("UPDATE telemetry_delivery_outbox_v3 SET status='cancelled' WHERE id<>?").run(job.id);
+ const at=new Date(Date.now()+16*60000).toISOString(),requests=[];
+ env.RESEND_API_KEY='test-only-not-a-real-key';
+ const failing=async(url,options)=>{requests.push(options);return Response.json({message:'Temporary outage'},{status:503})};
+ await automationModule.dispatchDeliveries(env,at,failing);
+ assert.equal(sql.prepare('SELECT status FROM telemetry_delivery_outbox_v3 WHERE id=?').get(job.id).status,'retry');
+ const success=async(url,options)=>{requests.push(options);return Response.json({id:'fake-provider-accepted'})};
+ await automationModule.dispatchDeliveries(env,new Date(Date.parse(at)+900000).toISOString(),success);
+ assert.equal(sql.prepare('SELECT status FROM telemetry_delivery_outbox_v3 WHERE id=?').get(job.id).status,'sent');
+ assert.equal(requests[0].headers['Idempotency-Key'],requests[1].headers['Idempotency-Key']);
+ assert.equal(requests[0].body,requests[1].body);
+ await automationModule.dispatchDeliveries(env,new Date(Date.parse(at)+1800000).toISOString(),success);assert.equal(requests.length,2);
+ delete env.RESEND_API_KEY;
+ const before=count(sql,'telemetry_delivery_outbox_v3');await intake(env,reading({test_data:true}));
+ await app.scheduled({scheduledTime:Date.now(),cron:'*/15 * * * *'},env,ctx);assert.equal(count(sql,'telemetry_delivery_outbox_v3'),before);
+});
+
+test('provider acceptance followed by a database failure recovers with the same request identity',async()=>{
+ const {sql,env,failNext}=database();await configure(env,sql);await deliverySettings(sql);await intake(env,reading({test_data:false}));
+ await app.scheduled({scheduledTime:Date.now(),cron:'*/15 * * * *'},env,ctx);
+ const job=sql.prepare('SELECT * FROM telemetry_delivery_outbox_v3 ORDER BY id LIMIT 1').get();sql.prepare("UPDATE telemetry_delivery_outbox_v3 SET status='cancelled' WHERE id<>?").run(job.id);
+ env.RESEND_API_KEY='test-only';const calls=[];const provider=async(url,opts)=>{calls.push(opts);return Response.json({id:'same-provider-id'})};
+ const at=new Date(Date.now()+16*60000).toISOString();failNext("UPDATE telemetry_delivery_outbox_v3 SET status='sent'");
+ await automationModule.dispatchDeliveries(env,at,provider);await automationModule.dispatchDeliveries(env,new Date(Date.parse(at)+900000).toISOString(),provider);
+ assert.equal(calls.length,2);assert.equal(calls[0].headers['Idempotency-Key'],calls[1].headers['Idempotency-Key']);
+ assert.equal(sql.prepare('SELECT provider_id FROM telemetry_delivery_outbox_v3 WHERE id=?').get(job.id).provider_id,'same-provider-id');
+});
+
+test('measurement calculations require valid meter intervals and explicit counter semantics',()=>{
+ const m=automationModule.measuredMetrics([
+  {id:1,recorded_at:'2026-11-11T01:00:00Z',engine_hours:100,raw_json:JSON.stringify({idle_hours:10,production_tonnes:100,counter_semantics:{idle_hours:'cumulative',production_tonnes:'cumulative'}})},
+  {id:2,recorded_at:'2026-11-11T02:00:00Z',engine_hours:100.75,raw_json:JSON.stringify({idle_hours:10.2,production_tonnes:125,counter_semantics:{idle_hours:'cumulative',production_tonnes:'cumulative'}})}
+ ]);
+ assert.equal(m.operating_hours,.75);assert.equal(m.engine_runtime_percent,75);assert.equal(m.idle_hours,.2);assert.equal(m.production_tonnes,25);assert.equal(m.confirmed_downtime_hours,null);assert.equal(m.availability_percent,null);
+ const invalid=automationModule.measuredMetrics([{recorded_at:'2026-11-11T01:00:00Z',engine_hours:100},{recorded_at:'2026-11-11T02:00:00Z',engine_hours:90}]);assert.equal(invalid.operating_hours,null);
+});
+
+test('configuration is company-scoped, administrator-only and protected against cross-origin requests',async()=>{
+ const {sql,env}=database();await configure(env,sql);const headers=await signIn(sql);
+ const csrf=await digest('session-1'),post=(h,values)=>app.fetch(new Request('https://test.invalid/telemetry/connections/automation',{method:'POST',headers:h,body:new URLSearchParams({csrf,action:'delivery',recipients:'engineer@example.test',hour:'18',...values})}),env,ctx);
+ assert.equal((await post({...headers,origin:'https://test.invalid'})).status,403);
+ sql.exec("UPDATE contractor_accounts SET role='company_admin' WHERE id=1;UPDATE contractor_sessions SET active_role='company_admin' WHERE company_id=1");
+ assert.equal((await post({...headers,origin:'https://evil.invalid'})).status,403);
+ assert.equal((await post({...headers,origin:'https://test.invalid'},{csrf:'bad'})).status,403);
+ assert.equal((await post({...headers,origin:'https://test.invalid'},{enabled:'on'})).status,303);
+ assert.equal(sql.prepare('SELECT delivery_enabled FROM telemetry_automation_settings_v3 WHERE company_id=1').get().delivery_enabled,1);
+ assert.equal(count(sql,'telemetry_delivery_outbox_v3'),0,'configuration must not itself send or fabricate a report');
+});
+
+test('report scheduling rotates through more than ten machines instead of starving later machines',async()=>{
+ const {sql,env}=database();await configure(env,sql);
+ const data=[];
+ for(let i=0;i<25;i++){
+  const fleet='ROTATE-'+String(i).padStart(2,'0'),external='EXT-'+fleet;
+  sql.prepare("INSERT INTO machines(company_id,fleet_number,operating_hours,next_service_hours,site,status) VALUES(1,?,1000,1500,'North','active')").run(fleet);
+  sql.prepare("INSERT INTO telemetry_machine_map_v2(company_id,connection_id,external_machine_id,machine_id,created_at) VALUES(1,1,?,?,'now')").run(external,fleet);
+  data.push(reading({external_machine_id:external,fault_codes:[]}));
+ }
+ assert.equal((await (await intake(env,data)).json()).ok,true);
+ for(let i=0;i<3;i++)await app.scheduled({scheduledTime:Date.now(),cron:'*/15 * * * *'},env,ctx);
+ assert.equal(count(sql,'telemetry_analysis_receipts_v3'),25);
+ assert.equal(count(sql,'telemetry_report_documents_v2'),75);
+});
+
+test('concurrent dispatchers claim a queued notification once',async()=>{
+ const {sql,env}=database();await configure(env,sql);await deliverySettings(sql);await intake(env,reading({test_data:false}));
+ await app.scheduled({scheduledTime:Date.now(),cron:'*/15 * * * *'},env,ctx);
+ const job=sql.prepare('SELECT id FROM telemetry_delivery_outbox_v3 ORDER BY id LIMIT 1').get();sql.prepare("UPDATE telemetry_delivery_outbox_v3 SET status='cancelled' WHERE id<>?").run(job.id);
+ env.RESEND_API_KEY='test-only';let calls=0;const provider=async()=>{calls++;return Response.json({id:'accepted-once'})};const at=new Date(Date.now()+16*60000).toISOString();
+ await Promise.all([automationModule.dispatchDeliveries(env,at,provider),automationModule.dispatchDeliveries(env,at,provider)]);
+ assert.equal(calls,1);assert.equal(sql.prepare('SELECT status FROM telemetry_delivery_outbox_v3 WHERE id=?').get(job.id).status,'sent');
+});
+
+test('all telemetry intake aliases use connection-scoped authentication and the same central table',async()=>{
+ const {sql,env}=database();await configure(env,sql);
+ for(const path of ['/api/telemetry','/api/telemetry/ingest','/api/telemetry/v2']){
+  const headers={'content-type':'application/json','x-telemetry-source':'test-source',authorization:'Bearer test-token'};
+  const response=await app.fetch(new Request('https://test.invalid'+path,{method:'POST',headers,body:JSON.stringify(reading())}),env,ctx);
+  assert.equal((await response.json()).ok,true);
+ }
+ assert.equal(count(sql,'machine_telemetry_v1'),3);
 });

@@ -330,7 +330,7 @@ async function scanCompanySms(env: Env, cid: number) {
     );
   }
 
-  if (zaNow().getUTCHours() >= 18) {
+  if (zaNow().getUTCHours() >= 18 && env.TMM_AUTOMATIC_MODE !== "true") {
     const report = await first(
       env,
       "SELECT id FROM daily_reports_v3 WHERE company_id=? AND report_date=? LIMIT 1",
