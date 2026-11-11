@@ -26,7 +26,7 @@ import urllib.request
 
 DEFAULT_URL = "https://tmm-asset-health-light-staging.mandlenkosisindane43.workers.dev/api/telemetry/v2"
 ALLOWED_FIELDS = {
-    "event_id", "external_machine_id", "recorded_at", "engine_hours",
+    "event_id", "external_machine_id", "recorded_at", "engine_hours", "test_data",
     "ignition_status", "latitude", "longitude", "fuel_level", "odometer",
     "hydraulic_pressure", "hydraulic_oil_level", "engine_oil_pressure",
     "coolant_temperature", "rpm", "engine_load", "fault_code", "fault_codes",
@@ -59,6 +59,7 @@ def normalize(reading):
 def simulated(machine):
     now = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
     return {
+        "test_data": True,
         "event_id": f"SIMULATED-{machine}-{int(time.time())}",
         "external_machine_id": machine,
         "recorded_at": now,

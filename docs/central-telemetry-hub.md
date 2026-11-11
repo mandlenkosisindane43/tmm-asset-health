@@ -1,5 +1,7 @@
 # TMM Asset Health — Central Telemetry Hub (isolated light staging)
 
+For the current automatic v2 flow and test evidence, see [Automatic pipeline verification](automatic-pipeline-verification.md). The v1 endpoint and setup below describe the earlier relay.
+
 ## What is implemented
 - A company-isolated machine-monitoring page: `/contractor?view=machine-monitoring`.
 - A central intake API: `POST /api/telemetry/ingest`, protected by `TMM_INGEST_TOKEN`.

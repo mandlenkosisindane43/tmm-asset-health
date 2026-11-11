@@ -1,6 +1,16 @@
 name: Deploy isolated light contractor staging
 
 on:
+  push:
+    branches:
+      - design/modern-light-contractor-dashboard
+    paths:
+      - 'worker/**'
+      - 'integrations/python/**'
+      - 'tests/**'
+      - 'scripts/tmm_*'
+      - 'tools/telemetry_pipeline.py'
+      - '.github/workflows/deploy-light-staging.yml'
   workflow_dispatch:
 
 permissions:
@@ -29,6 +39,10 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci --ignore-scripts
+      - name: Verify automatic telemetry pipeline
+        run: |
+          node --test tests/automatic-telemetry.test.mjs
+          python3 -m unittest discover -s tests -p test_telemetry_bridge.py
       - name: Build
         run: npm run build
       - name: Isolate staging root from application request chain
@@ -92,3 +106,33 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Observe unattended scheduler and automatic report records
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          node --input-type=module <<'EOF'
+          import { spawnSync } from 'node:child_process';
+          const since = new Date().toISOString();
+          // Read-only observation: never invoke the simulator or generate reports here.
+          // The next normal 15-minute cron must populate the new report documents.
+          const sql = `SELECT
+            (SELECT COUNT(*) FROM telemetry_ingest_v2 i JOIN machine_telemetry_v1 t ON t.id=i.telemetry_id AND t.company_id=i.company_id WHERE i.status='accepted' AND i.received_at>='${since}' AND t.source LIKE '%staging-test%') linked_readings,
+            (SELECT COUNT(*) FROM telemetry_report_documents_v2 WHERE generated_at>='${since}') reports,
+            (SELECT COUNT(*) FROM telemetry_condition_findings_v2 WHERE diagnostic_code='SPN 110 FMI 0' AND details LIKE '%Engine coolant temperature%') mapped_diagnostic_findings`;
+          for(let attempt=0;attempt<33;attempt++) {
+            const result=spawnSync('npx',['wrangler','d1','execute','tmm-asset-health-light-staging-db','--remote','--config','wrangler.light-staging.jsonc','--command',sql,'--json'],{encoding:'utf8',timeout:45000});
+            if(result.status===0) {
+              try {
+                const row=JSON.parse(result.stdout)?.[0]?.results?.[0];
+                if(row?.linked_readings>0 && row?.reports>=3 && row?.mapped_diagnostic_findings>0) {
+                  console.log('PASS: unattended staging intake -> storage -> mapped diagnostics -> saved automatic reports',JSON.stringify(row));
+                  process.exit(0);
+                }
+              } catch {}
+            }
+            console.log(`Awaiting normal staging cron and saved reports (${attempt+1}/33).`);
+            if(attempt<32) await new Promise(resolve=>setTimeout(resolve,30000));
+          }
+          throw Error('Deployment completed, but unattended staging pipeline evidence was not observed. Check D1 read permissions, enabled simulator and scheduled-handler logs.');
+          EOF

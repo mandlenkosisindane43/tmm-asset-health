@@ -40,3 +40,9 @@ next-env.d.ts
 /.sites-runtime/
 /outputs/
 /work/
+
+# Local Python bridge runtime state
+__pycache__/
+*.pyc
+*.sqlite3
+*.tsbuildinfo

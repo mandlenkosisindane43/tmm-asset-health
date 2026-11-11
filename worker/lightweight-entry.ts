@@ -86,7 +86,7 @@ function simplifyContractorNavigation(body:string):string{
     ["▣","Machines","/contractor?view=fleet"],
     ["◉","Machine Health","/telemetry"],
     ["⚙","Maintenance","/contractor?view=maintenance"],
-    ["▤","Reports","/contractor?view=reports-live"],
+    ["▤","Reports","/telemetry/connections/scheduled-reports"],
     ["▦","Administration","/contractor?view=users"]
    ];
    nav.replaceChildren();
@@ -121,7 +121,7 @@ function addTelemetryOverview(body:string):string{
    var section=document.createElement("section");
    section.id="tmm-telemetry-overview";
    section.style.cssText="margin:16px 0 20px;background:#fff;border:1px solid #dce5ef;border-radius:14px;padding:22px;box-shadow:0 4px 18px rgba(20,40,70,.04)";
-   section.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div><div style="font-size:11px;letter-spacing:.08em;font-weight:800;color:#008b85;margin-bottom:7px">AUTOMATIC MACHINE DATA</div><h2 style="margin:0 0 8px;font-size:22px;color:#102b4a">Fleet performance &amp; machine health</h2><p style="margin:0;color:#56708b;max-width:650px">Engine-hour trends, utilisation estimates, service thresholds and received alerts are calculated from valid telemetry. Missing data stays unavailable.</p></div><a href="/fleet-performance" style="background:#132b4d;color:#fff;padding:12px 16px;border-radius:8px;text-decoration:none;font-weight:700">View live fleet performance</a></div><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px"><a href="/telemetry" style="color:#12446f;font-weight:700;text-decoration:underline">Machine readings &amp; alerts</a><a href="/telemetry/connections" style="color:#12446f;font-weight:700;text-decoration:underline">Connect machine data</a></div>';
+   section.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div><div style="font-size:11px;letter-spacing:.08em;font-weight:800;color:#008b85;margin-bottom:7px">AUTOMATIC MACHINE DATA</div><h2 style="margin:0 0 8px;font-size:22px;color:#102b4a">Fleet performance &amp; machine health</h2><p style="margin:0;color:#56708b;max-width:650px">Engine-hour trends, utilisation estimates, service thresholds and received alerts are calculated from valid telemetry. Missing data stays unavailable.</p></div><a href="/fleet-performance" style="background:#132b4d;color:#fff;padding:12px 16px;border-radius:8px;text-decoration:none;font-weight:700">View live fleet performance</a></div><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:18px"><a href="/telemetry" style="color:#12446f;font-weight:700;text-decoration:underline">Machine readings &amp; alerts</a><a href="/telemetry/connections/pipeline-status" style="color:#12446f;font-weight:700;text-decoration:underline">Automatic pipeline status</a><a href="/telemetry/connections/automatic-analysis" style="color:#12446f;font-weight:700;text-decoration:underline">Fault analysis</a><a href="/telemetry/connections/scheduled-reports" style="color:#12446f;font-weight:700;text-decoration:underline">Automatic reports</a><a href="/telemetry/connections" style="color:#12446f;font-weight:700;text-decoration:underline">Connect machine data</a></div>';
    var metrics=document.createElement("div");
    metrics.id="tmm-live-metrics";
    metrics.style.cssText="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:18px";

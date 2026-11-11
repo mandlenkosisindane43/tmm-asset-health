@@ -21,6 +21,7 @@ def sample(external_id: str, count: int):
         at = now - timedelta(minutes=(count - 1 - i) * 5)
         running = (i % 6) != 0
         rows.append({
+            "test_data": True,
             "event_id": f"staging-demo-{external_id}-{at.strftime('%Y%m%dT%H%M%SZ')}",
             "external_machine_id": external_id,
             "recorded_at": at.isoformat().replace("+00:00", "Z"),
