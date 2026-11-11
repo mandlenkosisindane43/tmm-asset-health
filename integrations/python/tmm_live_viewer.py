@@ -247,8 +247,8 @@ def main():
                    threading.Thread(target=viewer.produce, daemon=True)]
         for thread in threads:
             thread.start()
-        print('TMM Python live viewer: http://127.0.0.1:' + str(args.port), flush=True)
-        print('Open port ' + str(args.port) + ' in your Codespaces Ports tab. Keep it Private.', flush=True)
+        print('TMM Python live viewer: http://127.0.0.1:' + str(port), flush=True)
+        print('Open port ' + str(port) + ' in your Codespaces Ports tab. Keep it Private.', flush=True)
         print('Simulated readings start automatically. Ctrl+C stops the viewer. Online TMM is unchanged.', flush=True)
         if args.self_test:
             serving = threading.Thread(target=server.serve_forever, daemon=True)
@@ -257,7 +257,7 @@ def main():
             snapshot = viewer.snapshot()
             if not snapshot['completed'] or snapshot['error']:
                 raise RuntimeError(snapshot['error'] or 'Integration check timed out')
-            with urllib.request.urlopen('http://127.0.0.1:'+str(args.port)+'/api/state',timeout=5) as response:
+            with urllib.request.urlopen('http://127.0.0.1:'+str(port)+'/api/state',timeout=5) as response:
                 observed = json.load(response)
             if not observed['completed'] or observed['pending'] != 0:
                 raise RuntimeError('Viewer endpoint did not expose completed state')
