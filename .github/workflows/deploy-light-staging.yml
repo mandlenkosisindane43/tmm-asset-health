@@ -21,7 +21,33 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  clear-authorised-staging-demo:
+    if: github.event_name == 'push' && github.event.head_commit.message == 'ops: clear authorised TMM staging demo 20261112'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    environment: light-staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Verify reset isolation and recovery tests
+        run: python3 -m unittest discover -s tests -p test_staging_reset.py
+      - name: Archive and clear only TMM Staging Demo
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          TMM_RESET_REQUEST: clear-staging-demo-20261112
+        run: python3 scripts/tmm_clear_staging_demo.py
+      - name: Save counts-only reset receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-reset-receipt-20261112
+          path: staging-reset-summary.json
+          if-no-files-found: error
+
   deploy:
+    if: github.event.head_commit.message != 'ops: clear authorised TMM staging demo 20261112'
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment: light-staging
