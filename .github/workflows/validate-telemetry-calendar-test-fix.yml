@@ -1,0 +1,25 @@
+name: Validate staging telemetry calendar test fix
+
+on:
+  pull_request:
+    branches:
+      - design/modern-light-contractor-dashboard
+    paths:
+      - 'tests/automatic-telemetry.test.mjs'
+      - '.github/workflows/validate-telemetry-calendar-test-fix.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run test:telemetry
