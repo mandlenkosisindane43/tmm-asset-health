@@ -1,0 +1,33 @@
+name: Verify SAST telemetry integration test fix
+
+on:
+  push:
+    branches:
+      - fix/staging-sast-test-loader
+  pull_request:
+    branches:
+      - design/modern-light-contractor-dashboard
+    paths:
+      - 'tests/automatic-telemetry.test.mjs'
+      - '.github/workflows/verify-sast-test-loader.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Verify actual telemetry integration suite
+        run: node --experimental-strip-types --test tests/automatic-telemetry.test.mjs
+      - name: Build staging Worker
+        run: npm run build
+      - name: Verify built output
+        run: test -s dist/server/index.js
