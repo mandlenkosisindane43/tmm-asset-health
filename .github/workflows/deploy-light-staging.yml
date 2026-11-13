@@ -142,6 +142,12 @@ jobs:
         run: |
           node --input-type=module <<'EOF'
           import { spawnSync } from 'node:child_process';
+          // A cleared staging demo must stay empty. Do not enable simulation for CI.
+          const state=spawnSync('npx',['wrangler','d1','execute','tmm-asset-health-light-staging-db','--remote','--config','wrangler.light-staging.jsonc','--command','SELECT COUNT(*) enabled FROM telemetry_simulator_v2 WHERE enabled=1','--json'],{encoding:'utf8',timeout:45000});
+          if(state.status!==0) throw Error('Could not verify simulator state');
+          const enabled=JSON.parse(state.stdout)?.[0]?.results?.[0]?.enabled;
+          if(enabled===0){console.log('No enabled simulator: preserving cleared staging data; unattended simulation check is not applicable.');process.exit(0)}
+          if(!Number.isInteger(enabled)||enabled<0) throw Error('Invalid simulator state');
           const since = new Date().toISOString();
           // Read-only observation: never invoke the simulator or generate reports here.
           // The next normal 15-minute cron must populate the new report documents.
