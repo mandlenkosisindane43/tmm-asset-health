@@ -414,7 +414,7 @@ async function visualEngineeringReport(req:Request,env:Env,s:Session){
  const source=u.searchParams.get("source")==="demo"?"demo":"live";
  const start=u.searchParams.get("from")||"";
  const end=u.searchParams.get("to")||"";
- const validDate=(v:string)=>/^\\d{4}-\\d{2}-\\d{2}$/.test(v)&&!Number.isNaN(Date.parse(v+"T00:00:00Z"));
+ const validDate=(v:string)=>/^\d{4}-\d{2}-\d{2}$/.test(v)&&!Number.isNaN(Date.parse(v+"T00:00:00Z"));
  if((start&&!validDate(start))||(end&&!validDate(end))||(start&&end&&start>end))return new Response("Invalid report date range",{status:400});
  type ReportMachine={machine:string;availability:number|null;utilisation:number|null;downtime:number|null;faults:number;readings:number;id:number|null;source:string};
  let rows:ReportMachine[]=[];
@@ -431,7 +431,7 @@ async function visualEngineeringReport(req:Request,env:Env,s:Session){
  if(u.searchParams.get("format")==="csv"){
   const records=[["Machine","Availability (%)","Utilisation (%)","Downtime (h)","Fault-bearing readings","Total readings","Source"],...rows.map(r=>[r.machine,r.availability??"Unavailable",r.utilisation??"Unavailable",r.downtime??"Unavailable",r.faults,r.readings,r.source])];
   const cell=(v:unknown)=>'"'+String(v).replace(/"/g,'""')+'"';
-  return new Response("\\uFEFF"+records.map(r=>r.map(cell).join(",")).join("\\r\\n"),{headers:{"content-type":"text/csv; charset=utf-8","content-disposition":'attachment; filename="tmm-engineering-'+period+'-'+source+'.csv"',"cache-control":"private, no-store"}});
+  return new Response("\uFEFF"+records.map(r=>r.map(cell).join(",")).join("\r\n"),{headers:{"content-type":"text/csv; charset=utf-8","content-disposition":'attachment; filename="tmm-engineering-'+period+'-'+source+'.csv"',"cache-control":"private, no-store"}});
  }
  const link=(params:Record<string,string>)=>{const copy=new URLSearchParams(u.searchParams);for(const [k,v] of Object.entries(params))copy.set(k,v);return "/telemetry/connections/engineering-report?"+copy.toString()};
  const metric=(name:string,value:string)=>'<div class="eng-metric"><small>'+esc(name)+'</small><strong>'+esc(value)+'</strong></div>';
