@@ -10,6 +10,7 @@ on:
     paths:
       - 'worker/router-telemetry-ingestion-v2.ts'
       - 'worker/lightweight-entry.ts'
+      - 'worker/telemetry-automation.ts'
       - '.github/workflows/validate-engineering-report-pr.yml'
 
 permissions:
@@ -36,6 +37,8 @@ jobs:
           import assert from 'node:assert/strict';
           const nav = readFileSync('worker/lightweight-entry.ts', 'utf8');
           const report = readFileSync('worker/router-telemetry-ingestion-v2.ts', 'utf8');
+          const workspace = readFileSync('worker/telemetry-automation.ts', 'utf8');
+          assert.ok(workspace.includes('href="/telemetry/connections/engineering-report"'), 'Workspace sidebar still links to old saved reports');
           assert.ok(nav.includes('["▤","Reports","/telemetry/connections/engineering-report"]'), 'Light staging Reports link not wired');
           assert.ok(report.includes('async function visualEngineeringReport('), 'Engineering report implementation missing');
           assert.ok(report.includes('return visualEngineeringReport(req,env,s)'), 'Engineering report route missing');
