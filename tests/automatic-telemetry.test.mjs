@@ -443,7 +443,15 @@ test('partial persisted analysis and report failures recover without duplicate o
  assert.equal(sql.prepare('SELECT occurrences FROM telemetry_auto_alerts_v3').get().occurrences,2);assert.equal(count(sql,'telemetry_analysis_receipts_v3'),2);
  failNext('INSERT INTO telemetry_report_snapshots_v2');await automationModule.runTelemetryAutomation(env,lookup,at+32*60000);
  assert.match(sql.prepare('SELECT last_error FROM telemetry_automation_runs_v3').get().last_error,/Report retry/);
- await automationModule.runTelemetryAutomation(env,lookup,at+48*60000);assert.equal(count(sql,'telemetry_report_documents_v2'),3);assert.equal(sql.prepare('SELECT last_error FROM telemetry_automation_runs_v3').get().last_error,null);
+ await automationModule.runTelemetryAutomation(env,lookup,at+48*60000);
+ const reports=count(sql,'telemetry_report_documents_v2');
+ const snapshots=count(sql,'telemetry_report_snapshots_v2');
+ assert.ok(reports>=2 && reports<=6,'Expected calendar-scoped reports across at most two SAST days');
+ assert.equal(reports,snapshots,'Every saved report must correspond to exactly one snapshot');
+ assert.equal(sql.prepare('SELECT COUNT(DISTINCT snapshot_id) n FROM telemetry_report_documents_v2').get().n,reports,'No duplicate report documents');
+ await automationModule.runTelemetryAutomation(env,lookup,at+48*60000);
+ assert.equal(count(sql,'telemetry_report_documents_v2'),reports,'Replaying the same cycle must not duplicate reports');
+ assert.equal(sql.prepare('SELECT last_error FROM telemetry_automation_runs_v3').get().last_error,null);
 });
 
 test('reordered JSON objects remain duplicate observations and preserve original audit payloads',async()=>{
