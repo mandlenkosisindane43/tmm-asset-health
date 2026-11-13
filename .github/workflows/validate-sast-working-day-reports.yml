@@ -1,0 +1,48 @@
+name: Validate SAST working-day reports (staging only)
+
+on:
+  push:
+    branches:
+      - feature/staging-sast-working-day-reports
+  pull_request:
+    branches:
+      - design/modern-light-contractor-dashboard
+    paths:
+      - 'worker/sa-working-days.ts'
+      - 'worker/telemetry-automation.ts'
+      - 'worker/router-telemetry-ingestion-v2.ts'
+      - '.github/workflows/validate-sast-working-day-reports.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Check working-day rules
+        run: |
+          node --input-type=module <<'EOF'
+          import assert from 'node:assert/strict';
+          import {readFileSync} from 'node:fs';
+          const source=readFileSync('worker/sa-working-days.ts','utf8');
+          const scheduler=readFileSync('worker/telemetry-automation.ts','utf8');
+          const report=readFileSync('worker/router-telemetry-ingestion-v2.ts','utf8');
+          assert.ok(source.includes('isSouthAfricanWorkingDay'));
+          assert.ok(source.includes('easterSunday'));
+          assert.ok(scheduler.includes('sastDayStartUtc(day)'));
+          assert.ok(scheduler.includes('if(period==="daily"&&!isSouthAfricanWorkingDay(day))continue'));
+          assert.ok(report.includes('shiftWorkingDay(start,1)'));
+          assert.ok(report.includes('const defaultDay=nearestWorkingDay(today)'));
+          EOF
+      - name: Compile worker build
+        run: npm run build
+      - name: Verify worker output
+        run: test -s dist/server/index.js
