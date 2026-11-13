@@ -13,11 +13,29 @@ const fallback = `const currentApp={fetch:async()=>new Response('fallback',{stat
 const dataURL = source => 'data:text/javascript;base64,' + Buffer.from(stripTypeScriptTypes(source)+'\n//# sourceURL=telemetry-under-test.js').toString('base64');
 const storage = readFileSync(new URL('../worker/router-telemetry-ready.ts', import.meta.url), 'utf8')
   .replace('import currentApp from "./router-month-end";', fallback);
-const automation=readFileSync(new URL('../worker/telemetry-automation.ts',import.meta.url),'utf8');
-const automationModule=await import(dataURL(automation));
-const router = readFileSync(new URL('../worker/router-telemetry-ingestion-v2.ts', import.meta.url), 'utf8')
+
+const calendar = readFileSync(
+  new URL('../worker/sa-working-days.ts', import.meta.url),
+  'utf8'
+);
+
+const calendarURL = dataURL(calendar);
+
+const automation = readFileSync(
+  new URL('../worker/telemetry-automation.ts', import.meta.url),
+  'utf8'
+).replace('"./sa-working-days"', JSON.stringify(calendarURL));
+
+const automationModule = await import(dataURL(automation));
+
+const router = readFileSync(
+  new URL('../worker/router-telemetry-ingestion-v2.ts', import.meta.url),
+  'utf8'
+)
+  .replace('"./sa-working-days"', JSON.stringify(calendarURL))
   .replace('"./router-telemetry-ready"', JSON.stringify(dataURL(storage)))
   .replace('"./telemetry-automation"', JSON.stringify(dataURL(automation)));
+
 const app = (await import(dataURL(router))).default;
 const digest = async v => Buffer.from(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(v))).toString('hex');
 const ctx = { waitUntil() {}, passThroughOnException() {} };
