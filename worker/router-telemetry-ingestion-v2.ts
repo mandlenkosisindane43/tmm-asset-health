@@ -423,7 +423,7 @@ async function visualEngineeringReport(req:Request,env:Env,s:Session){
  if((start&&!validDate(start))||(end&&!validDate(end))||(start&&end&&start>end))return new Response("Invalid report date range",{status:400});
  type ReportMachine={machine:string;availability:number|null;utilisation:number|null;downtime:number|null;faults:number;readings:number;id:number|null;source:string};
  let rows:ReportMachine[]=[];
- if(source==="demo"){
+ if(source==="demo"&&dailyWorking&&!futureDay){
   rows=[{machine:"ADT 027",availability:82,utilisation:71,downtime:18,faults:3,readings:0,id:null,source:"demo"},
    {machine:"FEL 001",availability:94,utilisation:83,downtime:6,faults:1,readings:0,id:null,source:"demo"},
    {machine:"EX 003",availability:76,utilisation:65,downtime:24,faults:4,readings:0,id:null,source:"demo"}];
