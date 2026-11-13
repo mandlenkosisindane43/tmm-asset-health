@@ -1,0 +1,50 @@
+name: Validate staging engineering report PR
+
+on:
+  push:
+    branches:
+      - feature/light-staging-engineering-report
+  pull_request:
+    branches:
+      - design/modern-light-contractor-dashboard
+    paths:
+      - 'worker/router-telemetry-ingestion-v2.ts'
+      - 'worker/lightweight-entry.ts'
+      - '.github/workflows/validate-engineering-report-pr.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check out report feature
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Verify staging report routing and safety
+        run: |
+          node --input-type=module <<'EOF'
+          import { readFileSync } from 'node:fs';
+          import assert from 'node:assert/strict';
+          const nav = readFileSync('worker/lightweight-entry.ts', 'utf8');
+          const report = readFileSync('worker/router-telemetry-ingestion-v2.ts', 'utf8');
+          assert.ok(nav.includes('["▤","Reports","/telemetry/connections/engineering-report"]'), 'Light staging Reports link not wired');
+          assert.ok(report.includes('async function visualEngineeringReport('), 'Engineering report implementation missing');
+          assert.ok(report.includes('return visualEngineeringReport(req,env,s)'), 'Engineering report route missing');
+          assert.ok(report.includes('source_mode=\'live\''), 'Report must query live source separately');
+          assert.ok(report.includes('company_id=?'), 'Company isolation must be retained');
+          assert.ok(report.includes('ILLUSTRATIVE DATA — NOT LIVE'), 'Demo label missing');
+          assert.ok(report.includes('Availability and utilisation require validated'), 'Missing-data guard missing');
+          EOF
+      - name: Build staging application
+        run: npm run build
+      - name: Verify generated Worker
+        run: test -s dist/server/index.js
