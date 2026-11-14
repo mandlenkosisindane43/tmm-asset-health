@@ -1,0 +1,31 @@
+name: Validate staging downtime classifier
+
+on:
+  pull_request:
+    branches:
+      - design/modern-light-contractor-dashboard
+    paths:
+      - 'worker/downtime-classification.ts'
+      - 'worker/maintenance-planner.ts'
+      - 'worker/telemetry-automation.ts'
+      - 'tests/downtime-classification.test.mjs'
+      - 'tests/automatic-telemetry.test.mjs'
+      - '.github/workflows/validate-staging-downtime.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: node --test tests/downtime-classification.test.mjs
+      - run: npm run build
+      - run: npm run test:telemetry
