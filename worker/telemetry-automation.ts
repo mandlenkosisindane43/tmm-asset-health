@@ -320,7 +320,19 @@ export async function automaticFleetData(e:AutomationEnv,cid:number,url:URL){
   const windowMs={start:Date.parse(start),end:Date.parse(end)};
   stopClassification=selected.map(m=>{
    const machineId=text(m.fleet_number);
-   const machineStops=stops.filter(x=>text(x.machine_id).toLowerCase()===machineId.toLowerCase()).map(x=>({id:number(x.id),start:Date.parse(text(x.started_at)),end:Date.parse(text(x.ended_at)),kind:text(x.kind)==="breakdown"?"breakdown" as const:"unknown" as const}));
+   const manualStops=stops.filter(x=>text(x.machine_id).toLowerCase()===machineId.toLowerCase()).map(x=>({id:"manual:"+text(x.id),start:Date.parse(text(x.started_at)),end:Date.parse(text(x.ended_at)),kind:text(x.kind)==="breakdown"?"breakdown" as const:"unknown" as const}));
+   // Source-confirmed breakdown intervals: never infer an end from a fault, a meter, or a duration.
+   const sourceEvents=new Map<string,{id:string;start:number;end:number;kind:"breakdown"}>();
+   for(const reading of readings.filter(x=>text(x.machine_id).toLowerCase()===machineId.toLowerCase())){
+    const payload=parsed(reading.raw_json);
+    for(const raw of Array.isArray(payload.breakdown_events)?payload.breakdown_events:[]){
+     if(!raw||typeof raw!=="object")continue;
+     const event=raw as Row, id=text(event.event_id),begin=Date.parse(text(event.occurred_at)),finish=Date.parse(text(event.resumed_at));
+     if(!id||event.confirmed!==true||!Number.isFinite(begin)||!Number.isFinite(finish)||finish<=begin||finish-begin>86400000||finish>Date.parse(text(reading.recorded_at)))continue;
+     sourceEvents.set(id,{id:"source:"+id,start:begin,end:finish,kind:"breakdown"});
+    }
+   }
+   const machineStops=[...manualStops,...sourceEvents.values()];
    const machineBookings=approvedBookings.filter(x=>text(x.machine_id).toLowerCase()===machineId.toLowerCase()).map(x=>{const b=sastBooking(text(x.service_date),text(x.start_time),text(x.end_time));return b?{...b,id:number(x.id)}:null}).filter((x):x is {start:number;end:number;id:number}=>x!=null);
    return {machine_id:machineId,...classifyConfirmedStops(machineStops,machineBookings,windowMs)};
   });
