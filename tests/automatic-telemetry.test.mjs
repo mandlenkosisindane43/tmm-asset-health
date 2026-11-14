@@ -36,7 +36,9 @@ const router = readFileSync(
 )
   .replace('"./sa-working-days"', JSON.stringify(calendarURL))
   .replace('"./router-telemetry-ready"', JSON.stringify(dataURL(storage)))
-  .replace('"./telemetry-automation"', JSON.stringify(dataURL(automation)));
+  .replace('"./telemetry-automation"', JSON.stringify(dataURL(automation)))
+  // Telemetry-only test harness: route is not exercised in this suite.
+  .replace('"./maintenance-planner"', JSON.stringify(dataURL('export async function maintenancePlanner(){return new Response("Not exercised in telemetry suite",{status:501})}')));
 
 const app = (await import(dataURL(router))).default;
 const digest = async v => Buffer.from(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(v))).toString('hex');
