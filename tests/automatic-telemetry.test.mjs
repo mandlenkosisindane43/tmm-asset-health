@@ -23,10 +23,14 @@ const calendarURL = dataURL(calendar);
 const calendarModule=await import(calendarURL);
 const reportPeriods=()=>calendarModule.isSouthAfricanWorkingDay(calendarModule.sastDate())?3:2;
 
+const classification = readFileSync(new URL('../worker/downtime-classification.ts', import.meta.url), 'utf8');
+const classificationURL = dataURL(classification);
+
 const automation = readFileSync(
   new URL('../worker/telemetry-automation.ts', import.meta.url),
   'utf8'
-).replace('"./sa-working-days"', JSON.stringify(calendarURL));
+).replace('"./sa-working-days"', JSON.stringify(calendarURL))
+  .replace('"./downtime-classification"', JSON.stringify(classificationURL));
 
 const automationModule = await import(dataURL(automation));
 
