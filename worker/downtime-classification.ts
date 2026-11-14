@@ -3,7 +3,7 @@
  * Stop intervals must be separately confirmed by an authorised source.
  */
 export type Interval={start:number;end:number};
-export type StopInterval=Interval&{kind:"breakdown"|"unknown";id?:number|string};
+export type StopInterval=Interval&{kind:"maintenance"|"breakdown"|"unknown";id?:number|string};
 export type BookingInterval=Interval&{id?:number|string};
 const finite=(v:number)=>Number.isFinite(v);
 const valid=(x:Interval)=>finite(x.start)&&finite(x.end)&&x.end>x.start;
@@ -26,9 +26,11 @@ export function classifyConfirmedStops(stops:StopInterval[],bookings:BookingInte
   const a=cuts[i-1],b=cuts[i];if(b<=a)continue;
   const active=eligible.filter(s=>s.start<b&&s.end>a);if(!active.length)continue;
   const book=approved.filter(x=>x.start<b&&x.end>a);
-  if(book.length){planned+=b-a;for(const x of book)matched.add(String(x.id??x.start));}
-  else if(active.some(s=>s.kind==="breakdown"))unplanned+=b-a;
-  else unresolved+=b-a;
+  const maintenance=active.some(s=>s.kind==="maintenance"),breakdown=active.some(s=>s.kind==="breakdown");
+  if(maintenance&&breakdown)unresolved+=b-a; // conflicting causes require human reconciliation
+  else if(breakdown)unplanned+=b-a; // breakdown remains unplanned even within a booked window
+  else if(maintenance&&book.length){planned+=b-a;for(const x of book)matched.add(String(x.id??x.start));}
+  else unresolved+=b-a; // unknown stops and unbooked maintenance are not automatically planned
  }
  return {planned_hours:hours(planned),unplanned_hours:hours(unplanned),unresolved_hours:hours(unresolved),total_stop_hours:hours(planned+unplanned+unresolved),confirmed_stop_events:eligible.length,matched_bookings:matched.size,coverage:"confirmed-stop-intervals-only"};
 }
