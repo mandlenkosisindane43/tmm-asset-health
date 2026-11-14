@@ -320,7 +320,7 @@ export async function automaticFleetData(e:AutomationEnv,cid:number,url:URL){
   const windowMs={start:Date.parse(start),end:Date.parse(end)};
   stopClassification=selected.map(m=>{
    const machineId=text(m.fleet_number);
-   const manualStops=stops.filter(x=>text(x.machine_id).toLowerCase()===machineId.toLowerCase()).map(x=>({id:"manual:"+text(x.id),start:Date.parse(text(x.started_at)),end:Date.parse(text(x.ended_at)),kind:text(x.kind)==="breakdown"?"breakdown" as const:"unknown" as const}));
+   const manualStops=stops.filter(x=>text(x.machine_id).toLowerCase()===machineId.toLowerCase()).map(x=>({id:"manual:"+text(x.id),start:Date.parse(text(x.started_at)),end:Date.parse(text(x.ended_at)),kind:text(x.kind)==="breakdown"?"breakdown" as const:text(x.kind)==="maintenance"?"maintenance" as const:"unknown" as const}));
    // Source-confirmed breakdown intervals: never infer an end from a fault, a meter, or a duration.
    const sourceEvents=new Map<string,{id:string;start:number;end:number;kind:"breakdown"}>();
    for(const reading of readings.filter(x=>text(x.machine_id).toLowerCase()===machineId.toLowerCase())){
