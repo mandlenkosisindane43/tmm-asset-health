@@ -287,8 +287,8 @@ export async function automaticFleetData(e:AutomationEnv,cid:number,url:URL){
  await ensureAutomation(e);
  const source=url.searchParams.get("mode")==="simulation"?"simulation":"live",selector=source==="simulation"?"(source LIKE '%staging-test%' OR source LIKE '%SIMULATED%')":"(source NOT LIKE '%staging-test%' AND source NOT LIKE '%SIMULATED%')";
  const window=monitoringWindow(url),{from,to,timeZone,start,end}=window;
- const machines=await rows(e,"SELECT * FROM machines WHERE company_id=? ORDER BY fleet_number",[cid]),site=url.searchParams.get("site")||"",machine=url.searchParams.get("machine")||url.searchParams.get("fleet")||"";
- const selected=machines.filter(m=>(!site||text(m.site)===site)&&(!machine||text(m.fleet_number).toLowerCase()===machine.toLowerCase()));
+ const machines=(await rows(e,"SELECT * FROM machines WHERE company_id=? ORDER BY fleet_number",[cid])).filter(m=>source!=='live'||m.status!=='simulation'),site=url.searchParams.get("site")||"",machine=url.searchParams.get("machine")||url.searchParams.get("fleet")||"";
+ const selected=machines.filter(m=>(source!=='live'||m.status!=='simulation')&&(!site||text(m.site)===site)&&(!machine||text(m.fleet_number).toLowerCase()===machine.toLowerCase()));
  const readings=await rows(e,"SELECT t.* FROM machine_telemetry_v1 t JOIN machines m ON m.company_id=t.company_id AND lower(m.fleet_number)=lower(t.machine_id) WHERE t.company_id=? AND recorded_at>=? AND recorded_at<=? AND "+selector+" AND (?='' OR m.site=?) AND (?='' OR lower(t.machine_id)=lower(?)) ORDER BY recorded_at DESC,t.id DESC LIMIT 10001",[cid,start,end,site,site,machine,machine]);
  const findings=await rows(e,"SELECT f.* FROM telemetry_condition_findings_v2 f JOIN machine_telemetry_v1 t ON t.id=f.telemetry_id AND t.company_id=f.company_id WHERE f.company_id=? AND f.source_mode=? AND t.recorded_at>=? AND t.recorded_at<=? ORDER BY f.id DESC LIMIT 200",[cid,source,start,end]);
  const latestRows=await rows(e,"SELECT * FROM (SELECT t.*,ROW_NUMBER() OVER(PARTITION BY lower(machine_id) ORDER BY recorded_at DESC,id DESC) rank FROM machine_telemetry_v1 t WHERE company_id=? AND "+selector+") WHERE rank=1",[cid]);

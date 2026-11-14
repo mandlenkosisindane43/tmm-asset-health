@@ -25,23 +25,27 @@ has an empty active-fault list, and the sixth reintroduces them. No manual
 fault entry is required. A restarted producer begins a new scenario and resets
 its illustrative meters; do not treat this as a persistent lifetime meter.
 
-## Staging integration boundary
+## Hosted staging registration
 
-Current discovery accepts identity-bearing observations, but the site assignment
-route refuses simulation registration into `machines`. Therefore this producer
-alone does NOT complete automatic fleet registration or analysis/reporting for
-five unknown simulated machines. Do not strip `test_data` to bypass that rule.
+The staging-only page `/telemetry/connections/five-machine-trial` lets a company
+administrator enter a site and register all five simulation identities once.
+It validates role, same origin and session CSRF. Existing non-simulation identity
+conflicts stop registration. Repeating setup preserves the scenario start time.
+A pause button stops future trial collection without deleting historical data.
 
-Before the full trial, provide a simulation-only registration/mapping path and
-an authenticated staging connection. Reuse the existing durable Python bridge
-for network transfer, with its documented environment credentials and an
-independent persistent spool. No credentials belong in source control.
+The route and collector require both `TMM_FIVE_MACHINE_TRIAL=true` and the exact
+isolated staging app origin. They are disabled in production. The first batch
+is sent during registration through scoped authenticated intake; the existing
+server cron supplies following batches every 15 minutes without Python or an
+open browser. This exercises internal intake; it does not prove network transfer
+from an external OEM. All machines have `status=simulation`, no live operating
+meter or service schedule, and clearly labelled SIM IDs. Incoming readings retain
+`test_data=true`. Live readings to simulation-only machines are rejected. These
+machines are excluded from the automatic dashboard's live fleet and catalog.
+Simulation analysis and reports never queue external delivery.
 
-Continuous producer output requires a running host/service. This script does
-not install a scheduler, deploy a Worker, or start an unattended cloud service.
-The existing Worker schedule processes received data; it does not automatically
-start this external producer. A hosted source/simulator needs deployment before
-claiming end-to-end unattended collection.
+The Python producer remains a separate optional tool. It requires a running
+process and is not used by the hosted five-machine collector.
 
 ## Acceptance evidence still required
 
@@ -53,5 +57,7 @@ claiming end-to-end unattended collection.
 6. Duplicate delivery adds no extra fault occurrences or machines.
 7. Stored simulation reports remain separate from live reports and emails.
 
-No live staging transfer, real OEM connection or deployment is claimed by the
-local checks. Production remains untouched.
+Local integration tests advance the clock to verify registration, repeat delivery,
+scheduled hour-meter progression, automatic faults, stored reports and tenant
+isolation. Actual deployed cycles still require observation after setup.
+Production remains untouched.
