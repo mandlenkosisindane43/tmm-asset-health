@@ -92,7 +92,7 @@ function simplifyContractorNavigation(body:string):string{
     ["▦","Dashboard","/contractor?view=dashboard"],
     ["▣","Machines","/contractor?view=fleet"],
     ["◉","Machine Health","/telemetry"],
-    ["⚙","Maintenance","/contractor?view=maintenance"],
+    ["⚙","Maintenance","/telemetry/connections/maintenance-planner"],
     ["▤","Reports","/telemetry/connections/engineering-report"],
     ["▦","Administration","/contractor?view=users"]
    ];
