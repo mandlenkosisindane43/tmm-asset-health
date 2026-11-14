@@ -36,6 +36,7 @@
   },
   "vars": {
     "TMM_AUTOMATIC_MODE": "true",
+    "TMM_FIVE_MACHINE_TRIAL": "true",
     "TMM_APP_ORIGIN": "https://tmm-asset-health-light-staging.mandlenkosisindane43.workers.dev"
   }
 }

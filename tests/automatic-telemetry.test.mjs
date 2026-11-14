@@ -20,6 +20,8 @@ const calendar = readFileSync(
 );
 
 const calendarURL = dataURL(calendar);
+const calendarModule=await import(calendarURL);
+const reportPeriods=()=>calendarModule.isSouthAfricanWorkingDay(calendarModule.sastDate())?3:2;
 
 const automation = readFileSync(
   new URL('../worker/telemetry-automation.ts', import.meta.url),
@@ -100,8 +102,8 @@ test('scheduler completes intake -> storage -> findings -> daily/weekly/monthly 
   await app.scheduled(controller,env,ctx);
   assert.equal(sql.prepare('SELECT last_status FROM telemetry_simulator_v2 WHERE company_id=1').get().last_status,'accepted');
   assert.ok(count(sql,'telemetry_condition_findings_v2')>=2);
-  assert.equal(count(sql,'telemetry_report_snapshots_v2'),3);
-  assert.equal(count(sql,'telemetry_report_documents_v2'),3);
+  assert.equal(count(sql,'telemetry_report_snapshots_v2'),reportPeriods());
+  assert.equal(count(sql,'telemetry_report_documents_v2'),reportPeriods());
   const report=JSON.parse(sql.prepare('SELECT report_json FROM telemetry_report_documents_v2 LIMIT 1').get().report_json);
   assert.ok(report.findings.some(f=>f.diagnostic_code==='SPN 110 FMI 0'));
   assert.equal(report.source_mode,'simulation');
@@ -112,7 +114,7 @@ test('scheduler completes intake -> storage -> findings -> daily/weekly/monthly 
   await app.scheduled(controller,env,ctx);
   assert.equal(count(sql,'machine_telemetry_v1'),before,'replayed cron must not duplicate readings');
   assert.equal(sql.prepare('SELECT last_status FROM telemetry_simulator_v2 WHERE company_id=1').get().last_status,'accepted');
-  assert.equal(count(sql,'telemetry_report_snapshots_v2'),3);
+  assert.equal(count(sql,'telemetry_report_snapshots_v2'),reportPeriods());
   assert.equal(sql.prepare('SELECT operating_hours FROM machines WHERE id=1').get().operating_hours,1000);
 });
 
@@ -213,7 +215,7 @@ test('multiple machines and companies produce separate reports and simulation ne
   await intake(env,reading({external_machine_id:'EXT-TWO',fault_codes:['UNKNOWN-TWO']}));
   await intake(env,reading({external_machine_id:'EXT-THREE',fault_codes:[{spn:110,fmi:1}]}),'second-source','second-token');
   await app.scheduled({scheduledTime:Date.now(),cron:'*/15 * * * *'},env,ctx);
-  assert.equal(count(sql,'telemetry_report_documents_v2'),9);
+  assert.equal(count(sql,'telemetry_report_documents_v2'),3*reportPeriods());
   const reports=sql.prepare('SELECT company_id,report_json FROM telemetry_report_documents_v2').all();
   for(const row of reports){
     const report=JSON.parse(row.report_json);
@@ -239,12 +241,12 @@ test('live intake automatically produces sourced fault findings, approved-limit 
  assert.equal((await (await intake(env,p)).json()).ok,true);
  await app.scheduled({scheduledTime:Date.now(),cron:'*/15 * * * *'},env,ctx);
  const reports=sql.prepare("SELECT report_json FROM telemetry_report_documents_v2").all().map(r=>JSON.parse(r.report_json));
- assert.equal(reports.length,3);assert.ok(reports.every(r=>r.source_mode==='live'));
+ assert.equal(reports.length,reportPeriods());assert.ok(reports.every(r=>r.source_mode==='live'));
  assert.ok(reports[0].findings.some(f=>f.diagnostic_code==='SPN 100 FMI 1'&&f.details.includes('Engine oil pressure')));
  assert.ok(reports[0].findings.some(f=>f.diagnostic_code==='UNMAPPED-OEM'&&f.details.includes('definition required')));
  assert.ok(reports[0].findings.some(f=>f.category==='configured_limit'&&f.severity==='critical'));
  assert.equal(count(sql,'telemetry_alerts_v1'),0,'unconfigured legacy numeric rules must not create guessed alarms');
- const outbox=count(sql,'telemetry_delivery_outbox_v3');assert.ok(outbox>=4);
+ const outbox=count(sql,'telemetry_delivery_outbox_v3');assert.ok(outbox>=(reportPeriods()===3?4:3));
  assert.equal(sql.prepare("SELECT COUNT(*) n FROM telemetry_delivery_outbox_v3 WHERE status='sent'").get().n,0,'no provider credentials means no send claims');
  await app.scheduled({scheduledTime:Date.now(),cron:'*/15 * * * *'},env,ctx);
  assert.equal(count(sql,'telemetry_delivery_outbox_v3'),outbox,'replayed processing must not duplicate notification jobs');
@@ -332,7 +334,7 @@ test('report scheduling rotates through more than ten machines instead of starvi
  assert.equal((await (await intake(env,data)).json()).ok,true);
  for(let i=0;i<3;i++)await app.scheduled({scheduledTime:Date.now(),cron:'*/15 * * * *'},env,ctx);
  assert.equal(count(sql,'telemetry_analysis_receipts_v3'),25);
- assert.equal(count(sql,'telemetry_report_documents_v2'),75);
+ assert.equal(count(sql,'telemetry_report_documents_v2'),25*reportPeriods());
 });
 
 test('concurrent dispatchers claim a queued notification once',async()=>{
@@ -495,7 +497,7 @@ test('operational hour counters survive authenticated intake and flow into saved
  const now=Date.now(),values=[{scheduled_hours:100,available_hours:80,productive_hours:60},{scheduled_hours:101,available_hours:80.8,productive_hours:60.6}];
  for(let i=0;i<2;i++){const response=await intake(env,{external_machine_id:'EXT-ONE',event_id:'kpi-'+i,timestamp:new Date(now-3600000+i*3600000).toISOString(),...values[i],units:{scheduled_hours:'h',available_hours:'h',productive_hours:'h'},counter_semantics:{scheduled_hours:'cumulative',available_hours:'cumulative',productive_hours:'cumulative'}});const receipt=await response.json();assert.equal(receipt.results[0].status,"accepted",JSON.stringify(receipt));}
  await app.scheduled({},env,ctx);
- const reports=sql.prepare('SELECT report_json FROM telemetry_report_documents_v2').all().map(r=>JSON.parse(r.report_json));assert.ok(reports.length>=3);assert.equal(reports[0].metrics.availability_percent,80);assert.equal(reports[0].metrics.utilisation_percent,75);
+ const reports=sql.prepare('SELECT report_json FROM telemetry_report_documents_v2').all().map(r=>JSON.parse(r.report_json));assert.ok(reports.length>=reportPeriods());assert.equal(reports[0].metrics.availability_percent,80);assert.equal(reports[0].metrics.utilisation_percent,75);
 });
 
 async function discoveryAdmin(sql){const headers=await signIn(sql);sql.exec("UPDATE contractor_accounts SET role='company_admin' WHERE id=1;UPDATE contractor_sessions SET active_role='company_admin' WHERE company_id=1");return headers;}
@@ -510,7 +512,7 @@ test('discovered machine registers from a site once and retained readings automa
  const headers=await discoveryAdmin(sql);assert.equal((await assignSite(env,headers,id,'Mine North')).status,303);assert.equal((await assignSite(env,headers,id,'Mine North')).status,303);assert.equal(count(sql,'machines'),3);
  const machine=sql.prepare("SELECT * FROM machines WHERE site='Mine North'").get();assert.equal(machine.operating_hours,1246);assert.equal(machine.next_service_hours,1500);assert.equal(machine.category,'ADT');
  failNext("UPDATE telemetry_ingest_v2 SET status='accepted'");await app.scheduled({scheduledTime:Date.now()},env,ctx);await app.scheduled({scheduledTime:Date.now()},env,ctx);
- assert.equal(sql.prepare('SELECT status FROM telemetry_ingest_v2 WHERE event_key=?').get('1:'+p.event_id).status,'accepted');assert.equal(sql.prepare('SELECT COUNT(*) n FROM machine_telemetry_v1 WHERE machine_id=?').get(machine.fleet_number).n,2);assert.equal(sql.prepare('SELECT COUNT(*) n FROM telemetry_report_snapshots_v2 WHERE machine_id=?').get(machine.fleet_number).n,3);
+ assert.equal(sql.prepare('SELECT status FROM telemetry_ingest_v2 WHERE event_key=?').get('1:'+p.event_id).status,'accepted');assert.equal(sql.prepare('SELECT COUNT(*) n FROM machine_telemetry_v1 WHERE machine_id=?').get(machine.fleet_number).n,2);assert.equal(sql.prepare('SELECT COUNT(*) n FROM telemetry_report_snapshots_v2 WHERE machine_id=?').get(machine.fleet_number).n,reportPeriods());
  const newer=discoveryReading({timestamp:new Date(Date.now()+2000).toISOString(),asset:{next_service_hours:1750},engine_hours:1247});assert.equal((await (await intake(env,newer)).json()).results[0].status,'accepted');assert.equal(sql.prepare('SELECT next_service_hours FROM machines WHERE id=?').get(machine.id).next_service_hours,1750);
  assert.equal((await (await intake(env,discoveryReading({asset:{serial_number:'CHANGED'}}))).json()).results[0].status,'quarantined');
 });
@@ -660,4 +662,47 @@ test('Today clears pinned dates, calendar presets are historical, and midnight r
  assert.equal(h.form.from.value,new Date(monday.getTime()-7*86400000).toISOString().slice(0,10));assert.equal(h.form.to.value,new Date(monday.getTime()-86400000).toISOString().slice(0,10));const pinned=h.form.from.value,n=calls.length;midnight.callback();await h.settle();assert.equal(calls.length,n);assert.equal(h.form.from.value,pinned);
  click('last-month');await h.settle();assert.equal(h.form.from.value.slice(-2),'01');assert.ok(h.form.to.value<today);
  click('today');await h.settle();assert.equal(calls.at(-1).searchParams.has('from'),false);assert.equal(calls.at(-1).searchParams.has('to'),false);
+});
+
+test('five-machine staging registration is scoped, replay-safe and feeds scheduled simulation reports',async(t)=>{
+ const {sql,env}=database();await configure(env,sql);
+ env.TMM_FIVE_MACHINE_TRIAL='true';env.TMM_APP_ORIGIN='https://tmm-asset-health-light-staging.mandlenkosisindane43.workers.dev';
+ const headers=await discoveryAdmin(sql),path='https://test.invalid/telemetry/connections/five-machine-trial';
+ const post=async(extra={},h=headers)=>app.fetch(new Request(path,{method:'POST',headers:{...h,origin:'https://test.invalid'},body:new URLSearchParams({site:'Trial North',csrf:await digest('session-1'),...extra})}),env,ctx);
+ assert.equal((await post({csrf:'bad'})).status,403);
+ assert.equal((await post()).status,303);
+ assert.equal(sql.prepare("SELECT COUNT(*) n FROM machines WHERE company_id=1 AND status='simulation'").get().n,5);
+ assert.equal(sql.prepare("SELECT COUNT(*) n FROM machines WHERE company_id=2 AND status='simulation'").get().n,0);
+ assert.equal(sql.prepare("SELECT COUNT(*) n FROM machine_telemetry_v1 WHERE source LIKE '%staging-test-five-%'").get().n,5);
+ assert.equal((await post()).status,303);
+ assert.equal(sql.prepare("SELECT COUNT(*) n FROM machine_telemetry_v1 WHERE source LIKE '%staging-test-five-%'").get().n,5);
+ const cfg=sql.prepare('SELECT * FROM telemetry_five_machine_trial_v1').get(),start=Date.parse(cfg.started_at);
+ // Advance the application clock; no actual elapsed-time claim.
+ t.mock.timers.enable({apis:['Date'],now:start+900000});
+ await app.scheduled({scheduledTime:start+900000,cron:'*/15 * * * *'},env,ctx);
+ const rows=sql.prepare("SELECT * FROM machine_telemetry_v1 WHERE source LIKE '%staging-test-five-%' ORDER BY id DESC LIMIT 5").all();
+ assert.equal(rows.length,5);assert.ok(rows.every(r=>r.fault_code==='SPN 110 FMI 3'));
+ assert.equal(rows.find(r=>r.machine_id==='SIM-ADT-001').engine_hours,4250.25);
+ assert.equal(sql.prepare("SELECT operating_hours FROM machines WHERE fleet_number='SIM-ADT-001'").get().operating_hours,0);
+ assert.equal(sql.prepare("SELECT COUNT(*) n FROM telemetry_report_snapshots_v2 WHERE machine_id LIKE 'SIM-%' AND source_mode='simulation'").get().n>=10,true);
+ assert.equal(count(sql,'telemetry_delivery_outbox_v3'),0);
+ const html=await (await app.fetch(new Request(path,{headers}),env,ctx)).text();assert.match(html,/SIM-EXCAVATOR-001/);assert.match(html,/SIMULATION ONLY/);
+ const live=await automationModule.automaticFleetData(env,1,new URL('https://test.invalid/api/telemetry/automatic'));
+ assert.ok(live.machines.every(m=>!m.machine_id.startsWith('SIM-')));
+ assert.equal((await post({action:'pause'})).status,303);
+ assert.equal(sql.prepare('SELECT enabled FROM telemetry_five_machine_trial_v1').get().enabled,0);
+ const beforePause=sql.prepare("SELECT COUNT(*) n FROM machine_telemetry_v1 WHERE source LIKE '%staging-test-five-%'").get().n;
+ await app.scheduled({scheduledTime:start+1800000},env,ctx);
+ assert.equal(sql.prepare("SELECT COUNT(*) n FROM machine_telemetry_v1 WHERE source LIKE '%staging-test-five-%'").get().n,beforePause);
+ const source='staging-test-five-1';assert.equal(sql.prepare("SELECT COUNT(*) n FROM telemetry_machine_map_v2 m JOIN telemetry_connections_v2 c ON c.id=m.connection_id WHERE c.source_key=?").get(source).n,5);
+});
+
+test('five-machine trial is disabled outside staging and rejects identity conflicts',async()=>{
+ const {sql,env}=database();await configure(env,sql);const headers=await discoveryAdmin(sql),url='https://test.invalid/telemetry/connections/five-machine-trial';
+ assert.equal((await app.fetch(new Request(url,{headers}),env,ctx)).status,404);
+ env.TMM_FIVE_MACHINE_TRIAL='true';env.TMM_APP_ORIGIN='https://production.invalid';assert.equal((await app.fetch(new Request(url,{headers}),env,ctx)).status,404);
+ env.TMM_APP_ORIGIN='https://tmm-asset-health-light-staging.mandlenkosisindane43.workers.dev';
+ sql.exec("INSERT INTO machines(company_id,fleet_number,status) VALUES(1,'SIM-FEL-001','active')");
+ const response=await app.fetch(new Request(url,{method:'POST',headers:{...headers,origin:'https://test.invalid'},body:new URLSearchParams({site:'North',csrf:await digest('session-1')})}),env,ctx);
+ assert.equal(response.status,409);assert.equal(sql.prepare("SELECT COUNT(*) n FROM machines WHERE status='simulation'").get().n,0);
 });
