@@ -73,6 +73,8 @@ jobs:
         run: |
           node --test tests/*.test.mjs
           python3 -m unittest discover -s tests -p 'test_*.py'
+          g++ -std=c++17 -Wall -Wextra -Werror tests/device-j1939.test.cpp -o /tmp/tmm-device-test
+          /tmp/tmm-device-test
           npx tsc worker/telemetry-automation.ts --noEmit --strict --target ES2022 --module esnext --moduleResolution bundler --skipLibCheck
       - name: Isolate staging root from application request chain
         run: |
@@ -125,7 +127,7 @@ jobs:
           if (cfg.account_id !== process.env.CLOUDFLARE_ACCOUNT_ID) throw Error('Cloudflare account mismatch');
           if (cfg.name !== 'tmm-asset-health-light-staging' || cfg.workers_dev !== true) throw Error('Unexpected Worker configuration');
           if (cfg.routes || cfg.route || cfg.zone_id) throw Error('Production routes prohibited');
-          if (JSON.stringify(cfg.triggers?.crons) !== JSON.stringify(['*/15 * * * *'])) throw Error('Only the isolated 15-minute staging simulator cron is allowed');
+          if (JSON.stringify(cfg.triggers?.crons) !== JSON.stringify(['* * * * *'])) throw Error('Only the isolated one-minute staging processor cron is allowed');
           if (cfg.d1_databases?.length !== 1 || cfg.d1_databases[0].database_name !== 'tmm-asset-health-light-staging-db') throw Error('Unexpected D1 name');
           if (id === '93fdd54e-404e-4fe0-ab59-dde7425575e6' || id === 'eb1c1fda-cc2f-44f3-9638-bc5cfd72465d') throw Error('Production or industrial-preview D1 forbidden');
           if (cfg.r2_buckets?.length !== 1 || cfg.r2_buckets[0].bucket_name !== 'tmm-asset-health-light-staging-files') throw Error('Unexpected R2 bucket');

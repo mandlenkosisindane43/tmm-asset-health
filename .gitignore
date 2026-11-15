@@ -46,3 +46,8 @@ __pycache__/
 *.pyc
 *.sqlite3
 *.tsbuildinfo
+
+# Device-local credentials and compiler output
+integrations/esp32/**/config.h
+integrations/esp32/**/build/
+.audit-planner.*
