@@ -38,10 +38,11 @@ jobs:
           assert.ok(source.includes('isSouthAfricanWorkingDay'));
           assert.ok(source.includes('easterSunday'));
           assert.ok(scheduler.includes('sastDayStartUtc(day)'));
-          assert.ok(scheduler.includes('if(period==="daily"&&!isSouthAfricanWorkingDay(day))continue'));
           assert.ok(report.includes('shiftWorkingDay(start,1)'));
-          assert.ok(report.includes('const defaultDay=nearestWorkingDay(today)'));
+          assert.ok(report.includes('companyReportingCalendar'));
           EOF
+      - name: Verify configurable working-day and 24/7 behaviour
+        run: node --test --test-name-pattern='24/7 reporting' tests/automatic-telemetry.test.mjs
       - name: Compile worker build
         run: npm run build
       - name: Verify worker output

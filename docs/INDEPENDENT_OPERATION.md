@@ -4,7 +4,7 @@
 
 The development branch's `.github/workflows/deploy-light-staging.yml` builds,
 tests and deploys the isolated Cloudflare Worker. It forwards scheduled events
-and requires a 15-minute staging cron with dedicated D1 and R2 bindings.
+and uses a one-minute processing/recovery cron with 15-minute demo collection with dedicated D1 and R2 bindings.
 Those cloud components do not require a laptop, browser or Codespace to stay open.
 This is configuration evidence; check current deployment/scheduler logs to verify
 the running release. It is not certification of real machine acquisition.

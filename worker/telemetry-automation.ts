@@ -38,6 +38,7 @@ export async function ensureAutomation(e:AutomationEnv){
   `CREATE TABLE IF NOT EXISTS telemetry_report_snapshots_v2(id INTEGER PRIMARY KEY AUTOINCREMENT,company_id INTEGER NOT NULL,machine_id TEXT NOT NULL,period TEXT NOT NULL,period_start TEXT NOT NULL,period_end TEXT NOT NULL,source_mode TEXT NOT NULL,reading_count INTEGER NOT NULL,fault_readings INTEGER NOT NULL,first_hours REAL,last_hours REAL,generated_at TEXT NOT NULL,UNIQUE(company_id,machine_id,period,period_start,source_mode))`,
   `CREATE TABLE IF NOT EXISTS telemetry_report_documents_v2(snapshot_id INTEGER PRIMARY KEY,company_id INTEGER NOT NULL,report_json TEXT NOT NULL,generated_at TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS telemetry_delivery_outbox_v3(id INTEGER PRIMARY KEY AUTOINCREMENT,company_id INTEGER NOT NULL,event_key TEXT NOT NULL,recipient TEXT NOT NULL,kind TEXT NOT NULL,payload_json TEXT NOT NULL,provider_key TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending',attempts INTEGER NOT NULL DEFAULT 0,next_attempt_at TEXT NOT NULL,lease_until TEXT,lease_token TEXT,first_attempt_at TEXT,provider_id TEXT,last_error TEXT,created_at TEXT NOT NULL,sent_at TEXT,UNIQUE(company_id,event_key,recipient))`,
+  `CREATE TABLE IF NOT EXISTS telemetry_reporting_calendar_v4(company_id INTEGER PRIMARY KEY,calendar TEXT NOT NULL CHECK(calendar IN ('working_days','all_days')))`,
   `CREATE INDEX IF NOT EXISTS idx_telemetry_delivery_pending ON telemetry_delivery_outbox_v3(status,next_attempt_at)`,
  ])await e.DB.prepare(q).run()})().catch(error=>{schemas.delete(e.DB);throw error});schemas.set(e.DB,pending);return pending;
 }
@@ -83,11 +84,13 @@ export function operationalMetrics(data:Row[]){
 }
 
 async function settings(e:AutomationEnv,cid:number){
- const s=await first(e,"SELECT * FROM telemetry_automation_settings_v3 WHERE company_id=?",[cid]);let recipients:unknown=[];
+ const s=await first(e,"SELECT * FROM telemetry_automation_settings_v3 WHERE company_id=?",[cid]),calendar=await first(e,"SELECT calendar FROM telemetry_reporting_calendar_v4 WHERE company_id=?",[cid]);let recipients:unknown=[];
  try{recipients=JSON.parse(text(s?.recipients_json)||"[]")}catch{}
  const emails=Array.isArray(recipients)?recipients.filter((v):v is string=>typeof v==="string").map(v=>v.trim().toLowerCase()).filter(v=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)):[];
- return {enabled:number(s?.delivery_enabled)===1,recipients:[...new Set(emails)].slice(0,20),hour:number(s?.report_hour_sast??18)};
+ return {enabled:number(s?.delivery_enabled)===1,recipients:[...new Set(emails)].slice(0,20),hour:number(s?.report_hour_sast??18),calendar:calendar?.calendar==="all_days"?"all_days":"working_days"};
 }
+export async function companyReportingCalendar(e:AutomationEnv,cid:number){await ensureAutomation(e);return (await settings(e,cid)).calendar}
+export async function companyReportingDay(e:AutomationEnv,cid:number,day:string){return (await companyReportingCalendar(e,cid))==='all_days'||isSouthAfricanWorkingDay(day)}
 async function enqueue(e:AutomationEnv,cid:number,event:string,kind:string,subject:string,html:string,now:string){
  const s=await settings(e,cid);if(!s.enabled)return;
  for(const recipient of s.recipients){
@@ -112,10 +115,11 @@ async function finding(e:AutomationEnv,r:Row,category:string,severity:string,cod
  if(source==="live"&&Date.parse(now)-Date.parse(text(r.recorded_at))<=3600000)await enqueue(e,cid,`alert:${machine}:${key}:${severity}:${now.slice(0,10)}`,"alert",`TMM ${severity}: ${machine} · ${code||category}`,`<h2>${escape(machine)}</h2><p>${escape(details)}</p><p>${escape(action)}</p><p>Recorded ${escape(r.recorded_at)} UTC. This observation is not a confirmed root cause.</p>`,now);
 }
 
-async function analyse(e:AutomationEnv,lookup:Lookup,now:string){
+async function analyse(e:AutomationEnv,lookup:Lookup,now:string,deadline=Infinity,stop=()=>false){
  // FIFO receipts guarantee older queued machines are not silently starved by a LIMIT.
  const pending=await rows(e,"SELECT t.* FROM machine_telemetry_v1 t LEFT JOIN telemetry_analysis_receipts_v3 a ON a.telemetry_id=t.id LEFT JOIN telemetry_analysis_failures_v3 f ON f.telemetry_id=t.id WHERE a.telemetry_id IS NULL AND (f.next_attempt_at IS NULL OR f.next_attempt_at<=?) ORDER BY t.id LIMIT 50",[now]);
- for(const r of pending){
+ let processed=0;for(const r of pending){
+  if(Date.now()>=deadline||stop())break;processed++;
   const cid=number(r.company_id),machine=text(r.machine_id),p=parsed(r.raw_json);
   try{
   for(const code of new Set(text(r.fault_code).split(',').map(canonicalFaultCode).filter(Boolean))){
@@ -148,19 +152,20 @@ async function analyse(e:AutomationEnv,lookup:Lookup,now:string){
    await e.DB.prepare("INSERT INTO telemetry_automation_runs_v3(company_id,last_error) VALUES(?,?) ON CONFLICT(company_id) DO UPDATE SET last_error=excluded.last_error").bind(cid,"Analysis retry: "+message).run();
   }
  }
- return pending.length;
+ return processed;
 }
 
-async function generateReports(e:AutomationEnv,now:string){
- const targets=await rows(e,"SELECT * FROM telemetry_automation_targets_v3 ORDER BY COALESCE(last_report_at,''),company_id,machine_id,source_mode LIMIT 10");
- for(const t of targets){
+async function generateReports(e:AutomationEnv,now:string,deadline=Infinity,stop=()=>false){
+ const targets=await rows(e,"SELECT * FROM telemetry_automation_targets_v3 WHERE last_report_at IS NULL OR last_report_at<? ORDER BY COALESCE(last_report_at,''),company_id,machine_id,source_mode LIMIT 200",[new Date(Date.parse(now)-60000).toISOString()]);
+ let processed=0;for(const t of targets){
+  if(Date.now()>=deadline||stop())break;processed++;
   try{
   const cid=number(t.company_id),machine=text(t.machine_id),source=text(t.source_mode),selector=source==="simulation"?"(source LIKE '%staging-test%' OR source LIKE '%SIMULATED%')":"(source NOT LIKE '%staging-test%' AND source NOT LIKE '%SIMULATED%')";
   const backlog=await first(e,"SELECT COUNT(*) n FROM machine_telemetry_v1 t LEFT JOIN telemetry_analysis_receipts_v3 a ON a.telemetry_id=t.id WHERE t.company_id=? AND lower(t.machine_id)=lower(?) AND a.telemetry_id IS NULL AND "+selector,[cid,machine]);
   const s=await settings(e,cid),local=new Date(Date.parse(now)+7200000),day=sastDate(now),weekday=local.getUTCDay(),hour=local.getUTCHours();
   for(const [period,days] of [["daily",1],["weekly",7],["monthly",30]] as const){
    // Daily reports use a SAST calendar day and exclude weekends and SA public holidays.
-   if(period==="daily"&&!isSouthAfricanWorkingDay(day))continue;
+   if(period==="daily"&&s.calendar!=="all_days"&&!isSouthAfricanWorkingDay(day))continue;
    const start=period==="daily"?sastDayStartUtc(day):new Date(Date.parse(now)-days*86400000).toISOString();
    const data=await rows(e,"SELECT * FROM machine_telemetry_v1 WHERE company_id=? AND lower(machine_id)=lower(?) AND recorded_at>=? AND recorded_at<=? AND "+selector+" ORDER BY recorded_at DESC,id DESC LIMIT 10001",[cid,machine,start,now]);
    // Do not create a completed daily report when no machine readings were received.
@@ -174,7 +179,7 @@ async function generateReports(e:AutomationEnv,now:string){
    const latest_sensors=Object.fromEntries(sensorFields.filter(k=>raw[k]!=null||last?.[k]!=null).map(k=>[k,{value:raw[k]??last?.[k],unit:(raw.units as Row|undefined)?.[k]??null}]));
    const report={version:3,latest_sensors,company_id:cid,machine_id:machine,period,period_start:start,period_end:now,source_mode:source,generated_at:now,reading_count:considered.length,fault_readings:faults,first_hours:hours.length?Math.min(...hours):null,last_hours:hours.length?Math.max(...hours):null,metrics,findings:findings.slice(0,200),findings_truncated:findings.length>200,readings_truncated:data.length>10000,analysis_pending:number(backlog?.n),analysis_window:"Durable FIFO analysis receipts; reports disclose any remaining backlog and truncation.",notes:[source==="simulation"?"SIMULATED DATA ONLY — not actual equipment conditions.":"Authorised received telemetry; no machine connection is certified by this report.","Rolling observation window, not a certified calendar-period production return.","Fault observations do not establish root cause, downtime or repair completion. Missing unsupported measurements remain unknown."]};
    await e.DB.prepare("INSERT INTO telemetry_report_documents_v2(snapshot_id,company_id,report_json,generated_at) VALUES(?,?,?,?) ON CONFLICT(snapshot_id) DO UPDATE SET report_json=excluded.report_json,generated_at=excluded.generated_at").bind(number(snapshot?.id),cid,JSON.stringify(report),now).run();
-   const due=hour>=s.hour&&((period==="daily"&&isSouthAfricanWorkingDay(day))||(period==="weekly"&&weekday===1)||(period==="monthly"&&local.getUTCDate()===1));
+   const due=hour>=s.hour&&((period==="daily"&&(s.calendar==="all_days"||isSouthAfricanWorkingDay(day)))||(period==="weekly"&&weekday===1)||(period==="monthly"&&local.getUTCDate()===1));
    if(source==="live"&&due&&number(backlog?.n)===0&&data.length<=10000){
     const origin=text(e.TMM_APP_ORIGIN)||"https://tmm-asset-health-light-staging.mandlenkosisindane43.workers.dev";
     await enqueue(e,cid,`report:${machine}:${period}:${day}`,"report",`TMM ${period} monitoring report · ${machine}`,`<h2>${escape(machine)} · ${period} monitoring report</h2><p>${considered.length} readings; ${faults} fault-bearing observations. Rolling window ${escape(start)} to ${escape(now)} UTC.</p><p>Engine runtime: ${metrics.operating_hours??"Unavailable"} hours. Production: ${metrics.production_tonnes??"Unavailable"} tonnes.</p><p><a href="${escape(origin)}/telemetry/connections/report-document?id=${number(snapshot?.id)}">Open the saved authenticated report</a></p>`,now);
@@ -186,7 +191,7 @@ async function generateReports(e:AutomationEnv,now:string){
    await e.DB.prepare("INSERT INTO telemetry_automation_runs_v3(company_id,last_error) VALUES(?,?) ON CONFLICT(company_id) DO UPDATE SET last_error=excluded.last_error").bind(number(t.company_id),"Report retry: "+text((error as Error).message).slice(0,500)).run();
   }
  }
- return targets.length;
+ return processed;
 }
 
 export async function dispatchDeliveries(e:AutomationEnv,now=new Date().toISOString(),send:typeof fetch=fetch){
@@ -218,8 +223,16 @@ export async function dispatchDeliveries(e:AutomationEnv,now=new Date().toISOStr
 
 export async function runTelemetryAutomation(e:AutomationEnv,lookup:Lookup,at=Date.now()){
  await ensureAutomation(e);const now=new Date(at).toISOString();
- const analysed=await analyse(e,lookup,now),reported=await generateReports(e,now),sent=await dispatchDeliveries(e,now);
- return {analysed,reported,sent};
+ // Meter query calls as well as wall time, leaving headroom for intake/schema
+ // work and the small delivery outbox. Durable receipts resume on the next minute.
+ let queries=0;
+ const wrap=(stmt:AutomationStatement):AutomationStatement=>({bind(...v:unknown[]){return wrap(stmt.bind(...v))},async first<T=Row>(){queries++;return stmt.first<T>()},async all<T=Row>(){queries++;return stmt.all<T>()},async run(){queries++;return stmt.run()}});
+ const DB:AutomationDatabase={prepare(q:string){return wrap(e.DB.prepare(q))}},work={...e,DB};schemas.set(DB,Promise.resolve());
+ const started=Date.now();let analysed=0;
+ for(let batch=0;batch<10&&Date.now()<started+10000&&queries<240;batch++){const count=await analyse(work,lookup,now,started+10000,()=>queries>=240);analysed+=count;if(count<50)break}
+ const reported=await generateReports(work,now,started+25000,()=>queries>=550),sent=await dispatchDeliveries(work,now);
+ const backlog=await first(work,"SELECT COUNT(*) n FROM machine_telemetry_v1 t LEFT JOIN telemetry_analysis_receipts_v3 a ON a.telemetry_id=t.id WHERE a.telemetry_id IS NULL");
+ return {analysed,reported,sent,analysis_pending:number(backlog?.n),queries};
 }
 
 /** View dates are calendar dates; persisted telemetry remains UTC. */

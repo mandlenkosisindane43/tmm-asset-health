@@ -708,3 +708,23 @@ test('five-machine trial is disabled outside staging and rejects identity confli
  const response=await app.fetch(new Request(url,{method:'POST',headers:{...headers,origin:'https://test.invalid'},body:new URLSearchParams({site:'North',csrf:await digest('session-1')})}),env,ctx);
  assert.equal(response.status,409);assert.equal(sql.prepare("SELECT COUNT(*) n FROM machines WHERE status='simulation'").get().n,0);
 });
+
+test('159-machine burst drains within a 15-minute window with bounded queries and replay safety',async()=>{
+ const {sql,env}=database();await configure(env,sql);const batch=[];
+ for(let i=0;i<159;i++){const id='CAPACITY-'+i;sql.prepare("INSERT INTO machines(company_id,fleet_number,operating_hours,site,status) VALUES(1,?,1000,'Capacity','active')").run(id);sql.prepare("INSERT INTO telemetry_machine_map_v2(company_id,connection_id,external_machine_id,machine_id,created_at) VALUES(1,1,?,?,'now')").run(id,id);batch.push(reading({external_machine_id:id,engine_hours:1000,fault_codes:[]}));}
+ for(const chunk of [batch.slice(0,100),batch.slice(100)])assert.equal((await (await intake(env,chunk)).json()).ok,true);
+ const at=Date.now(),lookup=()=>({code:'',meaning:'',system:'',severity:'review',verified:false});let cycles=0;
+ for(;cycles<15;cycles++){const result=await automationModule.runTelemetryAutomation(env,lookup,at+cycles*60000);assert.ok(result.queries<800);const reported=sql.prepare('SELECT COUNT(DISTINCT machine_id) n FROM telemetry_report_snapshots_v2').get().n;if(result.analysis_pending===0&&reported===159)break}
+ assert.ok(cycles<15,'all 159 targets must receive reports within fifteen minute processor cycles');assert.equal(count(sql,'telemetry_analysis_receipts_v3'),159);
+ await automationModule.runTelemetryAutomation(env,lookup,at+cycles*60000);assert.equal(count(sql,'telemetry_report_documents_v2'),159*reportPeriods());
+ console.log('Capacity recovery cycles:',cycles+1);
+
+});
+test('24/7 reporting creates Sunday daily reports while working-day companies retain their calendar',async(t)=>{
+ t.mock.timers.enable({apis:['Date'],now:new Date('2026-11-15T10:00:00Z')});const {sql,env}=database();await configure(env,sql);await intake(env,reading());
+ await app.scheduled({scheduledTime:Date.now()},env,ctx);assert.equal(sql.prepare("SELECT COUNT(*) n FROM telemetry_report_snapshots_v2 WHERE period='daily'").get().n,0);
+ sql.exec("INSERT INTO telemetry_reporting_calendar_v4 VALUES(1,'all_days')");
+ await automationModule.runTelemetryAutomation(env,()=>({code:'',meaning:'',system:'',severity:'review',verified:false}),Date.now()+120000);
+ assert.equal(sql.prepare("SELECT COUNT(*) n FROM telemetry_report_snapshots_v2 WHERE period='daily'").get().n,1);assert.equal(await automationModule.companyReportingDay(env,1,'2026-11-15'),true);assert.equal(await automationModule.companyReportingDay(env,2,'2026-11-15'),false);
+ const headers=await discoveryAdmin(sql);sql.exec("UPDATE contractor_sessions SET expires_at='2099-01-01'");const html=await(await app.fetch(new Request('https://test.invalid/telemetry/connections/engineering-report',{headers}),env,ctx)).text();assert.match(html,/value="2026-11-15"/);assert.match(html,/from=2026-11-14/);
+});

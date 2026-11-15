@@ -1,0 +1,33 @@
+name: Compile independent ESP32 device
+on:
+  pull_request:
+    branches: [design/modern-light-contractor-dashboard]
+    paths:
+      - 'integrations/esp32/**'
+      - 'tests/device-j1939.test.cpp'
+      - '.github/workflows/validate-esp32-device.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify portable receive-only decoder
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror tests/device-j1939.test.cpp -o /tmp/tmm-device-test
+          /tmp/tmm-device-test
+      - uses: arduino/setup-arduino-cli@v2
+      - name: Install pinned ESP32 core and JSON library
+        run: |
+          arduino-cli core update-index --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core install esp32:esp32@3.3.2 --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli lib install ArduinoJson@7.4.2
+      - name: Compile bench and receive-only CAN modes without credentials
+        run: |
+          cp integrations/esp32/TMM_Device/config.example.h integrations/esp32/TMM_Device/config.h
+          arduino-cli compile --fqbn esp32:esp32:esp32 --build-path /tmp/tmm-bench-build integrations/esp32/TMM_Device
+          sed -i 's/#define TMM_BENCH_MODE 1/#define TMM_BENCH_MODE 0/' integrations/esp32/TMM_Device/config.h
+          arduino-cli compile --fqbn esp32:esp32:esp32 --build-path /tmp/tmm-can-build integrations/esp32/TMM_Device
