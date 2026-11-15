@@ -19,6 +19,7 @@ jobs:
         run: |
           g++ -std=c++17 -Wall -Wextra -Werror tests/device-j1939.test.cpp -o /tmp/tmm-device-test
           /tmp/tmm-device-test
+          cmp integrations/esp32/TMM_Device/tmm_j1939.h integrations/esp32/TMM_Collector_Bench/tmm_j1939.h
       - uses: arduino/setup-arduino-cli@v2
       - name: Install pinned ESP32 core and JSON library
         run: |
@@ -31,3 +32,7 @@ jobs:
           arduino-cli compile --fqbn esp32:esp32:esp32 --build-path /tmp/tmm-bench-build integrations/esp32/TMM_Device
           sed -i 's/#define TMM_BENCH_MODE 1/#define TMM_BENCH_MODE 0/' integrations/esp32/TMM_Device/config.h
           arduino-cli compile --fqbn esp32:esp32:esp32 --build-path /tmp/tmm-can-build integrations/esp32/TMM_Device
+      - name: Compile offline LED collector in replay and listen-only modes
+        run: |
+          arduino-cli compile --fqbn esp32:esp32:esp32 --build-path /tmp/tmm-offline-build integrations/esp32/TMM_Collector_Bench
+          arduino-cli compile --fqbn esp32:esp32:esp32 --build-property 'compiler.cpp.extra_flags=-DBENCH_MODE=0' --build-path /tmp/tmm-offline-can-build integrations/esp32/TMM_Collector_Bench
