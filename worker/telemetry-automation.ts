@@ -89,7 +89,8 @@ async function settings(e:AutomationEnv,cid:number){
  const emails=Array.isArray(recipients)?recipients.filter((v):v is string=>typeof v==="string").map(v=>v.trim().toLowerCase()).filter(v=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)):[];
  return {enabled:number(s?.delivery_enabled)===1,recipients:[...new Set(emails)].slice(0,20),hour:number(s?.report_hour_sast??18),calendar:calendar?.calendar==="all_days"?"all_days":"working_days"};
 }
-export async function companyReportingDay(e:AutomationEnv,cid:number,day:string){await ensureAutomation(e);return (await settings(e,cid)).calendar==='all_days'||isSouthAfricanWorkingDay(day)}
+export async function companyReportingCalendar(e:AutomationEnv,cid:number){await ensureAutomation(e);return (await settings(e,cid)).calendar}
+export async function companyReportingDay(e:AutomationEnv,cid:number,day:string){return (await companyReportingCalendar(e,cid))==='all_days'||isSouthAfricanWorkingDay(day)}
 async function enqueue(e:AutomationEnv,cid:number,event:string,kind:string,subject:string,html:string,now:string){
  const s=await settings(e,cid);if(!s.enabled)return;
  for(const recipient of s.recipients){

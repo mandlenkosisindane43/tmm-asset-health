@@ -75,11 +75,11 @@ and equipment. Do not connect control outputs or send ECU commands.
 
 The portable RPM decoder compiles with g++ and passes host assertions for
 1500 RPM, zero RPM, invalid/short frames, wrong source, wrong PGN, remote/standard
-frames and not-available values. The full ESP32 firmware and both mode branches
-still require Arduino toolchain compilation and physical Wi-Fi/CAN testing.
-The CLI downloaded successfully in this session, but board/package index downloads
-were blocked by the environment's network path. No successful firmware compile,
-board upload or physical-machine acquisition is claimed.
+frames and not-available values. Both full firmware modes compiled successfully in GitHub CI with ESP32 core
+3.3.2, ArduinoJson 7.4.2 and the generic ESP32 target. Local board-index downloads
+were blocked, so compilation ran in GitHub. Physical Wi-Fi/CAN tests, board
+upload and actual-machine acquisition remain unverified. A compiled program is
+not evidence of a successful electrical installation or telemetry transfer.
 
 Bench acceptance: successful trusted-TLS upload; duplicate replay; Wi-Fi outage;
 power loss with pending record; bad token; wrong mapping; changed company binding;
