@@ -231,7 +231,7 @@ export async function runTelemetryAutomation(e:AutomationEnv,lookup:Lookup,at=Da
  const started=Date.now();let analysed=0;
  for(let batch=0;batch<10&&Date.now()<started+10000&&queries<240;batch++){const count=await analyse(work,lookup,now,started+10000,()=>queries>=240);analysed+=count;if(count<50)break}
  const reported=await generateReports(work,now,started+25000,()=>queries>=550),sent=await dispatchDeliveries(work,now);
- const backlog=await first(work,"SELECT COUNT(*) n FROM machine_telemetry_v1 t LEFT JOIN telemetry_analysis_receipts_v3 a ON a.telemetry_id=t.id WHERE a.telemetry_id IS NULL");
+ const backlog=await first(work,"SELECT EXISTS(SELECT 1 FROM machine_telemetry_v1 t WHERE NOT EXISTS (SELECT 1 FROM telemetry_analysis_receipts_v3 a WHERE a.telemetry_id=t.id) LIMIT 1) n");
  return {analysed,reported,sent,analysis_pending:number(backlog?.n),queries};
 }
 
