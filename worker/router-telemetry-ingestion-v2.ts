@@ -32,6 +32,7 @@ async function ensure(env:Env){const existing=schemas.get(env.DB);if(existing)re
 `CREATE INDEX IF NOT EXISTS idx_telemetry_map_company ON telemetry_machine_map_v2(company_id,connection_id)`,
 `CREATE TABLE IF NOT EXISTS telemetry_ingest_v2(id INTEGER PRIMARY KEY AUTOINCREMENT,company_id INTEGER NOT NULL,connection_id INTEGER NOT NULL,event_key TEXT NOT NULL UNIQUE,external_machine_id TEXT,recorded_at TEXT,raw_json TEXT NOT NULL,payload_hash TEXT NOT NULL,status TEXT NOT NULL,error TEXT,telemetry_id INTEGER,received_at TEXT NOT NULL,processed_at TEXT)`,
 `CREATE INDEX IF NOT EXISTS idx_telemetry_ingest_company_time ON telemetry_ingest_v2(company_id,received_at DESC)`,
+`CREATE INDEX IF NOT EXISTS idx_telemetry_ingest_pending ON telemetry_ingest_v2(status,id)`,
 `CREATE TABLE IF NOT EXISTS telemetry_quarantine_v2(id INTEGER PRIMARY KEY AUTOINCREMENT,company_id INTEGER NOT NULL,connection_id INTEGER NOT NULL,ingest_id INTEGER,reason TEXT NOT NULL,raw_json TEXT NOT NULL,created_at TEXT NOT NULL,resolved_at TEXT,resolved_by INTEGER)`,
 `CREATE TABLE IF NOT EXISTS telemetry_thresholds_v2(id INTEGER PRIMARY KEY AUTOINCREMENT,company_id INTEGER NOT NULL,machine_id TEXT,metric TEXT NOT NULL,warning_value REAL,critical_value REAL,comparison TEXT NOT NULL,unit TEXT,status TEXT NOT NULL DEFAULT 'active',created_at TEXT NOT NULL,UNIQUE(company_id,machine_id,metric))`
 ])await env.DB.prepare(q).run()})().catch(e=>{schemas.delete(env.DB);throw e});schemas.set(env.DB,schema);return schema}

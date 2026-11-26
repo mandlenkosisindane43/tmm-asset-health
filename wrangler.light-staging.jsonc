@@ -10,7 +10,7 @@
   "workers_dev": true,
   "triggers": {
     "crons": [
-      "* * * * *"
+      "*/15 * * * *"
     ]
   },
   "assets": {
