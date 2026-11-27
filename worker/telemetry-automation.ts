@@ -157,10 +157,7 @@ async function analyse(e:AutomationEnv,lookup:Lookup,now:string,deadline=Infinit
 }
 
 async function generateReports(e:AutomationEnv,now:string,deadline=Infinity,stop=()=>false){
- // Reports are snapshots, not live telemetry: refresh each target at most hourly.
- // 15-minute ingestion and analysis remain unchanged; this avoids repeatedly scanning
- // the same daily, weekly and monthly telemetry windows on every cron cycle.
- const targets=await rows(e,"SELECT * FROM telemetry_automation_targets_v3 WHERE last_report_at IS NULL OR last_report_at<? ORDER BY COALESCE(last_report_at,''),company_id,machine_id,source_mode LIMIT 200",[new Date(Date.parse(now)-3600000).toISOString()]);
+ const targets=await rows(e,"SELECT * FROM telemetry_automation_targets_v3 WHERE last_report_at IS NULL OR last_report_at<? ORDER BY COALESCE(last_report_at,''),company_id,machine_id,source_mode LIMIT 200",[new Date(Date.parse(now)-60000).toISOString()]);
  let processed=0;for(const t of targets){
   if(Date.now()>=deadline||stop())break;processed++;
   try{
