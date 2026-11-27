@@ -40,6 +40,7 @@ export async function ensureAutomation(e:AutomationEnv){
   `CREATE TABLE IF NOT EXISTS telemetry_delivery_outbox_v3(id INTEGER PRIMARY KEY AUTOINCREMENT,company_id INTEGER NOT NULL,event_key TEXT NOT NULL,recipient TEXT NOT NULL,kind TEXT NOT NULL,payload_json TEXT NOT NULL,provider_key TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'pending',attempts INTEGER NOT NULL DEFAULT 0,next_attempt_at TEXT NOT NULL,lease_until TEXT,lease_token TEXT,first_attempt_at TEXT,provider_id TEXT,last_error TEXT,created_at TEXT NOT NULL,sent_at TEXT,UNIQUE(company_id,event_key,recipient))`,
   `CREATE TABLE IF NOT EXISTS telemetry_reporting_calendar_v4(company_id INTEGER PRIMARY KEY,calendar TEXT NOT NULL CHECK(calendar IN ('working_days','all_days')))`,
   `CREATE INDEX IF NOT EXISTS idx_telemetry_delivery_pending ON telemetry_delivery_outbox_v3(status,next_attempt_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_telemetry_machine_report_window_v3 ON machine_telemetry_v1(company_id,lower(machine_id),recorded_at DESC)`,
  ])await e.DB.prepare(q).run()})().catch(error=>{schemas.delete(e.DB);throw error});schemas.set(e.DB,pending);return pending;
 }
 
@@ -156,7 +157,10 @@ async function analyse(e:AutomationEnv,lookup:Lookup,now:string,deadline=Infinit
 }
 
 async function generateReports(e:AutomationEnv,now:string,deadline=Infinity,stop=()=>false){
- const targets=await rows(e,"SELECT * FROM telemetry_automation_targets_v3 WHERE last_report_at IS NULL OR last_report_at<? ORDER BY COALESCE(last_report_at,''),company_id,machine_id,source_mode LIMIT 200",[new Date(Date.parse(now)-60000).toISOString()]);
+ // Reports are snapshots, not live telemetry: refresh each target at most hourly.
+ // 15-minute ingestion and analysis remain unchanged; this avoids repeatedly scanning
+ // the same daily, weekly and monthly telemetry windows on every cron cycle.
+ const targets=await rows(e,"SELECT * FROM telemetry_automation_targets_v3 WHERE last_report_at IS NULL OR last_report_at<? ORDER BY COALESCE(last_report_at,''),company_id,machine_id,source_mode LIMIT 200",[new Date(Date.parse(now)-3600000).toISOString()]);
  let processed=0;for(const t of targets){
   if(Date.now()>=deadline||stop())break;processed++;
   try{
