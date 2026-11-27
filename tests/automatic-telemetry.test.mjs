@@ -725,8 +725,6 @@ test('24/7 reporting creates Sunday daily reports while working-day companies re
  await app.scheduled({scheduledTime:Date.now()},env,ctx);assert.equal(sql.prepare("SELECT COUNT(*) n FROM telemetry_report_snapshots_v2 WHERE period='daily'").get().n,0);
  sql.exec("INSERT INTO telemetry_reporting_calendar_v4 VALUES(1,'all_days')");
  await automationModule.runTelemetryAutomation(env,()=>({code:'',meaning:'',system:'',severity:'review',verified:false}),Date.now()+120000);
- assert.equal(sql.prepare("SELECT COUNT(*) n FROM telemetry_report_snapshots_v2 WHERE period='daily'").get().n,0,'report refresh is deferred until the next hourly snapshot');
- await automationModule.runTelemetryAutomation(env,()=>({code:'',meaning:'',system:'',severity:'review',verified:false}),Date.now()+3600000);
  assert.equal(sql.prepare("SELECT COUNT(*) n FROM telemetry_report_snapshots_v2 WHERE period='daily'").get().n,1);assert.equal(await automationModule.companyReportingDay(env,1,'2026-11-15'),true);assert.equal(await automationModule.companyReportingDay(env,2,'2026-11-15'),false);
  const headers=await discoveryAdmin(sql);sql.exec("UPDATE contractor_sessions SET expires_at='2099-01-01'");const html=await(await app.fetch(new Request('https://test.invalid/telemetry/connections/engineering-report',{headers}),env,ctx)).text();assert.match(html,/value="2026-11-15"/);assert.match(html,/from=2026-11-14/);
 });
